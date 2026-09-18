@@ -96,9 +96,9 @@ class SettingsFragment : GuidedStepSupportFragment() {
     }
 
     override fun onSubGuidedActionClicked(action: GuidedAction): Boolean {
-        val parent = selectedAction ?: return true
+        val parentId = action.id / 100
         val label = action.title?.toString().orEmpty()
-        when (parent.id) {
+        when (parentId) {
             ID_PICK -> {
                 val name = label.substringAfter(": ").ifBlank { label }
                 val mode = WallpaperPickModes.ALL.firstOrNull { it.label == name }
@@ -109,8 +109,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 if (client != null) PreferencesManager.preferredClient = client.packageName
             }
         }
-        parent.description = label
-        notifyActionChanged(selectedActionPosition)
+        val parentPos = selectedActionPosition
+        if (parentPos >= 0) {
+            val parent = actions.get(parentPos) as? GuidedAction
+            if (parent != null) {
+                parent.description = label
+                notifyActionChanged(parentPos)
+            }
+        }
         (activity as? SettingsActivity)?.requestWallpaperUpdate()
         return true
     }
