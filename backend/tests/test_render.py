@@ -19,3 +19,11 @@ def test_all_presets_render():
     for name, layout in PRESETS.items():
         image = render_still(item, layout)
         assert image.size[0] == 1920, name
+
+
+def test_projectivy_dock_keeps_safe_zone():
+    layout = PRESETS["Projectivy Dock"]
+    assert layout.background.fade_bottom >= 0.4
+    title = next(layer for layer in layout.layers if layer.slot == "title")
+    assert title.y >= 120
+    assert title.y < 400

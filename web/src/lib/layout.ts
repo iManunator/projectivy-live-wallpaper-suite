@@ -44,10 +44,13 @@ export type WallpaperRecord = {
   official_rating: string;
   watch_state: string;
   library_state: string;
+  availability?: string;
   source: string;
   has_video: boolean;
   parallax_style?: string | null;
   action_url?: string | null;
+  pinned?: boolean;
+  hidden?: boolean;
 };
 
 export type CronJob = {
@@ -75,6 +78,13 @@ export type AppSettings = {
   motion_fps: number;
   overwrite_existing: boolean;
   editor_theme: string;
+  motion_preset?: string;
+  light_leak?: boolean;
+  taste_profile?: string;
+  taste_weights?: Record<string, number>;
+  overlays_enabled?: boolean;
+  overlay_clock?: boolean;
+  overlays?: Array<Record<string, unknown>>;
   jellyfin: Record<string, string>;
   jellyseerr: Record<string, string>;
   tmdb: Record<string, string>;

@@ -14,6 +14,7 @@ from app.motion import (
     ffmpeg_bin,
     generate_motion,
     has_motion,
+    intensity_from_preset,
     profile_from_settings,
     zoompan_expr,
 )
@@ -85,12 +86,36 @@ def test_profile_from_settings_defaults():
 
 
 def test_parallax_filtergraph_has_two_layers():
-    graph = build_filtergraph(MotionProfile(style="parallax", intensity=0.6, duration=6), has_chrome=True)
+    graph = build_filtergraph(
+        MotionProfile(style="parallax", intensity=0.6, duration=6, light_leak=False),
+        has_chrome=True,
+    )
     assert "[0:v]" in graph
     assert "[1:v]" in graph
+    assert "[2:v]" not in graph
     assert "overlay=" in graph
     assert "zoompan=" in graph
+    assert "[mid],format" not in graph
     assert "," not in zoompan_expr(0.05, 20, 48, 1920, 1080, 24).split("z=")[1].split(":")[0]
+
+
+def test_parallax_light_leak_adds_third_layer():
+    graph = build_filtergraph(
+        MotionProfile(style="parallax", intensity=0.6, duration=6, light_leak=True),
+        has_chrome=True,
+    )
+    assert "[2:v]" in graph
+    assert "colorchannelmixer" in graph
+    assert "[mid]" in graph
+
+
+def test_intensity_presets():
+    assert intensity_from_preset("subtle") == 0.28
+    assert intensity_from_preset("bold") == 0.88
+    assert intensity_from_preset("nope") == 0.55
+    profile = profile_from_settings(AppSettings(motion_preset="bold", motion_intensity=0.55))
+    assert profile.intensity == 0.88
+    assert profile.light_leak is True
 
 
 def test_kenburns_is_single_layer():
@@ -128,8 +153,29 @@ def test_ffmpeg_bakes_small_parallax_loop(tmp_path: Path):
     save_jpeg(render_plate(item, layout), plate)
     save_png(render_chrome(item, layout), chrome)
     # Tiny encode for CI speed: 320x180, 1s.
-    profile = MotionProfile(style="parallax", quality="light", intensity=0.5, duration=1.0, fps=12, width=320, height=180)
+    profile = MotionProfile(
+        style="parallax",
+        quality="light",
+        intensity=0.5,
+        duration=1.0,
+        fps=12,
+        width=320,
+        height=180,
+        light_leak=False,
+    )
     ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
     assert ok, msg
     assert has_motion(jpg)
     assert jpg.with_suffix(".mp4").stat().st_size > 1000
+    leak_profile = MotionProfile(
+        style="parallax",
+        quality="light",
+        intensity=0.5,
+        duration=1.0,
+        fps=12,
+        width=320,
+        height=180,
+        light_leak=True,
+    )
+    ok, msg = generate_motion(jpg, profile=leak_profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg

@@ -29,7 +29,7 @@ curl -sf http://127.0.0.1:8787/api/health
 Expected:
 
 ```json
-{"ok":true,"service":"wallpaparr","version":"1.0.0"}
+{"ok":true,"service":"wallpaparr","version":"1.1.0"}
 ```
 
 Compose healthcheck: `curl -sf http://127.0.0.1:8787/api/health` inside the container. UI: http://127.0.0.1:8787
@@ -43,6 +43,13 @@ curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=
 ```
 
 Expected fields (tvbgsuite-compatible): `imageUrl`, `actionUrl`, `path`, `title`, `layout`. Demo `title` for `sort=latest` is **Northlight**. Open `imageUrl` in a browser — it is a JPEG from the seeded gallery.
+
+Tonight + health (same demo catalog):
+
+```bash
+curl -sf "http://127.0.0.1:8787/api/tonight?layout=Netflix%20Hero"
+curl -sf http://127.0.0.1:8787/api/dashboard
+```
 
 ## 4. Unit tests (no Docker)
 

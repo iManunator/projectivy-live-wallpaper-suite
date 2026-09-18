@@ -206,3 +206,13 @@ def test_unique_genres(seeded_catalog):
     genres = unique_values(seeded_catalog, "genres")
     assert "Sci-Fi" in genres
     assert "Drama" in genres
+
+
+def test_pool_pinned_prefers_flagged_title():
+    catalog = [
+        _rec(id="1", filename="a.jpg", title="Loose", pinned=False, rating=9),
+        _rec(id="2", filename="b.jpg", title="Keeper", pinned=True, rating=2),
+    ]
+    picked = select_wallpaper(catalog, SelectionQuery(layout="Netflix Hero", pool="pinned"))
+    assert picked is not None
+    assert picked.title == "Keeper"

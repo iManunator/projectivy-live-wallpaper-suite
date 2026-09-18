@@ -14,6 +14,7 @@ def test_layouts_list_includes_presets(client):
     assert "Netflix Hero" in names
     assert "Prime Cinematic" in names
     assert "Google TV Clean" in names
+    assert "Projectivy Dock" in names
 
 
 def test_layouts_with_images_only_generated(client):
@@ -92,8 +93,12 @@ def test_wallpaper_status_year_and_rating_filters(client):
 def test_options_lists_pick_modes_and_motion(client):
     body = client.get("/api/options").json()
     assert "unwatched" in body["pools"]
+    assert "pinned" in body["pools"]
     assert "parallax" in body["motion_styles"]
     assert "layout_round_robin" in body["pick_modes"]
+    assert "tonight" in body["pick_modes"]
+    assert "subtle" in body["motion_presets"]
+    assert "cinephile" in body["taste_profiles"]
 
 
 def test_wallpaper_status_video_includes_parallax_fields(client):
@@ -207,3 +212,84 @@ def test_settings_roundtrip_motion_options(client):
     assert saved["motion_style"] == "parallax"
     assert saved["motion_intensity"] == 0.8
     assert saved["editor_theme"] == "high-contrast"
+
+
+def test_dashboard_and_tonight(client):
+    dash = client.get("/api/dashboard").json()
+    assert dash["ok"] is True
+    assert dash["service"] == "wallpaparr"
+    assert dash["gallery"]["count"] == 6
+    assert dash["providers"]["demo"]["configured"] is True
+    assert dash["taste"]["profile"]
+    tonight = client.get("/api/tonight", params={"layout": "Netflix Hero"}).json()
+    assert tonight["status"]["imageUrl"]
+    assert tonight["status"]["title"]
+    assert tonight["profile"]
+    ids = {q["id"] for q in tonight["queues"]}
+    assert "unwatched" in ids
+    assert "continue_watching" in ids
+
+
+def test_gallery_pin_and_never_show(client):
+    gallery = client.get("/api/gallery", params={"layout": "Netflix Hero"}).json()
+    rec = next(item for item in gallery if item["title"] == "Glass Orchard")
+    pinned = client.post(f"/api/gallery/{rec['id']}/flag", json={"pinned": True}).json()
+    assert pinned["record"]["pinned"] is True
+    status = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "pool": "pinned"},
+    ).json()
+    assert status["title"] == "Glass Orchard"
+    assert status["pinned"] is True
+    hidden = client.post(f"/api/gallery/{rec['id']}/flag", json={"hidden": True, "pinned": False}).json()
+    assert hidden["record"]["hidden"] is True
+    again = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "pool": "pinned"},
+    ).json()
+    assert again["imageUrl"] is None
+
+
+def test_wallpaper_status_taste_and_queue(client):
+    body = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "profile": "tonight"},
+    ).json()
+    assert body["imageUrl"]
+    queued = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "queue": "continue_watching"},
+    ).json()
+    assert queued["title"] == "Harbor Season"
+    trending = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Prime Cinematic", "queue": "seerr_trending", "sort": "rating"},
+    ).json()
+    assert trending["title"] in {"Signal Country", "Night Relay"}
+
+
+def test_provider_test_records_ops(client):
+    body = client.post("/api/settings/test/demo").json()
+    assert body["ok"] is True
+    dash = client.get("/api/dashboard").json()
+    assert dash["providers"]["demo"]["last_test"]["ok"] is True
+
+
+def test_generate_with_clock_overlay(client):
+    settings = client.get("/api/settings").json()
+    settings["overlays_enabled"] = True
+    settings["overlay_clock"] = True
+    assert client.post("/api/settings", json=settings).status_code == 200
+    out = client.post(
+        "/api/generate",
+        json={
+            "layout": "Projectivy Dock",
+            "source": "demo",
+            "limit": 1,
+            "skip_existing": False,
+            "ids": ["demo-jf-1"],
+        },
+    ).json()
+    assert out["count"] == 1
+    gallery = client.get("/api/gallery", params={"layout": "Projectivy Dock"}).json()
+    assert gallery[0]["title"] == "Northlight"

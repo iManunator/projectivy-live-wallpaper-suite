@@ -9,6 +9,8 @@ export type WallpaperQuery = {
   min_rating?: number;
   max_rating?: number;
   exclude?: string;
+  profile?: string;
+  queue?: string;
 };
 
 export function parseYearRange(yearFilter: string): { min?: string; max?: string } {
@@ -33,6 +35,8 @@ export function buildStatusQuery(input: WallpaperQuery): string {
   if (input.min_rating && input.min_rating > 0) params.set("min_rating", String(input.min_rating));
   if (input.max_rating != null && input.max_rating < 10) params.set("max_rating", String(input.max_rating));
   if (input.exclude) params.set("exclude", input.exclude);
+  if (input.profile) params.set("profile", input.profile);
+  if (input.queue) params.set("queue", input.queue);
   return `/api/wallpaper/status?${params.toString()}`;
 }
 

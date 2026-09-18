@@ -24,8 +24,10 @@ Distinct values harvested from the wallpaper catalog (not live Jellyfin). Rebuil
 | `min_year` / `max_year` | Inclusive |
 | `min_rating` / `max_rating` | Inclusive, 0–10 |
 | `sort` | `random` (default), `latest`/`newest`, `oldest`, `rating`/`rating_high`, `rating_asc`/`rating_low`, `year`/`year_desc`, `year_asc`/`year_old` |
-| `pool` | `unwatched`, `partial`, `watched`, `in_library`, `seerr_only`/`not_in_library`, `requestable`, `available`, `source:jellyfin`, `source:jellyseerr`/`source:seerr`, `source:plex` |
+| `pool` | `unwatched`, `partial`/`continue_watching`, `watched`, `in_library`, `seerr_only`/`not_in_library`, `requestable`, `available`, `pinned`, `newly_added`, `taste:<profile>`, `source:jellyfin`, `source:jellyseerr`/`source:seerr`, `source:plex` |
 | `exclude` | Comma-separated paths/filenames recently shown (no-repeat bag) |
+| `queue` | Smart queue id (`unwatched`, `continue_watching`, `newly_added`, `seerr_trending`, `requestable`, `pinned`) — maps to pool/sort |
+| `profile` | Taste profile (`tonight`, `unwatched_heavy`, `cinephile`, `discovery`) |
 
 If a pool/filter would empty the set, the server **falls back** to the unfiltered layout (same as the legacy WebGUI). If every item is excluded and only one remains, exclude is ignored.
 
@@ -43,13 +45,15 @@ Response:
   "pool": "unwatched",
   "layout": "Netflix Hero",
   "parallaxStyle": "parallax",
-  "motionDuration": 6.0
+  "motionDuration": 6.0,
+  "queue": "unwatched",
+  "pinned": false
 }
 ```
 
-Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle` and `motionDuration` are **additive** (null when there is no clip). The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
+Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle`, `motionDuration`, `queue`, and `pinned` are **additive**. Hidden (`never-show`) titles are omitted from selection. The `pinned` pool does **not** fall back to the whole layout if empty. The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
 
-`GET /api/options` lists pick modes, pools, motion styles, and preferred clients.
+`GET /api/options` lists pick modes, pools, motion styles/presets, taste profiles, queues, and preferred clients.
 
 ## Editor / ops endpoints
 
@@ -58,9 +62,13 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET | `/api/health` | Liveness (`ok`, `service`, `version`) |
 | GET/POST | `/api/layouts/save`, `/api/layouts/load/{name}` | Layout JSON |
 | GET | `/api/gallery` | Catalog |
-| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
+| POST | `/api/gallery/{id}/flag` | `{ "pinned": true }` / `{ "hidden": true }` never-show |
+| GET | `/api/queues` | Smart-queue counts for a layout |
+| GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
+| GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
+| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`)
 | POST | `/api/wallpaper/generate-motion` | Re-bake parallax/Ken Burns MP4s for a layout |
-| GET/POST | `/api/settings` | Providers, cron, motion style/intensity/duration, editor theme |
+| GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |
 
 Generate skip/replace matches **Jellyfin / TMDB / IMDb ids** (then title+year). `ids` limits the batch; `skip_ids` excludes those ids even when skip-existing is off.

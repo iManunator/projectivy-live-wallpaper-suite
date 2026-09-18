@@ -22,6 +22,23 @@ export function describeMotion(style: MotionStyle, intensity: number, duration: 
   return `${label} · ${depth} · ${duration}s loop`;
 }
 
+export const INTENSITY_PRESETS: Record<string, number> = {
+  subtle: 0.28,
+  cinematic: 0.55,
+  bold: 0.88,
+};
+
+export function intensityFromPreset(name: string | null | undefined): number {
+  return INTENSITY_PRESETS[(name || "cinematic").toLowerCase()] ?? 0.55;
+}
+
+export function nearestMotionPreset(value: number): string {
+  const intensity = clampIntensity(value);
+  return Object.entries(INTENSITY_PRESETS).reduce((best, [name, amount]) =>
+    Math.abs(amount - intensity) < Math.abs(INTENSITY_PRESETS[best] - intensity) ? name : best,
+  "cinematic");
+}
+
 export function shouldPreferVideo(opts: {
   preferMotion: boolean;
   hasVideo: boolean;

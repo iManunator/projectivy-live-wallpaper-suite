@@ -71,5 +71,8 @@ def reload_jobs() -> None:
 
 
 def _run_job(**kwargs) -> None:
+    from app.ops import record_event
+
     request = GenerateRequest(**kwargs)
-    run_generate(request)
+    result = run_generate(request)
+    record_event("cron", {"layout": request.layout, "count": result.get("count"), "ok": True})

@@ -31,4 +31,24 @@ export const api = {
   testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,
+  flag: (id: string, body: { pinned?: boolean; hidden?: boolean }) =>
+    json<{ status: string; record: WallpaperRecord }>(`/api/gallery/${encodeURIComponent(id)}/flag`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  tonight: (layout: string, exclude?: string) => {
+    const params = new URLSearchParams({ layout });
+    if (exclude) params.set("exclude", exclude);
+    return json<{
+      status: Record<string, unknown>;
+      queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
+      profile: string;
+      motion: Record<string, unknown>;
+    }>(`/api/tonight?${params.toString()}`);
+  },
+  dashboard: () => json<Record<string, unknown>>("/api/dashboard"),
+  queues: (layout?: string) =>
+    json<Array<{ id: string; label: string; count: number; titles: string[] }>>(
+      layout ? `/api/queues?layout=${encodeURIComponent(layout)}` : "/api/queues",
+    ),
 };

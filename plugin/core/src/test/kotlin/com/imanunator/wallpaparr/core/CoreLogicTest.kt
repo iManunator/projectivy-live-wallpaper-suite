@@ -59,6 +59,27 @@ class WallpaperPickModesTest {
         val q = WallpaperPickModes.resolve("recent_years", "A", "", "", 30, 3, 0, 2026)
         assertEquals("2023", q.minYear)
     }
+
+    @Test
+    fun tonightMapsToTastePool() {
+        val q = WallpaperPickModes.resolve("tonight", "Hero", "", "", 30, 3, 0, 2026)
+        assertEquals("taste:tonight", q.pool)
+        assertEquals("random", q.sort)
+    }
+
+    @Test
+    fun continueWatchingAndNewlyAdded() {
+        val watching = WallpaperPickModes.resolve("continue_watching", "Hero", "", "", 30, 3, 0, 2026)
+        val newest = WallpaperPickModes.resolve("newly_added", "Hero", "", "", 30, 3, 0, 2026)
+        val trending = WallpaperPickModes.resolve("seerr_trending", "Hero", "", "", 30, 3, 0, 2026)
+        val pinned = WallpaperPickModes.resolve("pinned", "Hero", "", "", 30, 3, 0, 2026)
+        assertEquals("continue_watching", watching.pool)
+        assertEquals("latest", newest.sort)
+        assertEquals("newly_added", newest.pool)
+        assertEquals("source:jellyseerr", trending.pool)
+        assertEquals("rating", trending.sort)
+        assertEquals("pinned", pinned.pool)
+    }
 }
 
 class UrlSupportTest {
@@ -112,6 +133,13 @@ class StatusRequestTest {
         assertEquals("random", map["sort"])
         assertFalse(map.containsKey("genre"))
         assertFalse(map.containsKey("min_rating"))
+    }
+
+    @Test
+    fun includesProfileAndQueue() {
+        val map = StatusRequest(layout = "Hero", profile = "tonight", queue = "unwatched").toQueryMap()
+        assertEquals("tonight", map["profile"])
+        assertEquals("unwatched", map["queue"])
     }
 }
 

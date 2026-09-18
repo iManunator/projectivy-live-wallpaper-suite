@@ -89,6 +89,20 @@ PRESETS: dict[str, Layout] = {
             {"id": "overview", "slot": "overview", "x": 64, "y": 320, "width": 760, "font_size": 22},
         ),
     ),
+    "Projectivy Dock": Layout(
+        name="Projectivy Dock",
+        preset=True,
+        preset_id="projectivy_dock",
+        description="Safe-zone chrome: below the clock, above the Projectivy row dock.",
+        background=LayoutBackground(fade_left=0.4, fade_bottom=0.48, fade_top=0.16, fade_right=0.08, fade_softness=0.5),
+        layers=_layers(
+            {"id": "title", "slot": "title", "x": 88, "y": 140, "width": 900, "font_size": 64, "font_weight": "bold"},
+            {"id": "year", "slot": "year", "x": 88, "y": 230, "font_size": 24},
+            {"id": "genres", "slot": "genres", "x": 200, "y": 230, "font_size": 24, "max_items": 3},
+            {"id": "rating", "slot": "rating", "x": 88, "y": 280, "font_size": 30, "font_weight": "bold"},
+            {"id": "overview", "slot": "overview", "x": 88, "y": 360, "width": 760, "font_size": 24},
+        ),
+    ),
 }
 
 

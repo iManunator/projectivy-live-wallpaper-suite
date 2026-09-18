@@ -9,6 +9,17 @@
   "motion_fps": 24,
   "overwrite_existing": false,
   "editor_theme": "cinema",
+  "motion_preset": "cinematic",
+  "light_leak": true,
+  "taste_profile": "tonight",
+  "taste_weights": {
+    "unwatched": 50,
+    "newly_added": 30,
+    "requestable": 20
+  },
+  "overlays_enabled": false,
+  "overlay_clock": true,
+  "overlays": [],
   "jellyfin": {
     "url": "http://192.168.1.10:8096",
     "api_key": "YOUR_JELLYFIN_API_KEY",

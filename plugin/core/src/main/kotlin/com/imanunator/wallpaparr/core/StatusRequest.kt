@@ -11,6 +11,8 @@ data class StatusRequest(
     val sort: String? = null,
     val pool: String? = null,
     val exclude: String? = null,
+    val profile: String? = null,
+    val queue: String? = null,
 ) {
     fun toQueryMap(): Map<String, String> {
         val out = linkedMapOf("layout" to layout)
@@ -23,6 +25,8 @@ data class StatusRequest(
         sort?.takeIf { it.isNotBlank() }?.let { out["sort"] = it }
         pool?.takeIf { it.isNotBlank() }?.let { out["pool"] = it }
         exclude?.takeIf { it.isNotBlank() }?.let { out["exclude"] = it }
+        profile?.takeIf { it.isNotBlank() }?.let { out["profile"] = it }
+        queue?.takeIf { it.isNotBlank() }?.let { out["queue"] = it }
         return out
     }
 }

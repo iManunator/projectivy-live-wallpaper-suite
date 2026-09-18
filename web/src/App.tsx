@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "./lib/api";
 import { duplicateLayout, emptyLayout, SLOTS, validateLayout, type AppSettings, type CronJob, type Layout } from "./lib/layout";
 import type { WallpaperRecord } from "./lib/layout";
-import { clampIntensity, defaultDuration, describeMotion, type MotionStyle } from "./lib/motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, nearestMotionPreset, type MotionStyle } from "./lib/motion";
+import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import "./styles/app.css";
 
-type Page = "gallery" | "editor" | "generate" | "settings";
+type Page = "tonight" | "gallery" | "editor" | "generate" | "dashboard" | "settings";
 
 const SAMPLE: Record<string, string> = {
   title: "Northlight",
@@ -30,14 +31,23 @@ const EMPTY_SETTINGS: AppSettings = {
   motion_fps: 24,
   overwrite_existing: false,
   editor_theme: "cinema",
+  motion_preset: "cinematic",
+  light_leak: true,
+  taste_profile: "tonight",
+  taste_weights: { unwatched: 50, newly_added: 30, requestable: 20 },
+  overlays_enabled: false,
+  overlay_clock: true,
+  overlays: [],
   jellyfin: {},
   jellyseerr: {},
   tmdb: {},
   cron_jobs: [],
 };
 
+const PAGES: Page[] = ["tonight", "gallery", "editor", "generate", "dashboard", "settings"];
+
 export function App() {
-  const [page, setPage] = useState<Page>("gallery");
+  const [page, setPage] = useState<Page>("tonight");
   const [theme, setTheme] = useState("cinema");
   useEffect(() => {
     api
@@ -49,42 +59,179 @@ export function App() {
     <div className="app" data-theme={theme}>
       <nav className="nav">
         <h2 className="brand">Wallpaparr</h2>
-        <div className="brand-sub">Projectivy · cinematic stills & parallax</div>
-        {(["gallery", "editor", "generate", "settings"] as Page[]).map((id) => (
+        <div className="brand-sub">*arr live wallpapers for Projectivy</div>
+        {PAGES.map((id) => (
           <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>
-            {id[0].toUpperCase() + id.slice(1)}
+            {id === "tonight" ? "Tonight" : id[0].toUpperCase() + id.slice(1)}
           </button>
         ))}
       </nav>
       <main className="main">
+        {page === "tonight" && <TonightPage />}
         {page === "gallery" && <GalleryPage onEdit={() => setPage("editor")} />}
         {page === "editor" && <EditorPage />}
         {page === "generate" && <GeneratePage />}
+        {page === "dashboard" && <DashboardPage />}
         {page === "settings" && <SettingsPage onTheme={setTheme} />}
       </main>
     </div>
   );
 }
 
+type TonightPayload = {
+  status: {
+    imageUrl?: string | null;
+    title?: string | null;
+    mediaType?: string;
+    videoUrl?: string | null;
+    queue?: string | null;
+    pinned?: boolean;
+    layout?: string | null;
+    path?: string | null;
+  };
+  queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
+  profile: string;
+  motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean };
+};
+
+function TonightPage() {
+  const [layout, setLayout] = useState("Netflix Hero");
+  const [layouts, setLayouts] = useState<string[]>([]);
+  const [payload, setPayload] = useState<TonightPayload | null>(null);
+  const [error, setError] = useState("");
+  async function load(nextLayout = layout) {
+    try {
+      const data = (await api.tonight(nextLayout)) as TonightPayload;
+      setPayload(data);
+      setError("");
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+  useEffect(() => {
+    api.layouts().then(setLayouts).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    void load(layout);
+  }, [layout]);
+  const image = payload?.status?.imageUrl;
+  const queueLabel = payload?.status?.queue ? QUEUE_LABELS[payload.status.queue] || payload.status.queue : "Tonight";
+  return (
+    <section>
+      <h1>Tonight’s home screen</h1>
+      <p className="lede">
+        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock — then one-click a layout DNA preset.
+        Smart queues mix unwatched, continue watching, newly added, and Seerr titles from the demo catalog or your library.
+      </p>
+      <div className="chip-row">
+        {LAYOUT_DNA.map((preset) => (
+          <button
+            key={preset.name}
+            className={`chip ${layout === preset.name ? "active" : ""}`}
+            onClick={() => setLayout(preset.name)}
+            title={preset.blurb}
+          >
+            {preset.name}
+          </button>
+        ))}
+        {layouts
+          .filter((name) => !LAYOUT_DNA.some((preset) => preset.name === name))
+          .map((name) => (
+            <button key={name} className={`chip ${layout === name ? "active" : ""}`} onClick={() => setLayout(name)}>
+              {name}
+            </button>
+          ))}
+        <button className="btn tiny" onClick={() => load(layout)}>
+          Shuffle tonight
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="tonight-grid">
+        <div className="tv-preview" aria-label="Projectivy home screen preview">
+          {image ? <img className="tv-art" src={image} alt={payload?.status?.title || "Wallpaper"} /> : <div className="tv-art tv-art-empty">Generate a batch to fill tonight</div>}
+          <div className="tv-chrome">
+            <div className="tv-top">
+              <span className="tv-logo">projectivy</span>
+              <span className="tv-clock">9:41</span>
+            </div>
+            <div className="tv-hero-meta">
+              <span className="badge">{queueLabel}</span>
+              {payload?.status?.pinned && <span className="badge">Pinned</span>}
+              {payload?.status?.mediaType === "video" && <span className="badge">VIDEO</span>}
+              <h2>{payload?.status?.title || "Waiting for a title"}</h2>
+              <p>Behind the guide · {layout}</p>
+            </div>
+            <div className="tv-rows">
+              <div className="tv-row-label">Continue watching</div>
+              <div className="tv-posters">
+                <span /><span /><span /><span /><span />
+              </div>
+            </div>
+            <div className="tv-dock" />
+          </div>
+        </div>
+        <div className="card">
+          <h3>Taste · {payload?.profile || "tonight"}</h3>
+          <p className="muted">Weighted mix used by pick mode “Tonight’s mix” (`taste:tonight`).</p>
+          <ul className="taste-list">
+            {Object.entries(TASTE_PRESETS[payload?.profile || "tonight"] || TASTE_PRESETS.tonight).map(([id, weight]) => (
+              <li key={id}>
+                <strong>{weight}%</strong> {QUEUE_LABELS[id] || id}
+              </li>
+            ))}
+          </ul>
+          <p className="muted">
+            Motion {payload?.motion?.preset || "cinematic"} · {payload?.motion?.style || "parallax"}
+            {payload?.motion?.light_leak ? " · light leak" : ""}
+          </p>
+        </div>
+      </div>
+      <div className="queue-grid">
+        {(payload?.queues || []).map((queue) => (
+          <article className="card queue-card" key={queue.id}>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <strong>{queue.label}</strong>
+              <span className="badge">{queue.count}</span>
+            </div>
+            <p className="muted">{queue.titles.join(" · ") || "Empty in this layout"}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function GalleryPage({ onEdit }: { onEdit: () => void }) {
   const [items, setItems] = useState<WallpaperRecord[]>([]);
   const [error, setError] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
+  async function refresh() {
+    try {
+      setItems(await api.gallery());
+    } catch (err) {
+      setError(String(err));
+    }
+  }
   useEffect(() => {
-    api.gallery().then(setItems).catch((err) => setError(String(err)));
+    refresh();
   }, []);
+  const visible = items.filter((item) => showHidden || !item.hidden);
   return (
     <section>
       <h1>Gallery</h1>
       <p className="lede">
-        Generated stills and optional parallax VIDEO loops served to Projectivy. Open the editor to restyle a layout, or generate a fresh batch.
+        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation, or mark never-show so it drops out of every queue.
       </p>
       <div className="row" style={{ marginBottom: 18 }}>
         <button className="btn" onClick={onEdit}>Open editor</button>
-        <span className="muted">{items.length} wallpapers</span>
+        <span className="muted">{visible.length} wallpapers</span>
+        <label className="inline">
+          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show never-show
+        </label>
       </div>
       {error && <p className="error">{error}</p>}
       <div className="thumb-grid">
-        {items.map((item) => (
+        {visible.map((item) => (
           <article className="thumb" key={item.id}>
             <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
             <div className="meta">
@@ -94,9 +241,29 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
                 {item.has_video ? ` · ${item.parallax_style || "motion"}` : ""}
               </div>
               <div>
-                <span className="badge">{item.source}</span>
-                <span className="badge">{item.watch_state || "—"}</span>
-                {item.has_video && <span className="badge">VIDEO</span>}
+                {queueBadges(item).map((badge) => (
+                  <span className="badge" key={badge}>{badge}</span>
+                ))}
+              </div>
+              <div className="row" style={{ marginTop: 8 }}>
+                <button
+                  className="btn ghost tiny"
+                  onClick={async () => {
+                    await api.flag(item.id, { pinned: !item.pinned });
+                    refresh();
+                  }}
+                >
+                  {item.pinned ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  className="btn ghost tiny"
+                  onClick={async () => {
+                    await api.flag(item.id, { hidden: !item.hidden });
+                    refresh();
+                  }}
+                >
+                  {item.hidden ? "Allow again" : "Never show"}
+                </button>
               </div>
             </div>
           </article>
@@ -142,7 +309,7 @@ function EditorPage() {
   return (
     <section>
       <h1>Layout editor</h1>
-      <p className="lede">WYSIWYG-style chrome over a 16:9 stage. Slots bind to media metadata at generate time. Parallax VIDEO keeps this chrome nearly still while the artwork drifts.</p>
+      <p className="lede">WYSIWYG-style chrome over a 16:9 stage. Layout DNA presets (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock) keep metadata in Projectivy-safe zones. Parallax VIDEO keeps this chrome nearly still while the artwork drifts.</p>
       <div className="grid two">
         <div className="card">
           <div className="row" style={{ marginBottom: 12 }}>
@@ -341,7 +508,7 @@ function GeneratePage() {
     api.settings().then(setSettings).catch(() => undefined);
   }, []);
   const style = (settings?.motion_style || "parallax") as MotionStyle;
-  const intensity = clampIntensity(settings?.motion_intensity ?? 0.55);
+  const intensity = intensityFromPreset(settings?.motion_preset) || clampIntensity(settings?.motion_intensity ?? 0.55);
   const duration = settings?.motion_duration || defaultDuration(settings?.motion_quality || "light");
   return (
     <section>
@@ -377,7 +544,7 @@ function GeneratePage() {
         <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked })} /> Replace / overwrite same show</label>
         <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
         <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
-        <p className="muted">{describeMotion(style, intensity, duration)}. Stills always remain; the plugin prefers VIDEO when this is enabled.</p>
+        <p className="muted">{describeMotion(style, intensity, duration)}. Stills always remain; the plugin prefers VIDEO when this is enabled. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
         <div className="row" style={{ marginTop: 16 }}>
           <button
             className="btn"
@@ -414,6 +581,59 @@ function GeneratePage() {
   );
 }
 
+function DashboardPage() {
+  const [data, setData] = useState<Record<string, any> | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api.dashboard().then(setData).catch((err) => setError(String(err)));
+  }, []);
+  if (!data) return <p>{error || "Loading…"}</p>;
+  const gallery = data.gallery || {};
+  const cron = data.cron || {};
+  const providers = data.providers || {};
+  return (
+    <section>
+      <h1>Health</h1>
+      <p className="lede">Last cron, gallery size, motion preset, and whether Jellyfin / Seerr keys are configured. Demo mode is always healthy.</p>
+      {error && <p className="error">{error}</p>}
+      <div className="dash-grid">
+        <article className="card">
+          <h3>Gallery</h3>
+          <p className="dash-stat">{gallery.count ?? 0}</p>
+          <p className="muted">{gallery.videos ?? 0} VIDEO · {gallery.pinned ?? 0} pinned · {gallery.hidden ?? 0} never-show</p>
+        </article>
+        <article className="card">
+          <h3>Cron</h3>
+          <p className="dash-stat">{formatOpsTime(cron.last?.at)}</p>
+          <p className="muted">{cron.jobs ?? 0} jobs · last generate {formatOpsTime(cron.last_generate?.at)}</p>
+        </article>
+        <article className="card">
+          <h3>Motion</h3>
+          <p className="dash-stat">{data.motion?.preset || "cinematic"}</p>
+          <p className="muted">{data.motion?.style} · {data.motion?.quality}{data.motion?.light_leak ? " · leak" : ""}</p>
+        </article>
+        <article className="card">
+          <h3>Taste</h3>
+          <p className="dash-stat">{data.taste?.profile || "tonight"}</p>
+          <p className="muted">Plugin pick mode “Tonight’s mix” uses this profile.</p>
+        </article>
+      </div>
+      <div className="grid two" style={{ marginTop: 16 }}>
+        {["jellyfin", "jellyseerr", "tmdb", "demo"].map((name) => {
+          const row = providers[name] || {};
+          return (
+            <article className="card" key={name}>
+              <h3>{name}</h3>
+              <p>{row.configured ? "Configured" : "Not configured"}</p>
+              <p className="muted">Last test {formatOpsTime(row.last_test?.at)}</p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [msg, setMsg] = useState("");
@@ -443,13 +663,15 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   function setCron(next: CronJob) {
     setSettings({ ...settings!, cron_jobs: [next] });
   }
-  const style = (settings.motion_style || "parallax") as MotionStyle;
-  const intensity = clampIntensity(Number(settings.motion_intensity ?? 0.55));
+  const preset = settings.motion_preset || nearestMotionPreset(settings.motion_intensity);
+  const intensity = intensityFromPreset(preset);
   const duration = Number(settings.motion_duration || defaultDuration(settings.motion_quality));
+  const style = (settings.motion_style || "parallax") as MotionStyle;
+  const weights = settings.taste_weights || TASTE_PRESETS[settings.taste_profile || "tonight"];
   return (
     <section>
       <h1>Settings</h1>
-      <p className="lede">Provider keys stay in config.json on the server. This form never commits secrets. Plugin pick modes, filters, and VIDEO preference live on the TV; generation/motion defaults live here.</p>
+      <p className="lede">Provider keys stay in config.json on the server. This form never commits secrets. Plugin pick modes, filters, and VIDEO preference live on the TV; generation, taste, motion presets, and overlay hooks live here.</p>
       <div className="grid two">
         <div className="card">
           <h3>Serving</h3>
@@ -478,21 +700,35 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             <option value="kenburns">Ken Burns — single-layer zoom</option>
             <option value="drift">Drift — slow pan, tiny zoom</option>
           </select>
+          <label>Intensity preset</label>
+          <select
+            value={preset}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                motion_preset: e.target.value,
+                motion_intensity: intensityFromPreset(e.target.value),
+              })
+            }
+          >
+            <option value="subtle">Subtle</option>
+            <option value="cinematic">Cinematic</option>
+            <option value="bold">Bold</option>
+          </select>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.light_leak)}
+              onChange={(e) => setSettings({ ...settings, light_leak: e.target.checked })}
+            />{" "}
+            Light-leak layer on parallax VIDEO
+          </label>
           <label>Quality</label>
           <select value={settings.motion_quality} onChange={(e) => setSettings({ ...settings, motion_quality: e.target.value })}>
             <option value="light">light (~6s, 2.2 Mbps)</option>
             <option value="standard">standard (~8s, 3.5 Mbps)</option>
             <option value="cinematic">cinematic (~10s, 5 Mbps)</option>
           </select>
-          <label>Intensity ({intensity.toFixed(2)})</label>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={intensity}
-            onChange={(e) => setSettings({ ...settings, motion_intensity: clampIntensity(Number(e.target.value)) })}
-          />
           <label>Loop duration seconds (blank = quality default)</label>
           <input
             type="number"
@@ -515,6 +751,61 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             onChange={(e) => setSettings({ ...settings, motion_fps: Number(e.target.value) })}
           />
           <p className="muted">{describeMotion(style, intensity, duration)}</p>
+        </div>
+        <div className="card">
+          <h3>Taste profile</h3>
+          <label>Profile (plugin pick mode “Tonight’s mix”)</label>
+          <select
+            value={settings.taste_profile || "tonight"}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                taste_profile: e.target.value,
+                taste_weights: TASTE_PRESETS[e.target.value] || settings.taste_weights,
+              })
+            }
+          >
+            {Object.keys(TASTE_PRESETS).map((id) => (
+              <option key={id} value={id}>{id}</option>
+            ))}
+          </select>
+          {Object.entries(weights || {}).map(([id, weight]) => (
+            <div key={id}>
+              <label>{QUEUE_LABELS[id] || id} ({weight}%)</label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={weight}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    taste_weights: { ...weights, [id]: Number(e.target.value) },
+                  })
+                }
+              />
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <h3>Overlay widgets</h3>
+          <p className="muted">Off by default. Clock is a local demo widget; HA / news / JSON are documented hooks that render fixture cards so offline tests stay green.</p>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.overlays_enabled)}
+              onChange={(e) => setSettings({ ...settings, overlays_enabled: e.target.checked })}
+            />{" "}
+            Enable overlay widgets on generated stills / chrome
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.overlay_clock)}
+              onChange={(e) => setSettings({ ...settings, overlay_clock: e.target.checked })}
+            />{" "}
+            Clock card
+          </label>
         </div>
         <div className="card">
           <h3>Editor appearance</h3>

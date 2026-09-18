@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0
+
+Flagship Wallpaparr layer on the 1.0 wallpaper core.
+
+- Tonight’s home screen preview (Projectivy chrome overlay) and health dashboard in the web UI
+- Smart queues: Unwatched, Continue watching, Newly added, Seerr trending, Requestable, Pinned
+- Taste profiles with weighted mixes (`profile=` / `pool=taste:<name>`)
+- Pin / never-show gallery flags (hidden titles never selected)
+- Layout DNA: **Projectivy Dock** safe-zone preset plus Netflix Hero / Prime Cinematic / Google TV Clean
+- Parallax intensity presets Subtle / Cinematic / Bold and optional light-leak layer
+- Overlay widget hook (off by default) with a local clock card; HA / news / JSON demo stubs
+- Plugin pick modes for tonight / continue watching / newly added / Seerr trending / pinned
+- Additive status fields `queue` and `pinned`
+
 ## 1.0.0
 
 First release of **Wallpaparr**.

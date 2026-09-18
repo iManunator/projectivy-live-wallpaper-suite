@@ -32,7 +32,7 @@ status ──imageUrl──► JPEG  ──► WallpaperType.IMAGE
 | **kenburns** | Single composite still, classic slow zoom/pan |
 | **drift** | Same as Ken Burns with a larger pan and tiny zoom |
 
-Intensity (0–1), duration (2–20s), fps (12–30), and quality (`light` / `standard` / `cinematic`) are Settings fields. Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
+Intensity presets **Subtle / Cinematic / Bold** (0.28 / 0.55 / 0.88), duration (2–20s), fps (12–30), and quality (`light` / `standard` / `cinematic`) are Settings fields. Parallax may add a third **light-leak** lavfi layer. Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
 
 ## Bake pipeline
 

@@ -41,7 +41,7 @@ Open `http://YOUR_LAN_IP:8787`.
 
 ```bash
 docker pull ghcr.io/imanunator/wallpaparr:latest
-# or ghcr.io/imanunator/wallpaparr:1.0.0
+# or ghcr.io/imanunator/wallpaparr:1.1.0
 
 export PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787
 docker compose pull

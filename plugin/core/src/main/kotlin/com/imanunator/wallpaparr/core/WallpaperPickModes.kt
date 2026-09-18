@@ -16,6 +16,11 @@ data class ResolvedQuery(
 
 object WallpaperPickModes {
     val ALL: List<PickMode> = listOf(
+        PickMode("tonight", "Tonight's mix", "Smart"),
+        PickMode("continue_watching", "Continue watching", "Smart"),
+        PickMode("newly_added", "Newly added", "Smart"),
+        PickMode("seerr_trending", "Seerr trending", "Smart"),
+        PickMode("pinned", "Pinned titles", "Smart"),
         PickMode("random", "Random", "Sort"),
         PickMode("latest", "Newest generated", "Sort"),
         PickMode("oldest", "Oldest generated", "Sort"),
@@ -63,6 +68,11 @@ object WallpaperPickModes {
         val third = thirdLayout.ifBlank { secondary }
         val odd = counter % 2 == 0
         return when (modeId) {
+            "tonight" -> ResolvedQuery(primary, "random", pool = "taste:tonight")
+            "continue_watching" -> ResolvedQuery(primary, "random", pool = "continue_watching")
+            "newly_added" -> ResolvedQuery(primary, "latest", pool = "newly_added")
+            "seerr_trending" -> ResolvedQuery(primary, "rating", pool = "source:jellyseerr")
+            "pinned" -> ResolvedQuery(primary, "random", pool = "pinned")
             "latest" -> ResolvedQuery(primary, "latest")
             "oldest" -> ResolvedQuery(primary, "oldest")
             "rating_high" -> ResolvedQuery(primary, "rating")

@@ -63,6 +63,17 @@ describe("wallpaper query builder", () => {
     expect(url).toContain("exclude=northlight.jpg");
   });
 
+  it("encodes taste profile and smart queue", () => {
+    const url = buildStatusQuery({
+      layout: "Projectivy Dock",
+      sort: "random",
+      profile: "tonight",
+      queue: "unwatched",
+    });
+    expect(url).toContain("profile=tonight");
+    expect(url).toContain("queue=unwatched");
+  });
+
   it("parses year ranges", () => {
     expect(parseYearRange("2005-2010")).toEqual({ min: "2005", max: "2010" });
     expect(parseYearRange("2024")).toEqual({ min: "2024", max: "2024" });

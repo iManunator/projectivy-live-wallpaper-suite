@@ -1,37 +1,30 @@
 # Wallpaparr
 
-Cinematic **Projectivy** wallpapers — stills and optional **parallax VIDEO** loops — from Jellyfin and Jellyseerr/Seerr. *arr-style name, same idea as Sonarr/Radarr.
+Cinematic **Projectivy** wallpapers — stills and optional **parallax VIDEO** loops — from Jellyfin and Jellyseerr/Seerr. An *arr-family product: generate, queue, and serve tonight’s home screen.
 
 This GitHub repository may still be named `projectivy-live-wallpaper-suite`; the product is **Wallpaparr**.
 
-**Version:** 1.0.0 — [CHANGELOG.md](CHANGELOG.md) · [Verify (no Jellyfin)](docs/VERIFY.md) · [Install](docs/INSTALL.md) · [Parallax / IMAGE vs VIDEO](docs/MOTION.md)
+**Version:** 1.1.0 — [CHANGELOG.md](CHANGELOG.md) · [Verify (no Jellyfin)](docs/VERIFY.md) · [Install](docs/INSTALL.md) · [Parallax / IMAGE vs VIDEO](docs/MOTION.md) · [Overlay widgets](docs/OVERLAYS.md)
 
-## Verify tonight (no Jellyfin)
+![Tonight’s home screen](docs/screenshots/tonight.svg)
+![Gallery with smart-queue badges](docs/screenshots/gallery.svg)
+![Health dashboard](docs/screenshots/dashboard.svg)
 
-One command builds the **Dockerfile** (does not need GHCR) and hits the demo catalog:
+## Show off in 5 minutes (demo fixtures, no Jellyfin)
 
-```bash
-./scripts/verify.sh
-```
-
-That is `docker compose up --build` (`pull_policy: build` so Compose never depends on a public GHCR image), then:
+1. `./scripts/verify.sh` — builds the Dockerfile (`pull_policy: build`, no GHCR required), waits for health, curls demo wallpaper status.
+2. Open http://127.0.0.1:8787 — **Tonight** is the home page. You should see a 16:9 Projectivy chrome overlay (clock / rows / dock) over a demo title.
+3. Click **Netflix Hero**, **Prime Cinematic**, **Google TV Clean**, or **Projectivy Dock** to preview layout DNA. **Shuffle tonight** draws another title from the taste mix.
+4. **Generate** → source `Demo catalog` → enable *Bake parallax / motion VIDEO* if ffmpeg is in the image → Run batch. Gallery badges show Unwatched / Continue / Requestable / VIDEO.
+5. Pin or Never-show a title in the gallery; **Dashboard** shows gallery size, last cron, and provider configuration.
 
 ```bash
 curl -sf http://127.0.0.1:8787/api/health
-# {"ok":true,"service":"wallpaparr","version":"1.0.0"}
+# {"ok":true,"service":"wallpaparr","version":"1.1.0"}
 
-curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
-# demo title: Northlight — imageUrl is a JPEG, no Jellyfin required
-```
-
-UI: http://127.0.0.1:8787  
-Full copy-paste: [docs/VERIFY.md](docs/VERIFY.md)
-
-Equivalent without the script:
-
-```bash
-mkdir -p data && cp -n config.example.json data/config.json || true
-docker compose up --build -d
+curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&profile=tonight"
+curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
+curl -sf http://127.0.0.1:8787/api/dashboard
 ```
 
 Unit tests (no Docker): `./scripts/test.sh`
@@ -67,7 +60,7 @@ adb connect TV_IP
 adb install -r wallpaparr-plugin-release.apk
 ```
 
-Then Projectivy → Appearance → Wallpaper → **Wallpaparr**. Server URL: `http://YOUR_LAN_IP:8787`.
+Then Projectivy → Appearance → Wallpaper → **Wallpaparr**. Server URL: `http://YOUR_LAN_IP:8787`. Pick mode **Tonight’s mix** uses the suite taste profile.
 
 Package: `com.imanunator.wallpaparr`  
 UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
@@ -78,15 +71,25 @@ UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
 
 | Piece | Path | Role |
 | --- | --- | --- |
-| Backend | `backend/` | Generate, catalog, cron, Projectivy HTTP API |
-| Web UI | `web/` | Layout editor, gallery, generate, settings |
+| Backend | `backend/` | Generate, catalog, smart queues, taste, cron, Projectivy HTTP API |
+| Web UI | `web/` | Tonight preview, gallery, layout editor, generate, health, settings |
 | Plugin | `plugin/` | Projectivy wallpaper provider (`com.imanunator.wallpaparr`) |
 
-`GET /api/wallpaper/status` stays compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `path`, optional `mediaType`/`videoUrl`) and adds `parallaxStyle` / `motionDuration` when a clip exists. See [docs/API.md](docs/API.md).
+`GET /api/wallpaper/status` stays compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `path`, optional `mediaType`/`videoUrl`) and adds `parallaxStyle` / `motionDuration` / `queue` / `pinned` when relevant. See [docs/API.md](docs/API.md).
 
 ## Options
 
-Web UI and the plugin cover pick modes (random/latest/rating/year, watch/library/Seerr pools, mix/round-robin, no-repeat), filters, parallax motion, providers + tests, cron skip/replace/cleanup/ids, and client deep links (Jellyfin, Moonfin, …).
+| Area | What you can set |
+| --- | --- |
+| Layout DNA | Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock (safe zones), plus custom layouts |
+| Smart queues | Unwatched, Continue watching, Newly added, Seerr trending, Requestable, Pinned |
+| Taste profiles | tonight / unwatched_heavy / cinephile / discovery, with editable weights |
+| Pin / never-show | Gallery flags; hidden titles never enter `/status` |
+| No-repeat | Plugin exclude bag (recent paths decay as new ones arrive) |
+| Motion | parallax / kenburns / drift · Subtle / Cinematic / Bold · optional light-leak layer · still fallback |
+| Overlays | Off by default; optional clock card + HA/news/JSON hooks ([OVERLAYS.md](docs/OVERLAYS.md)) |
+| Plugin | Tonight’s mix, continue watching, newly added, Seerr trending, pinned, plus the original sort/pool/mix modes |
+| Cron | skip / replace / cleanup / ids / motion |
 
 ## Credits
 

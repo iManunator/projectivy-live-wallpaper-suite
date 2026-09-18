@@ -90,6 +90,8 @@ class WallpaperRecord(BaseModel):
     mtime: float = 0.0
     has_video: bool = False
     parallax_style: str | None = None
+    pinned: bool = False
+    hidden: bool = False
 
     def media_ids(self) -> set[str]:
         return {
@@ -111,6 +113,8 @@ class WallpaperStatus(BaseModel):
     layout: str | None = None
     parallaxStyle: str | None = None
     motionDuration: float | None = None
+    queue: str | None = None
+    pinned: bool = False
 
 
 class GenerateRequest(BaseModel):
@@ -136,6 +140,15 @@ class AppSettings(BaseModel):
     motion_fps: int = 24
     overwrite_existing: bool = False
     editor_theme: str = "cinema"
+    motion_preset: str = "cinematic"
+    light_leak: bool = True
+    taste_profile: str = "tonight"
+    taste_weights: dict[str, int] = Field(
+        default_factory=lambda: {"unwatched": 50, "newly_added": 30, "requestable": 20}
+    )
+    overlays_enabled: bool = False
+    overlay_clock: bool = True
+    overlays: list[dict[str, Any]] = Field(default_factory=list)
     jellyfin: dict[str, Any] = Field(default_factory=dict)
     jellyseerr: dict[str, Any] = Field(default_factory=dict)
     tmdb: dict[str, Any] = Field(default_factory=dict)

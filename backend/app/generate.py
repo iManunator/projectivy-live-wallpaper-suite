@@ -87,8 +87,11 @@ def generate_one(
     if layout is None:
         raise ValueError(f"Unknown layout: {layout_name}")
     catalog = catalog_store.load_catalog()
+    previous = matching_records(catalog, item, layout_name)
+    keep_pinned = any(rec.pinned for rec in previous)
+    keep_hidden = any(rec.hidden for rec in previous)
     if replace:
-        doomed = matching_records(catalog, item, layout_name)
+        doomed = previous
         if doomed:
             catalog_store.remove_records({rec.id for rec in doomed})
     backdrop_bytes = None
@@ -97,11 +100,13 @@ def generate_one(
             backdrop_bytes = http_get(item.backdrop_url)
         except Exception:
             backdrop_bytes = None
-    image = render_still(item, layout, backdrop_bytes=backdrop_bytes)
+    settings = load_settings()
+    from app.overlays import apply_overlays
+
+    image = apply_overlays(render_still(item, layout, backdrop_bytes=backdrop_bytes), settings)
     filename = _filename_for(item)
     dest: Path = catalog_store.layout_dir(layout_name) / filename
     save_jpeg(image, dest)
-    settings = load_settings()
     want_motion = motion or settings.motion_wallpapers
     video = False
     style = None
@@ -110,7 +115,7 @@ def generate_one(
         plate_path = dest.with_name(dest.stem + "_plate.jpg")
         chrome_path = dest.with_name(dest.stem + "_chrome.png")
         save_jpeg(render_plate(item, layout, backdrop_bytes=backdrop_bytes), plate_path)
-        save_png(render_chrome(item, layout), chrome_path)
+        save_png(apply_overlays(render_chrome(item, layout), settings), chrome_path)
         ok, _ = generate_motion(
             dest,
             profile=profile,
@@ -144,6 +149,8 @@ def generate_one(
         mtime=time.time(),
         has_video=video,
         parallax_style=style,
+        pinned=keep_pinned,
+        hidden=keep_hidden,
     )
     catalog_store.upsert(record)
     return record

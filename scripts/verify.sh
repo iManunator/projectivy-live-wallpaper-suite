@@ -34,6 +34,10 @@ echo
 
 echo "==> GET /api/wallpaper/status (demo catalog, no Jellyfin required)"
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
+echo "==> GET /api/tonight + /api/dashboard"
+curl -sf "http://127.0.0.1:8787/api/tonight?layout=Netflix%20Hero"
+echo
+curl -sf http://127.0.0.1:8787/api/dashboard
 echo
 echo
 echo "Wallpaparr is up. UI: http://127.0.0.1:8787"

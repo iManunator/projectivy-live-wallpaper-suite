@@ -50,6 +50,7 @@ class SelectionQuery:
     sort: str = "random"
     pool: str | None = None
     exclude: str | None = None
+    profile: str | None = None
 
 
 def _norm(value: str | None) -> str:
@@ -64,17 +65,24 @@ def matches_layout(record: WallpaperRecord, layout: str) -> bool:
     return _norm(record.layout) == _norm(layout)
 
 
-def apply_pool(records: list[WallpaperRecord], pool: str | None) -> list[WallpaperRecord]:
+def apply_pool(
+    records: list[WallpaperRecord],
+    pool: str | None,
+    *,
+    fallback: bool = True,
+) -> list[WallpaperRecord]:
     if not pool:
         return list(records)
     key = _norm(pool)
     before = list(records)
     if key == "unwatched":
         filtered = [r for r in records if _norm(r.watch_state) in WATCH_UNWATCHED]
-    elif key in ("partial", "partially_watched"):
+    elif key in ("partial", "partially_watched", "continue_watching"):
         filtered = [r for r in records if _norm(r.watch_state) in WATCH_PARTIAL]
     elif key == "watched":
         filtered = [r for r in records if _norm(r.watch_state) in WATCH_WATCHED]
+    elif key == "pinned":
+        return [r for r in records if r.pinned]
     elif key == "in_library":
         filtered = [
             r
@@ -110,7 +118,9 @@ def apply_pool(records: list[WallpaperRecord], pool: str | None) -> list[Wallpap
         ]
     else:
         filtered = list(records)
-    return filtered or before
+    if filtered:
+        return filtered
+    return before if fallback else []
 
 
 def apply_rating(records: list[WallpaperRecord], min_rating: float | None, max_rating: float | None) -> list[WallpaperRecord]:
@@ -195,23 +205,55 @@ def pick_sorted(records: list[WallpaperRecord], sort: str, rng: random.Random | 
     return chooser(items)
 
 
+def visible_records(records: list[WallpaperRecord]) -> list[WallpaperRecord]:
+    return [r for r in records if not r.hidden]
+
+
 def select_wallpaper(
     catalog: list[WallpaperRecord],
     query: SelectionQuery,
     rng: random.Random | None = None,
 ) -> WallpaperRecord | None:
-    existing = [r for r in catalog if matches_layout(r, query.layout)]
+    existing = visible_records([r for r in catalog if matches_layout(r, query.layout)])
     if not existing:
         return None
-    filtered = apply_pool(existing, query.pool)
+    pool = query.pool
+    sort = query.sort
+    profile = query.profile
+    if (pool or "").startswith("taste:"):
+        profile = profile or pool.split(":", 1)[1]
+        pool = None
+    if profile:
+        from app.queues import pick_taste, resolve_taste_weights
+
+        rec, _qid = pick_taste(
+            catalog,
+            query.layout,
+            resolve_taste_weights(profile),
+            rng=rng,
+            exclude=query.exclude,
+        )
+        return rec
+    if pool == "newly_added":
+        pool = None
+        sort = "latest"
+    if pool == "continue_watching":
+        pool = "partial"
+    strict = _norm(pool) == "pinned"
+    filtered = apply_pool(existing, pool, fallback=not strict)
     filtered = apply_rating(filtered, query.min_rating, query.max_rating)
     filtered = apply_year(filtered, query.min_year, query.max_year)
     filtered = apply_genre(filtered, query.genre)
     filtered = apply_age(filtered, query.age_rating)
     filtered = apply_exclude(filtered, query.exclude)
     if not filtered:
+        if strict:
+            return None
         filtered = existing
-    return pick_sorted(filtered, query.sort, rng=rng)
+    pinned = [r for r in filtered if r.pinned]
+    if pinned and (pool == "pinned" or (rng.random() < 0.35 if rng else False)):
+        filtered = pinned
+    return pick_sorted(filtered, sort, rng=rng)
 
 
 def unique_values(catalog: list[WallpaperRecord], field: str) -> list[str]:

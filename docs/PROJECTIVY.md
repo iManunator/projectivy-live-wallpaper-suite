@@ -26,7 +26,13 @@ Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VID
 | Setting | Status API |
 | --- | --- |
 | Primary / secondary / third layout | `layout` (mix and round-robin modes) |
-| Pick mode | `sort` + `pool` (see `WallpaperPickModes`) |
+| Pick mode | Status API |
+| --- | --- |
+| Tonight’s mix | `pool=taste:tonight` (server taste profile) |
+| Continue watching | `pool=continue_watching` |
+| Newly added | `sort=latest` + `pool=newly_added` |
+| Seerr trending | `pool=source:jellyseerr` + `sort=rating` |
+| Pinned titles | `pool=pinned` (no fallback) |
 | Genre / age / year | `genre`, `age_rating`, `min_year`, `max_year` |
 | Min / max rating | `min_rating`, `max_rating` |
 | No-repeat bag | `exclude` |

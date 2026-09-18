@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampIntensity, defaultDuration, describeMotion, shouldPreferVideo } from "./motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, nearestMotionPreset, shouldPreferVideo } from "./motion";
 
 describe("motion options", () => {
   it("clamps intensity", () => {
@@ -24,5 +24,12 @@ describe("motion options", () => {
   it("defaults duration from quality", () => {
     expect(defaultDuration("light")).toBe(6);
     expect(defaultDuration("standard")).toBe(8);
+  });
+
+  it("maps intensity presets", () => {
+    expect(intensityFromPreset("subtle")).toBe(0.28);
+    expect(intensityFromPreset("bold")).toBe(0.88);
+    expect(nearestMotionPreset(0.9)).toBe("bold");
+    expect(nearestMotionPreset(0.3)).toBe("subtle");
   });
 });

@@ -15,11 +15,13 @@ from app.jobs import reload_jobs
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
 from app import __version__
 from app.models import AppSettings, GenerateRequest, Layout, WallpaperStatus
-from app.motion import generate_motion, profile_from_settings
+from app.motion import generate_motion, intensity_from_preset, profile_from_settings
+from app.ops import load_ops
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
 from app.providers.tmdb import TmdbProvider
+from app.queues import QUEUE_DEFS, TASTE_PRESETS, queue_ids_for, summarize_queues
 from app.selection import SelectionQuery, select_wallpaper, unique_values
 
 router = APIRouter()
@@ -115,12 +117,16 @@ def suite_options() -> dict[str, Any]:
             "seerr_only",
             "requestable",
             "available",
+            "pinned",
             "source:jellyfin",
             "source:jellyseerr",
             "source:plex",
         ],
         "motion_styles": ["parallax", "kenburns", "drift"],
         "motion_qualities": ["light", "standard", "cinematic"],
+        "motion_presets": ["subtle", "cinematic", "bold"],
+        "taste_profiles": list(TASTE_PRESETS.keys()),
+        "queues": [{"id": qid, "label": spec["label"]} for qid, spec in QUEUE_DEFS.items()],
         "pick_modes": [
             "random",
             "latest",
@@ -149,6 +155,11 @@ def suite_options() -> dict[str, Any]:
             "layout_round_robin",
             "genre_round_robin",
             "no_repeat_bag",
+            "tonight",
+            "continue_watching",
+            "newly_added",
+            "seerr_trending",
+            "pinned",
         ],
         "clients": [
             {"name": "Moonfin", "package": "org.moonfin.androidtv", "type": "deep_link"},
@@ -192,8 +203,23 @@ def wallpaper_status(
     pool: str | None = None,
     exclude: str | None = None,
     exclude_path: str | None = None,
+    queue: str | None = None,
+    profile: str | None = None,
 ) -> WallpaperStatus:
     catalog = catalog_store.load_catalog()
+    settings = load_settings()
+    pool_arg = pool
+    sort_arg = sort or "random"
+    profile_arg = profile
+    if queue:
+        spec = QUEUE_DEFS.get(queue)
+        if spec:
+            pool_arg = spec.get("pool") or pool_arg
+            if spec.get("sort") and sort_arg == "random":
+                sort_arg = str(spec["sort"])
+    if (pool_arg or "").startswith("taste:"):
+        profile_arg = profile_arg or pool_arg.split(":", 1)[1]
+        pool_arg = None
     query = SelectionQuery(
         layout=layout,
         genre=genre,
@@ -202,14 +228,19 @@ def wallpaper_status(
         max_year=_int_or_none(max_year),
         min_rating=_float_or_none(min_rating),
         max_rating=_float_or_none(max_rating),
-        sort=sort or "random",
-        pool=pool,
+        sort=sort_arg,
+        pool=pool_arg,
         exclude=exclude or exclude_path,
+        profile=profile_arg,
     )
     selected = select_wallpaper(catalog, query)
-    status = WallpaperStatus(sort=query.sort, pool=query.pool or None, layout=layout)
+    status = WallpaperStatus(sort=query.sort, pool=query.pool or queue or None, layout=layout)
     if not selected:
         return status
+    return _fill_status(request, status, selected, settings)
+
+
+def _fill_status(request: Request, status: WallpaperStatus, selected, settings) -> WallpaperStatus:
     jpg = catalog_store.wallpaper_file(selected.layout, selected.filename)
     if not jpg:
         return status
@@ -217,14 +248,19 @@ def wallpaper_status(
     status.actionUrl = selected.action_url
     status.title = selected.title
     status.path = selected.filename
+    status.pinned = bool(selected.pinned)
+    queues = queue_ids_for(selected)
+    status.queue = queues[0] if queues else None
     mp4 = jpg.with_suffix(".mp4")
     if selected.has_video or (mp4.is_file() and mp4.stat().st_size > 1000):
         status.videoUrl = _public_url(request, selected.layout, mp4.name)
         status.mediaType = "video"
-        settings = load_settings()
         status.parallaxStyle = selected.parallax_style or settings.motion_style
         profile = profile_from_settings(settings)
         status.motionDuration = profile.duration
+    else:
+        status.mediaType = "image"
+        status.videoUrl = None
     return status
 
 
@@ -252,6 +288,100 @@ def gallery_delete(record_id: str) -> dict[str, Any]:
     return {"status": "ok"}
 
 
+@router.post("/api/gallery/{record_id}/flag")
+def gallery_flag(record_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    catalog = catalog_store.load_catalog()
+    rec = next((r for r in catalog if r.id == record_id), None)
+    if not rec:
+        raise HTTPException(404, "Not found")
+    if "pinned" in body:
+        rec.pinned = bool(body["pinned"])
+    if "hidden" in body:
+        rec.hidden = bool(body["hidden"])
+    catalog_store.upsert(rec)
+    return {"status": "ok", "record": rec.model_dump()}
+
+
+@router.get("/api/queues")
+def list_queues(layout: str | None = None) -> list[dict[str, Any]]:
+    views = summarize_queues(catalog_store.load_catalog(), layout)
+    return [{"id": v.id, "label": v.label, "count": v.count, "titles": v.titles} for v in views]
+
+
+@router.get("/api/tonight")
+def tonight(
+    request: Request,
+    layout: str = Query("Netflix Hero"),
+    exclude: str | None = None,
+) -> dict[str, Any]:
+    settings = load_settings()
+    catalog = catalog_store.load_catalog()
+    status = wallpaper_status(
+        request,
+        layout=layout,
+        profile=settings.taste_profile or "tonight",
+        exclude=exclude,
+    )
+    queues = list_queues(layout)
+    return {
+        "status": status.model_dump(),
+        "queues": queues,
+        "profile": settings.taste_profile,
+        "motion": {
+            "style": settings.motion_style,
+            "preset": settings.motion_preset,
+            "intensity": intensity_from_preset(settings.motion_preset),
+            "light_leak": settings.light_leak,
+        },
+    }
+
+
+@router.get("/api/dashboard")
+def dashboard() -> dict[str, Any]:
+    settings = load_settings()
+    catalog = catalog_store.load_catalog()
+    ops = load_ops()
+    jf = settings.jellyfin or {}
+    se = settings.jellyseerr or {}
+    tm = settings.tmdb or {}
+    return {
+        "ok": True,
+        "service": "wallpaparr",
+        "version": __version__,
+        "gallery": {
+            "count": len(catalog),
+            "layouts": sorted({r.layout for r in catalog}),
+            "videos": sum(1 for r in catalog if r.has_video),
+            "pinned": sum(1 for r in catalog if r.pinned),
+            "hidden": sum(1 for r in catalog if r.hidden),
+        },
+        "cron": {
+            "jobs": len(settings.cron_jobs or []),
+            "last": ops.get("cron"),
+            "last_generate": ops.get("generate"),
+        },
+        "providers": {
+            "jellyfin": {
+                "configured": bool(jf.get("url") and jf.get("api_key")),
+                "last_test": ops.get("test_jellyfin"),
+            },
+            "jellyseerr": {
+                "configured": bool(se.get("url") and se.get("api_key")),
+                "last_test": ops.get("test_jellyseerr") or ops.get("test_seerr"),
+            },
+            "tmdb": {"configured": bool(tm.get("api_key")), "last_test": ops.get("test_tmdb")},
+            "demo": {"configured": True, "last_test": ops.get("test_demo")},
+        },
+        "motion": {
+            "style": settings.motion_style,
+            "preset": settings.motion_preset,
+            "quality": settings.motion_quality,
+            "light_leak": settings.light_leak,
+        },
+        "taste": {"profile": settings.taste_profile, "weights": settings.taste_weights},
+    }
+
+
 @router.get("/api/settings")
 def get_settings() -> dict[str, Any]:
     return load_settings().model_dump()
@@ -268,18 +398,24 @@ def post_settings(settings: AppSettings) -> dict[str, Any]:
 def test_provider(provider: str) -> dict[str, Any]:
     settings = load_settings()
     key = provider.lower()
+    from app.ops import record_event
+
+    result: dict[str, Any]
     if key == "jellyfin":
         cfg = settings.jellyfin or {}
-        return JellyfinProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "", user_id=cfg.get("user_id") or "").test()
-    if key in ("seerr", "jellyseerr"):
+        result = JellyfinProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "", user_id=cfg.get("user_id") or "").test()
+    elif key in ("seerr", "jellyseerr"):
         cfg = settings.jellyseerr or {}
-        return SeerrProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "").test()
-    if key == "tmdb":
+        result = SeerrProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "").test()
+    elif key == "tmdb":
         cfg = settings.tmdb or {}
-        return TmdbProvider(api_key=cfg.get("api_key") or "").test()
-    if key == "demo":
-        return DemoProvider().test()
-    raise HTTPException(404, "Unknown provider")
+        result = TmdbProvider(api_key=cfg.get("api_key") or "").test()
+    elif key == "demo":
+        result = DemoProvider().test()
+    else:
+        raise HTTPException(404, "Unknown provider")
+    record_event(f"test_{key}", {"ok": bool(result.get("ok")), "provider": key})
+    return result
 
 
 @router.get("/api/media")
@@ -289,7 +425,11 @@ def media_preview(source: str = "demo", limit: int = 12) -> list[dict[str, Any]]
 
 @router.post("/api/generate")
 def generate(request: GenerateRequest) -> dict[str, Any]:
-    return run_generate(request)
+    from app.ops import record_event
+
+    result = run_generate(request)
+    record_event("generate", {"layout": request.layout, "count": result.get("count"), "ok": True})
+    return result
 
 
 @router.post("/api/wallpaper/generate-motion")
