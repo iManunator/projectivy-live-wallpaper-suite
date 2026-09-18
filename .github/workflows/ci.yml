@@ -1,9 +1,19 @@
+# Wallpaparr CI
+#
+# Pull requests: test + build the image locally (no GHCR push) and upload
+#   wallpaparr-plugin-apk + wallpaparr-image artifacts.
+# Pushes to main: same tests, then publish ghcr.io/imanunator/wallpaparr
+#   with tags :latest, :ci, and :sha-<git>. Requires packages: write so
+#   GITHUB_TOKEN can push to GHCR. The package is linked to this repo via
+#   org.opencontainers.image.source (see docker/metadata-action labels).
+# Tags (v*): the Release workflow also publishes GHCR + GitHub Release APKs.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,6 +21,8 @@ permissions:
 
 env:
   IMAGE: ghcr.io/imanunator/wallpaparr
+  # Keep in sync with release.yml — GHCR package name is wallpaparr (lowercase).
+  GHCR_PACKAGE: https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr
 
 jobs:
   backend:
@@ -90,11 +102,17 @@ jobs:
           if-no-files-found: error
 
   image:
+    # Publish GHCR only on main (and tags, if this workflow ever runs there).
+    # Job-level packages: write is required for docker/login-action + push.
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         with:
           registry: ghcr.io
@@ -104,6 +122,14 @@ jobs:
         id: meta
         with:
           images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.title=Wallpaparr
+            org.opencontainers.image.description=Cinematic Projectivy live/parallax wallpapers from Jellyfin and Seerr
+            org.opencontainers.image.source=https://github.com/iManunator/projectivy-live-wallpaper-suite
+            org.opencontainers.image.url=https://github.com/iManunator/projectivy-live-wallpaper-suite
+            org.opencontainers.image.documentation=https://github.com/iManunator/projectivy-live-wallpaper-suite#readme
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=iManunator
           tags: |
             type=raw,value=ci,enable=true
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}

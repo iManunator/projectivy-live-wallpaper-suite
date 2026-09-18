@@ -13,7 +13,9 @@ cd plugin
 ./gradlew :app:assembleDebug :app:assembleRelease
 ```
 
-CI uploads **`wallpaparr-plugin-apk`** (`wallpaparr-plugin-debug.apk` + sideload-signed `wallpaparr-plugin-release.apk`). Releases attach the same files. See [INSTALL.md](INSTALL.md).
+**Install from the GitHub Release** (durable): [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk).
+
+CI also uploads ephemeral artifact **`wallpaparr-plugin-apk`** (same filenames) on every green Android job. See [INSTALL.md](INSTALL.md) and [RELEASE.md](RELEASE.md).
 
 The `:core` JVM module holds pick-mode mapping, URL rewrite, IMAGE vs VIDEO choice, and deep-link builders so logic is tested without an emulator.
 

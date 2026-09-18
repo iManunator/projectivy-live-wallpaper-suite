@@ -4,6 +4,15 @@ SeerChannel (Preview Channel rows) is **not** part of this suite. Wallpaparr shi
 
 The GitHub repository may still be named `projectivy-live-wallpaper-suite`. The product, image, and APK are **Wallpaparr**.
 
+## Downloads
+
+| Artifact | Where |
+| --- | --- |
+| **Plugin APK** | [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) on the [GitHub Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest) |
+| **Container** | [`ghcr.io/imanunator/wallpaparr`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) (`:latest` from `main`, `:1.1.0` from tag `v1.1.0`) |
+
+Packaging, `packages: write`, and the exact tag command: **[RELEASE.md](RELEASE.md)**.
+
 ## Local verify (offline demo, no Jellyfin)
 
 Step-by-step for an assistant machine: [VERIFY.md](VERIFY.md)
@@ -39,16 +48,16 @@ Open `http://YOUR_LAN_IP:8787`.
 
 ### Tag a GitHub Release (GHCR + APKs)
 
-`.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest`, then attaches `wallpaparr-plugin-release.apk` (and debug) to a GitHub Release.
+`.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest` (`packages: write`), then attaches **`wallpaparr-plugin-release.apk`** (and debug) to a GitHub Release (`contents: write`). Details: [RELEASE.md](RELEASE.md).
 
 ```bash
 git checkout main
-git pull
-git tag v1.1.0
+git pull origin main
+git tag -a v1.1.0 -m "Wallpaparr 1.1.0"
 git push origin v1.1.0
 ```
 
-Merges to **main** also run CI, which pushes GHCR when not a pull request.
+Merges to **main** also run CI, which pushes GHCR `:latest` when the event is not a pull request.
 
 ### Pull a published image (after a release / main build)
 
@@ -73,10 +82,10 @@ docker run --rm -p 8787:8787 \
 
 ## 2. Plugin APK (Android TV / Projectivy)
 
-Download **one** of:
+Download **one** of (prefer the Release — Actions artifacts expire):
 
-- GitHub **Release** assets: `wallpaparr-plugin-release.apk` (sideload-signed) or `wallpaparr-plugin-debug.apk`
-- GitHub **Actions** artifact **`wallpaparr-plugin-apk`** (same filenames)
+- GitHub **Release** asset (primary): [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk)
+- GitHub **Actions** artifact **`wallpaparr-plugin-apk`** (same filenames; use until the first `v*` tag)
 - Local: `cd plugin && ./gradlew :app:assembleRelease` → `plugin/app/build/outputs/apk/release/app-release.apk`
 
 Install on the TV:
