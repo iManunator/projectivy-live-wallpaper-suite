@@ -1,0 +1,52 @@
+"""FastAPI application: wallpaper API + editor SPA."""
+
+from __future__ import annotations
+
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from app import __version__
+from app.api import router
+from app.config import ensure_dirs
+from app.generate import run_generate
+from app.jobs import shutdown_scheduler, start_scheduler
+from app.layouts import seed_presets
+from app.models import GenerateRequest
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_dirs()
+    seed_presets()
+    if os.environ.get("SUITE_SKIP_SCHEDULER") != "1":
+        start_scheduler()
+    from app.catalog import load_catalog
+
+    if os.environ.get("SUITE_SKIP_SEED") != "1" and not load_catalog():
+        run_generate(GenerateRequest(layout="Netflix Hero", source="demo", limit=6, skip_existing=False))
+    yield
+    if os.environ.get("SUITE_SKIP_SCHEDULER") != "1":
+        shutdown_scheduler()
+
+
+app = FastAPI(
+    title="Wallpaparr",
+    version=__version__,
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(router)
+
+WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+if WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0c0d10"/>
+  <text x="48" y="56" fill="#e2b657" font-family="Georgia, serif" font-size="28">Gallery</text>
+  <rect x="48" y="90" width="360" height="210" rx="14" fill="#14161c"/>
+  <rect x="428" y="90" width="360" height="210" rx="14" fill="#14161c"/>
+  <rect x="808" y="90" width="360" height="210" rx="14" fill="#14161c"/>
+  <text x="64" y="280" fill="#f4efe6" font-family="sans-serif" font-size="16">Northlight</text>
+  <text x="64" y="302" fill="#e2b657" font-family="sans-serif" font-size="12">Unwatched · VIDEO</text>
+  <text x="444" y="280" fill="#f4efe6" font-family="sans-serif" font-size="16">Harbor Season</text>
+  <text x="444" y="302" fill="#e2b657" font-family="sans-serif" font-size="12">Continue</text>
+  <text x="824" y="280" fill="#f4efe6" font-family="sans-serif" font-size="16">Signal Country</text>
+  <text x="824" y="302" fill="#e2b657" font-family="sans-serif" font-size="12">Requestable · Seerr</text>
+  <text x="48" y="700" fill="#9a9388" font-family="sans-serif" font-size="12">Placeholder screenshot  pin / never-show live in the gallery</text>
+</svg>
