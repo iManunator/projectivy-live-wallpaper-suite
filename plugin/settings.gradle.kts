@@ -13,7 +13,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "projectivy-live-wallpaper-plugin"
+rootProject.name = "wallpaparr-plugin"
 include(":core")
 include(":api")
 include(":app")

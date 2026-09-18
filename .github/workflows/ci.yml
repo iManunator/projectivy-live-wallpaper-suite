@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/imanunator/projectivy-live-wallpaper-suite
+  IMAGE: ghcr.io/imanunator/wallpaparr
 
 jobs:
   backend:
@@ -51,27 +51,42 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: plugin
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-      - name: JVM unit tests (no Android SDK)
+      - name: Install Android SDK platforms (no obsolete tools package)
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | tail -n 1)"
+          if [[ -z "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under $ANDROID_HOME" >&2
+            ls -la "$ANDROID_HOME" || true
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: JVM unit tests (no Android SDK compile of :app)
+        working-directory: plugin
         run: ./gradlew :core:test --no-daemon
-      - uses: android-actions/setup-android@v3
-      - name: Android unit tests and APKs
+      - name: Android unit tests and sideload APKs
+        working-directory: plugin
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --no-daemon
+      - name: Stage named APKs
+        run: |
+          mkdir -p dist
+          cp plugin/app/build/outputs/apk/debug/app-debug.apk dist/wallpaparr-plugin-debug.apk
+          cp plugin/app/build/outputs/apk/release/app-release.apk dist/wallpaparr-plugin-release.apk
       - name: Upload plugin APKs
         uses: actions/upload-artifact@v4
         with:
-          name: live-wallpaper-plugin-apk
-          path: |
-            plugin/app/build/outputs/apk/debug/app-debug.apk
-            plugin/app/build/outputs/apk/release/app-release.apk
+          name: wallpaparr-plugin-apk
+          path: dist/wallpaparr-plugin-*.apk
           if-no-files-found: error
 
   image:
@@ -110,11 +125,11 @@ jobs:
       - name: Save loadable image artifact
         if: github.event_name == 'pull_request'
         run: |
-          docker save "${IMAGE}:ci" | gzip > projectivy-live-wallpaper-suite-image.tar.gz
-          ls -lh projectivy-live-wallpaper-suite-image.tar.gz
+          docker save "${IMAGE}:ci" | gzip > wallpaparr-image.tar.gz
+          ls -lh wallpaparr-image.tar.gz
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request'
         with:
-          name: projectivy-live-wallpaper-suite-image
-          path: projectivy-live-wallpaper-suite-image.tar.gz
+          name: wallpaparr-image
+          path: wallpaparr-image.tar.gz
           if-no-files-found: error

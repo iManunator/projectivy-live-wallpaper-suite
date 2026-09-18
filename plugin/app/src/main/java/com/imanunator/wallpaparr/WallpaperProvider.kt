@@ -1,4 +1,4 @@
-package com.imanunator.projectivy.livewallpaper
+package com.imanunator.wallpaparr
 
 import android.content.ContentProvider
 import android.content.ContentValues

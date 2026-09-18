@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.imanunator.projectivy.livewallpaper"
+    namespace = "com.imanunator.wallpaparr"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.imanunator.projectivy.livewallpaper"
+        applicationId = "com.imanunator.wallpaparr"
         minSdk = 23
         targetSdk = 35
         versionCode = 1

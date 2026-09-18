@@ -57,7 +57,7 @@ describe("App smoke", () => {
   it("renders gallery heading", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Live Wallpaper Suite" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Wallpaparr" })).toBeInTheDocument();
     expect(screen.getByText(/0 wallpapers/)).toBeInTheDocument();
   });
 });

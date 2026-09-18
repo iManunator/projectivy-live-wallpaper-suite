@@ -49,7 +49,7 @@
 
         <provider
             android:name=".WallpaperProvider"
-            android:authorities="com.imanunator.projectivy.livewallpaper.wallpaper"
+            android:authorities="com.imanunator.wallpaparr.wallpaper"
             android:exported="true">
             <meta-data
                 android:name="updateMode"
@@ -85,7 +85,7 @@
                 android:value=".ProjectivySettingsAlias" />
             <meta-data
                 android:name="authority"
-                android:value="com.imanunator.projectivy.livewallpaper.wallpaper" />
+                android:value="com.imanunator.wallpaparr.wallpaper" />
             <meta-data
                 android:name="itemsCacheDurationMillis"
                 android:value="1000" />

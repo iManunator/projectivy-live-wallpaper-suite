@@ -1,4 +1,4 @@
-package com.imanunator.projectivy.livewallpaper.core
+package com.imanunator.wallpaparr.core
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse

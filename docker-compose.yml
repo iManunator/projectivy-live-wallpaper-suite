@@ -1,8 +1,13 @@
+# Wallpaparr — cinematic Projectivy wallpapers.
+# Local verify always builds the Dockerfile (`docker compose up --build`).
+# `image:` is the tag applied to that local build, and the name used if you later `docker compose pull` from GHCR.
 services:
-  wallpaper-suite:
-    build: .
-    image: ghcr.io/imanunator/projectivy-live-wallpaper-suite:latest
-    container_name: projectivy-live-wallpaper-suite
+  wallpaparr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/imanunator/wallpaparr:latest
+    container_name: wallpaparr
     ports:
       - "8787:8787"
     environment:
@@ -14,4 +19,10 @@ services:
     volumes:
       - ./data:/data
       - ./config.example.json:/data/config.example.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8787/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 45s
     restart: unless-stopped

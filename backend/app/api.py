@@ -56,7 +56,7 @@ def _public_url(request: Request, layout: str, filename: str) -> str:
 
 @router.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "projectivy-live-wallpaper-suite", "version": __version__}
+    return {"ok": True, "service": "wallpaparr", "version": __version__}
 
 
 @router.get("/api/layouts/list")

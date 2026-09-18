@@ -1,14 +1,14 @@
-package com.imanunator.projectivy.livewallpaper
+package com.imanunator.wallpaparr
 
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
-import com.imanunator.projectivy.livewallpaper.core.ClientIntents
-import com.imanunator.projectivy.livewallpaper.core.ClientType
-import com.imanunator.projectivy.livewallpaper.core.MediaChoice
-import com.imanunator.projectivy.livewallpaper.core.UrlSupport
-import com.imanunator.projectivy.livewallpaper.core.WallpaperPickModes
+import com.imanunator.wallpaparr.core.ClientIntents
+import com.imanunator.wallpaparr.core.ClientType
+import com.imanunator.wallpaparr.core.MediaChoice
+import com.imanunator.wallpaparr.core.UrlSupport
+import com.imanunator.wallpaparr.core.WallpaperPickModes
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import tv.projectivy.plugin.wallpaperprovider.api.Event

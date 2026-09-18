@@ -48,7 +48,7 @@ export function App() {
   return (
     <div className="app" data-theme={theme}>
       <nav className="nav">
-        <h2 className="brand">Live Wallpaper Suite</h2>
+        <h2 className="brand">Wallpaparr</h2>
         <div className="brand-sub">Projectivy · cinematic stills & parallax</div>
         {(["gallery", "editor", "generate", "settings"] as Page[]).map((id) => (
           <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>

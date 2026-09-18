@@ -1,6 +1,6 @@
-package com.imanunator.projectivy.livewallpaper
+package com.imanunator.wallpaparr
 
-import com.imanunator.projectivy.livewallpaper.core.UrlSupport
+import com.imanunator.wallpaparr.core.UrlSupport
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

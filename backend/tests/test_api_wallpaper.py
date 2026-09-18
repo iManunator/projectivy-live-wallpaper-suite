@@ -4,7 +4,9 @@ from __future__ import annotations
 def test_health(client):
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json()["ok"] is True
+    body = response.json()
+    assert body["ok"] is True
+    assert body["service"] == "wallpaparr"
 
 
 def test_layouts_list_includes_presets(client):

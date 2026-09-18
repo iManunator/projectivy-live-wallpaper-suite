@@ -35,7 +35,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Projectivy Live Wallpaper Suite",
+    title="Wallpaparr",
     version=__version__,
     lifespan=lifespan,
 )

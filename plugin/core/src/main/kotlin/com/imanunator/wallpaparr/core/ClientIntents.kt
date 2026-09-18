@@ -1,4 +1,4 @@
-package com.imanunator.projectivy.livewallpaper.core
+package com.imanunator.wallpaparr.core
 
 enum class ClientType { DEEP_LINK, LAUNCH }
 

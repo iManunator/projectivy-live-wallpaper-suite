@@ -1,9 +1,9 @@
-package com.imanunator.projectivy.livewallpaper
+package com.imanunator.wallpaparr
 
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
-import com.imanunator.projectivy.livewallpaper.core.UrlSupport
+import com.imanunator.wallpaparr.core.UrlSupport
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject

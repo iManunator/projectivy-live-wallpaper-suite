@@ -1,4 +1,4 @@
-package com.imanunator.projectivy.livewallpaper.core
+package com.imanunator.wallpaparr.core
 
 data class ChosenWallpaper(val uri: String, val isVideo: Boolean)
 

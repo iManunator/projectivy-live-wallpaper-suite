@@ -1,11 +1,11 @@
-package com.imanunator.projectivy.livewallpaper
+package com.imanunator.wallpaparr
 
 import android.os.Bundle
 import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidanceStylist
 import androidx.leanback.widget.GuidedAction
-import com.imanunator.projectivy.livewallpaper.core.ClientIntents
-import com.imanunator.projectivy.livewallpaper.core.WallpaperPickModes
+import com.imanunator.wallpaparr.core.ClientIntents
+import com.imanunator.wallpaparr.core.WallpaperPickModes
 
 class SettingsFragment : GuidedStepSupportFragment() {
     override fun onCreateGuidance(savedInstanceState: Bundle?): GuidanceStylist.Guidance {
