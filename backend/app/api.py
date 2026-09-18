@@ -252,7 +252,8 @@ def _fill_status(request: Request, status: WallpaperStatus, selected, settings) 
     queues = queue_ids_for(selected)
     status.queue = queues[0] if queues else None
     mp4 = jpg.with_suffix(".mp4")
-    if selected.has_video or (mp4.is_file() and mp4.stat().st_size > 1000):
+    has_clip = mp4.is_file() and mp4.stat().st_size > 1000
+    if has_clip:
         status.videoUrl = _public_url(request, selected.layout, mp4.name)
         status.mediaType = "video"
         status.parallaxStyle = selected.parallax_style or settings.motion_style

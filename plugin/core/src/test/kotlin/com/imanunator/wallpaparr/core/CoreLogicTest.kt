@@ -206,4 +206,17 @@ class MediaChoiceTest {
         )
         assertEquals(false, chosen!!.isVideo)
     }
+
+    @Test
+    fun blankVideoUrlDoesNotCountAsMotion() {
+        val chosen = MediaChoice.choose(
+            imageUrl = "http://x/a.jpg",
+            videoUrl = "",
+            mediaType = "video",
+            preferMotion = true,
+            fallbackStill = true,
+        )
+        assertEquals(false, chosen!!.isVideo)
+        assertTrue(chosen.uri.endsWith(".jpg"))
+    }
 }

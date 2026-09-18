@@ -37,12 +37,14 @@ def suite_dirs(tmp_path, monkeypatch):
     import app.jobs as jobs_mod
     import app.layouts as layouts_mod
     import app.main as main_mod
+    import app.ops as ops_mod
 
     importlib.reload(config_mod)
     importlib.reload(catalog_mod)
     importlib.reload(layouts_mod)
-    importlib.reload(jobs_mod)
     importlib.reload(generate_mod)
+    importlib.reload(jobs_mod)
+    importlib.reload(ops_mod)
     importlib.reload(api_mod)
     importlib.reload(main_mod)
     config_mod.ensure_dirs()

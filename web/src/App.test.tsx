@@ -95,5 +95,10 @@ describe("App smoke", () => {
     expect(screen.getByText(/0 wallpapers/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Health" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByText(/Taste profile/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Overlay widgets/i })).toBeInTheDocument();
+    expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
   });
 });

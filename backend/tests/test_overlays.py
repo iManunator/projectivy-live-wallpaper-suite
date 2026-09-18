@@ -55,3 +55,11 @@ def test_settings_clock_toggle():
     settings.overlays = [{"kind": "news", "x": 20, "y": 20, "width": 160, "height": 60}]
     specs = specs_from_settings(settings)
     assert [s.kind for s in specs] == ["news"]
+
+
+def test_apply_overlays_changes_still_when_enabled():
+    settings = AppSettings(overlays_enabled=True, overlay_clock=True)
+    base = Image.new("RGB", (320, 180), (10, 20, 30))
+    out = apply_overlays(base, settings, now=datetime(2026, 9, 18, 20, 45))
+    assert out.mode == "RGB"
+    assert out.getpixel((90, 50)) != base.getpixel((90, 50))

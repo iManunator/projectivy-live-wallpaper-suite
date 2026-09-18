@@ -212,6 +212,17 @@ def test_settings_roundtrip_motion_options(client):
     assert saved["motion_style"] == "parallax"
     assert saved["motion_intensity"] == 0.8
     assert saved["editor_theme"] == "high-contrast"
+    settings["motion_preset"] = "bold"
+    settings["light_leak"] = False
+    settings["taste_profile"] = "cinephile"
+    settings["overlays_enabled"] = False
+    settings["overlay_clock"] = True
+    assert client.post("/api/settings", json=settings).status_code == 200
+    saved = client.get("/api/settings").json()
+    assert saved["motion_preset"] == "bold"
+    assert saved["light_leak"] is False
+    assert saved["taste_profile"] == "cinephile"
+    assert saved["overlays_enabled"] is False
 
 
 def test_dashboard_and_tonight(client):
@@ -293,3 +304,57 @@ def test_generate_with_clock_overlay(client):
     assert out["count"] == 1
     gallery = client.get("/api/gallery", params={"layout": "Projectivy Dock"}).json()
     assert gallery[0]["title"] == "Northlight"
+
+
+def test_stale_has_video_flag_does_not_advertise_missing_mp4(client, suite_dirs):
+    catalog_mod = suite_dirs["catalog_mod"]
+    records = catalog_mod.load_catalog()
+    north = next(r for r in records if r.title == "Northlight")
+    north.has_video = True
+    north.parallax_style = "parallax"
+    catalog_mod.upsert(north)
+    body = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "sort": "latest"},
+    ).json()
+    assert body["title"] == "Northlight"
+    assert body["imageUrl"]
+    assert body["videoUrl"] is None
+    assert body["mediaType"] == "image"
+
+
+def test_replace_preserves_pin_and_hidden(client):
+    gallery = client.get("/api/gallery", params={"layout": "Netflix Hero"}).json()
+    rec = next(item for item in gallery if item["title"] == "Northlight")
+    client.post(f"/api/gallery/{rec['id']}/flag", json={"pinned": True})
+    out = client.post(
+        "/api/generate",
+        json={
+            "layout": "Netflix Hero",
+            "source": "demo",
+            "limit": 20,
+            "skip_existing": False,
+            "replace_existing": True,
+            "ids": ["demo-jf-1"],
+        },
+    ).json()
+    assert out["count"] == 1
+    gallery = client.get("/api/gallery", params={"layout": "Netflix Hero"}).json()
+    north = next(item for item in gallery if item["title"] == "Northlight")
+    assert north["pinned"] is True
+
+
+def test_wallpaper_status_taste_pool_prefix(client):
+    body = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "pool": "taste:tonight"},
+    ).json()
+    assert body["imageUrl"]
+    assert body["title"]
+
+
+def test_generate_motion_batch_contract(client):
+    body = client.post("/api/wallpaper/generate-motion", params={"layout": "Prime Cinematic"}).json()
+    assert body["status"] == "ok"
+    assert "generated" in body
+    assert body["style"] in {"parallax", "kenburns", "drift"}
