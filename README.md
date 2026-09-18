@@ -72,18 +72,17 @@ Durable artifacts live on **GitHub Releases** and **GHCR**. Actions artifacts ex
 | --- | --- |
 | **Plugin APK (primary)** | [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) on the [latest GitHub Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest) |
 | Debug APK | [`wallpaparr-plugin-debug.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-debug.apk) |
-| **Container** | [`ghcr.io/imanunator/wallpaparr:latest`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) · also `:1.1.0` after tag `v1.1.0` |
-| CI fallback (before the first tag) | Green **CI** run on `main` → artifact `wallpaparr-plugin-apk` (same filenames) |
+| **Container** | [`ghcr.io/imanunator/wallpaparr:latest`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) · also [`:1.1.0`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) |
+| CI fallback | Green **CI** run → artifact `wallpaparr-plugin-apk` (same filenames; expires) |
 
 ```bash
 docker pull ghcr.io/imanunator/wallpaparr:latest
 adb install -r wallpaparr-plugin-release.apk
 ```
 
-How GHCR + Release publishing works (permissions, tag command): **[docs/RELEASE.md](docs/RELEASE.md)**.
+How GHCR + Release publishing works (permissions, future tags): **[docs/RELEASE.md](docs/RELEASE.md)**.
 
-> If `/releases/latest` 404s, the `v1.1.0` tag has not been pushed yet. CI on `main` still publishes `:latest` to GHCR and still **builds** the APK. One tag push finishes the Release:
-> `git checkout main && git pull && git tag v1.1.0 && git push origin v1.1.0`
+**v1.1.0 is published** — [Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.1.0) includes `wallpaparr-plugin-release.apk`; GHCR tags include `:latest`, `:v1.1.0`, and `:1.1.0`. Do not retag `v1.1.0`.
 
 ---
 
@@ -129,7 +128,7 @@ Unit tests (no Docker): `./scripts/test.sh`.
 
 ### 4. Plugin — Projectivy on the TV
 
-1. Sideload [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk).
+1. Sideload [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/download/v1.1.0/wallpaparr-plugin-release.apk).
 2. Projectivy → Appearance → Wallpaper → **Wallpaparr**.
 3. Server URL: `http://YOUR_LAN_IP:8787` (not `127.0.0.1` — the TV has to reach it).
 4. Pick mode **Tonight’s mix**. Enable **Prefer parallax / motion VIDEO** if you baked MP4s.
