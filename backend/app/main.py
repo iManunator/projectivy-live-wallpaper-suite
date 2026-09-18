@@ -13,10 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api import router
 from app.config import ensure_dirs
-from app.generate import run_generate
+from app.generate import seed_demo_catalog
 from app.jobs import shutdown_scheduler, start_scheduler
 from app.layouts import seed_presets
-from app.models import GenerateRequest
 
 
 @asynccontextmanager
@@ -28,7 +27,7 @@ async def lifespan(_app: FastAPI):
     from app.catalog import load_catalog
 
     if os.environ.get("SUITE_SKIP_SEED") != "1" and not load_catalog():
-        run_generate(GenerateRequest(layout="Netflix Hero", source="demo", limit=6, skip_existing=False))
+        seed_demo_catalog(layout="Netflix Hero", limit=6)
     yield
     if os.environ.get("SUITE_SKIP_SCHEDULER") != "1":
         shutdown_scheduler()
