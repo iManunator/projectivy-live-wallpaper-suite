@@ -1,0 +1,17 @@
+services:
+  wallpaper-suite:
+    build: .
+    image: projectivy-live-wallpaper-suite:local
+    container_name: projectivy-live-wallpaper-suite
+    ports:
+      - "8787:8787"
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8787}
+      SUITE_DATA: /data
+      SUITE_LAYOUTS: /data/layouts
+      SUITE_GALLERY: /data/gallery
+      SUITE_CONFIG: /data/config.json
+    volumes:
+      - ./data:/data
+      - ./config.example.json:/data/config.example.json:ro
+    restart: unless-stopped
