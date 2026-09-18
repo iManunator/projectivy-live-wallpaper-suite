@@ -14,6 +14,8 @@ Flagship Wallpaparr layer on the 1.0 wallpaper core.
 - Plugin pick modes for tonight / continue watching / newly added / Seerr trending / pinned
 - Additive status fields `queue` and `pinned`
 
+Local verify: demo `sort=latest` is **Northlight**; `./scripts/test.sh` uses `backend/.venv`; `./scripts/verify.sh` falls back to `docker build`/`docker run` without Compose v2.
+
 ## 1.0.0
 
 First release of **Wallpaparr**.

@@ -37,6 +37,19 @@ docker compose up --build -d
 
 Open `http://YOUR_LAN_IP:8787`.
 
+### Tag a GitHub Release (GHCR + APKs)
+
+`.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest`, then attaches `wallpaparr-plugin-release.apk` (and debug) to a GitHub Release.
+
+```bash
+git checkout main
+git pull
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+Merges to **main** also run CI, which pushes GHCR when not a pull request.
+
 ### Pull a published image (after a release / main build)
 
 ```bash
