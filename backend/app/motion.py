@@ -1,16 +1,123 @@
-"""Optional Ken Burns MP4 loops for Projectivy VIDEO wallpapers."""
+"""Parallax / Ken Burns / drift VIDEO loops for Projectivy.
+
+Projectivy wallpaper plugins return either:
+  - IMAGE (JPEG URL) — static, or
+  - VIDEO (H.264 MP4 URL) — looping live wallpaper.
+
+This module bakes the VIDEO. The ``parallax`` style keeps metadata chrome
+nearly still while the artwork layer breathes and drifts (true depth).
+``kenburns`` / ``drift`` animate a single composite still.
+"""
 
 from __future__ import annotations
 
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
-QUALITY = {
-    "light": {"w": 1920, "h": 1080, "fps": 24, "duration": 3.0, "bitrate": "1800k", "zoom": 1.035},
-    "standard": {"w": 1920, "h": 1080, "fps": 25, "duration": 4.0, "bitrate": "2800k", "zoom": 1.045},
-}
+STYLES = ("parallax", "kenburns", "drift")
+QUALITIES = ("light", "standard", "cinematic")
+
+_BITRATE = {"light": "2200k", "standard": "3500k", "cinematic": "5000k"}
+_DEFAULT_DURATION = {"light": 6.0, "standard": 8.0, "cinematic": 10.0}
+
+
+@dataclass(frozen=True)
+class MotionProfile:
+    style: str = "parallax"
+    quality: str = "light"
+    intensity: float = 0.55
+    duration: float = 6.0
+    fps: int = 24
+    width: int = 1920
+    height: int = 1080
+
+    @property
+    def frames(self) -> int:
+        return max(int(round(self.duration * self.fps)), 2)
+
+    @property
+    def bitrate(self) -> str:
+        return _BITRATE.get(self.quality, "2200k")
+
+    @property
+    def bg_zoom_amp(self) -> float:
+        base = {"parallax": 0.07, "kenburns": 0.045, "drift": 0.02}.get(self.style, 0.05)
+        return round(base * (0.45 + self.intensity * 1.1), 4)
+
+    @property
+    def bg_pan(self) -> float:
+        base = {"parallax": 36.0, "kenburns": 18.0, "drift": 42.0}.get(self.style, 24.0)
+        return round(base * (0.4 + self.intensity), 2)
+
+    @property
+    def fg_pan(self) -> float:
+        # Foreground moves less → depth. Zero-ish at low intensity.
+        return round(self.bg_pan * 0.22, 2)
+
+    def normalized_style(self) -> str:
+        style = (self.style or "parallax").strip().lower()
+        return style if style in STYLES else "parallax"
+
+
+def profile_from_settings(settings) -> MotionProfile:
+    quality = str(getattr(settings, "motion_quality", None) or "light").strip().lower()
+    if quality not in QUALITIES:
+        quality = "light"
+    intensity = float(getattr(settings, "motion_intensity", None) or 0.55)
+    intensity = min(1.0, max(0.0, intensity))
+    duration = getattr(settings, "motion_duration", None)
+    duration_f = float(duration) if duration else _DEFAULT_DURATION[quality]
+    duration_f = min(20.0, max(2.0, duration_f))
+    fps = int(getattr(settings, "motion_fps", None) or 24)
+    fps = min(30, max(12, fps))
+    style = str(getattr(settings, "motion_style", None) or "parallax")
+    return MotionProfile(
+        style=style,
+        quality=quality,
+        intensity=intensity,
+        duration=duration_f,
+        fps=fps,
+    )
+
+
+def zoompan_expr(amp: float, pan: float, frames: int, width: int, height: int, fps: int) -> str:
+    """Ken-Burns zoompan. No commas inside the z/x/y expressions (ffmpeg filtergraph)."""
+    return (
+        f"zoompan=z='1+{amp}*sin(2*PI*on/{frames})':"
+        f"x='iw/2-(iw/zoom/2)+({pan})*sin(2*PI*on/{frames})':"
+        f"y='ih/2-(ih/zoom/2)+({pan * 0.45})*cos(2*PI*on/{frames})':"
+        f"d=1:s={width}x{height}:fps={fps}"
+    )
+
+
+def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
+    """Return an ffmpeg -filter_complex (parallax) or -vf (single layer) graph."""
+    p = MotionProfile(
+        style=profile.normalized_style(),
+        quality=profile.quality,
+        intensity=profile.intensity,
+        duration=profile.duration,
+        fps=profile.fps,
+        width=profile.width,
+        height=profile.height,
+    )
+    w, h, fps, frames = p.width, p.height, p.fps, p.frames
+    prep = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    if has_chrome and p.style == "parallax":
+        bg = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
+        fg_x = f"{p.fg_pan}*sin(2*PI*n/{frames})"
+        fg_y = f"{p.fg_pan * 0.4}*cos(2*PI*n/{frames})"
+        return (
+            f"[0:v]{prep},{bg}[bg];"
+            f"[1:v]scale={w}:{h},format=rgba[fg];"
+            f"[bg][fg]overlay=x='{fg_x}':y='{fg_y}':shortest=1,format=yuv420p"
+        )
+    # Single-layer kenburns / drift (or parallax without a chrome plate)
+    zp = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
+    return f"{prep},{zp},format=yuv420p"
 
 
 def ffmpeg_bin() -> str | None:
@@ -29,7 +136,15 @@ def has_motion(jpg: Path) -> bool:
         return False
 
 
-def generate_motion(jpg: Path, quality: str = "light", force: bool = False) -> tuple[bool, str]:
+def generate_motion(
+    jpg: Path,
+    *,
+    profile: MotionProfile | None = None,
+    quality: str | None = None,
+    force: bool = False,
+    plate: Path | None = None,
+    chrome: Path | None = None,
+) -> tuple[bool, str]:
     if not jpg.is_file():
         return False, "jpeg missing"
     if not force and has_motion(jpg):
@@ -37,32 +152,41 @@ def generate_motion(jpg: Path, quality: str = "light", force: bool = False) -> t
     ff = ffmpeg_bin()
     if not ff:
         return False, "ffmpeg not found"
-    preset = QUALITY.get(quality) or QUALITY["light"]
-    w, h = preset["w"], preset["h"]
-    fps = int(preset["fps"])
-    duration = float(preset["duration"])
-    bitrate = preset["bitrate"]
-    amp = float(preset["zoom"]) - 1.0
-    frames = max(int(round(duration * fps)), 2)
-    zoompan = (
-        f"zoompan=z='1+{amp}*sin(2*PI*on/{frames})':"
-        f"x='iw/2-(iw/zoom/2)':"
-        f"y='ih/2-(ih/zoom/2)+({amp}*20)*sin(2*PI*on/{frames})':"
-        f"d=1:s={w}x{h}:fps={fps}"
-    )
-    vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},{zoompan}"
+    if profile is None:
+        profile = MotionProfile(quality=quality or "light", style="kenburns" if not chrome else "parallax")
+        if quality == "standard":
+            profile = MotionProfile(quality="standard", duration=8.0, style=profile.style)
+        elif quality == "cinematic":
+            profile = MotionProfile(quality="cinematic", duration=10.0, style=profile.style)
+    style = profile.normalized_style()
+    use_chrome = bool(chrome and chrome.is_file() and style == "parallax")
+    graph = build_filtergraph(profile, has_chrome=use_chrome)
+    src = plate if plate and plate.is_file() else jpg
     mp4 = mp4_path_for(jpg)
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     try:
-        cmd = [
-            ff, "-y", "-loop", "1", "-i", str(jpg),
-            "-vf", vf, "-t", str(duration), "-r", str(fps),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "main",
-            "-level", "4.0", "-b:v", bitrate, "-maxrate", bitrate,
-            "-bufsize", "4M", "-movflags", "+faststart", "-an", str(tmp_path),
+        cmd = [ff, "-y", "-loop", "1", "-i", str(src)]
+        if use_chrome:
+            cmd += ["-loop", "1", "-i", str(chrome)]
+            cmd += ["-filter_complex", graph]
+        else:
+            cmd += ["-vf", graph]
+        cmd += [
+            "-t", str(profile.duration),
+            "-r", str(profile.fps),
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-profile:v", "main",
+            "-level", "4.0",
+            "-b:v", profile.bitrate,
+            "-maxrate", profile.bitrate,
+            "-bufsize", "4M",
+            "-movflags", "+faststart",
+            "-an",
+            str(tmp_path),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         if result.returncode != 0 or not tmp_path.is_file() or tmp_path.stat().st_size < 1000:
             tail = (result.stderr or result.stdout or "ffmpeg failed").strip().splitlines()[-8:]
             return False, " | ".join(tail) or "ffmpeg failed"
@@ -73,3 +197,24 @@ def generate_motion(jpg: Path, quality: str = "light", force: bool = False) -> t
     finally:
         if tmp_path.exists() and tmp_path != mp4:
             tmp_path.unlink(missing_ok=True)
+
+
+def choose_delivery(
+    *,
+    image_url: str | None,
+    video_url: str | None,
+    prefer_video: bool,
+    fallback_still: bool = True,
+    media_type: str | None = None,
+) -> tuple[str | None, str]:
+    """Pick IMAGE vs VIDEO for a client. Always keeps image_url available for fallback."""
+    has_video = bool(video_url) and (
+        (media_type or "").lower() == "video" or str(video_url).lower().endswith(".mp4")
+    )
+    if prefer_video and has_video:
+        return video_url, "video"
+    if image_url:
+        return image_url, "image"
+    if fallback_still is False and has_video:
+        return video_url, "video"
+    return None, "image"

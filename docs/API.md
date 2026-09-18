@@ -41,21 +41,26 @@ Response:
   "path": "northlight-demo.jpg",
   "sort": "random",
   "pool": "unwatched",
-  "layout": "Netflix Hero"
+  "layout": "Netflix Hero",
+  "parallaxStyle": "parallax",
+  "motionDuration": 6.0
 }
 ```
 
-`mediaType` is `"video"` when a sibling MP4 exists; the plugin decides whether to prefer it.
+Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle` and `motionDuration` are **additive** (null when there is no clip). The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
+
+`GET /api/options` lists pick modes, pools, motion styles, and preferred clients.
 
 ## Editor / ops endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/health` | Liveness |
+| GET | `/api/health` | Liveness (`ok`, `service`, `version`) |
 | GET/POST | `/api/layouts/save`, `/api/layouts/load/{name}` | Layout JSON |
 | GET | `/api/gallery` | Catalog |
-| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`) |
-| GET/POST | `/api/settings` | Providers, cron, motion |
+| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
+| POST | `/api/wallpaper/generate-motion` | Re-bake parallax/Ken Burns MP4s for a layout |
+| GET/POST | `/api/settings` | Providers, cron, motion style/intensity/duration, editor theme |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |
 
-Generate skip/replace matches **Jellyfin / TMDB / IMDb ids** (then title+year).
+Generate skip/replace matches **Jellyfin / TMDB / IMDb ids** (then title+year). `ids` limits the batch; `skip_ids` excludes those ids even when skip-existing is off.

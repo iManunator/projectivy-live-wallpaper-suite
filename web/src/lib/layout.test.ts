@@ -23,6 +23,31 @@ describe("layout validation", () => {
 });
 
 describe("wallpaper query builder", () => {
+  it("encodes rating, year, and age filters", () => {
+    const url = buildStatusQuery({
+      layout: "Prime Cinematic",
+      sort: "rating",
+      pool: "seerr_only",
+      age_rating: "PG-13",
+      min_year: "2020",
+      max_year: "2025",
+      min_rating: 8,
+      max_rating: 9.5,
+    });
+    expect(url).toContain("age_rating=PG-13");
+    expect(url).toContain("min_year=2020");
+    expect(url).toContain("max_year=2025");
+    expect(url).toContain("min_rating=8");
+    expect(url).toContain("max_rating=9.5");
+    expect(url).toContain("pool=seerr_only");
+  });
+
+  it("omits zero min rating and full-scale max rating", () => {
+    const url = buildStatusQuery({ layout: "Hero", sort: "random", min_rating: 0, max_rating: 10 });
+    expect(url).not.toContain("min_rating");
+    expect(url).not.toContain("max_rating");
+  });
+
   it("encodes Projectivy status params", () => {
     const url = buildStatusQuery({
       layout: "Netflix Hero",

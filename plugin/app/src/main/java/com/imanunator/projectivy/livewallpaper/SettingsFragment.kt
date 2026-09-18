@@ -20,26 +20,40 @@ class SettingsFragment : GuidedStepSupportFragment() {
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
         PreferencesManager.init(requireContext())
         actions += editable(ID_SERVER, "Server URL", PreferencesManager.serverUrl)
-        actions += editable(ID_LAYOUT, "Collection / Layout", PreferencesManager.selectedLayout)
+        actions += editable(ID_LAYOUT, "Primary layout / collection", PreferencesManager.selectedLayout)
+        actions += editable(ID_SECONDARY, "Secondary layout (mix modes)", PreferencesManager.secondaryLayout)
+        actions += editable(ID_THIRD, "Third layout (round-robin)", PreferencesManager.thirdLayout)
         actions += listAction(
             ID_PICK,
             "Wallpaper pick mode",
             WallpaperPickModes.labelFor(PreferencesManager.wallpaperPickMode),
-            WallpaperPickModes.ALL.map { it.label },
+            WallpaperPickModes.ALL.map { "${it.group}: ${it.label}" },
         )
-        actions += GuidedAction.Builder(context)
-            .id(ID_MOTION)
-            .title("Prefer motion video")
-            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
-            .checked(PreferencesManager.preferMotion)
-            .build()
-        actions += editable(ID_SECONDARY, "Secondary layout", PreferencesManager.secondaryLayout)
         actions += editable(ID_GENRE, "Genre filter (comma)", PreferencesManager.genreFilter)
         actions += editable(ID_AGE, "Age rating filter", PreferencesManager.ageFilter)
         actions += editable(ID_YEAR, "Year or range (2005-2010)", PreferencesManager.yearFilter)
+        actions += editable(ID_MIN_RATING, "Minimum rating (0-10)", PreferencesManager.minRating.toString())
+        actions += editable(ID_MAX_RATING, "Maximum rating (0-10)", PreferencesManager.maxRating.toString())
+        actions += editable(ID_MIX, "Weighted mix % newest (0-100)", PreferencesManager.mixRatio.toString())
+        actions += editable(ID_RECENT, "Recent-years window", PreferencesManager.recentYears.toString())
+        actions += editable(ID_EXCLUDE, "No-repeat bag depth", PreferencesManager.excludeDepth.toString())
+        actions += GuidedAction.Builder(context)
+            .id(ID_MOTION)
+            .title("Prefer parallax / motion VIDEO")
+            .description("Use baked MP4 when the suite provides videoUrl")
+            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
+            .checked(PreferencesManager.preferMotion)
+            .build()
+        actions += GuidedAction.Builder(context)
+            .id(ID_FALLBACK)
+            .title("Fallback to still JPEG")
+            .description("If no MP4, use imageUrl")
+            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
+            .checked(PreferencesManager.fallbackStill)
+            .build()
         actions += listAction(
             ID_CLIENT,
-            "Preferred client",
+            "Preferred client / deep link",
             ClientIntents.SUPPORTED.firstOrNull { it.packageName == PreferencesManager.preferredClient }?.name
                 ?: PreferencesManager.preferredClient,
             ClientIntents.SUPPORTED.map { it.name },
@@ -55,19 +69,27 @@ class SettingsFragment : GuidedStepSupportFragment() {
     override fun onGuidedActionClicked(action: GuidedAction) {
         when (action.id) {
             ID_MOTION -> PreferencesManager.preferMotion = action.isChecked
+            ID_FALLBACK -> PreferencesManager.fallbackStill = action.isChecked
             ID_IDLE -> PreferencesManager.refreshOnIdleExit = action.isChecked
         }
         (activity as? SettingsActivity)?.requestWallpaperUpdate()
     }
 
     override fun onGuidedActionEditedAndProceed(action: GuidedAction): Long {
+        val text = action.description?.toString().orEmpty()
         when (action.id) {
-            ID_SERVER -> PreferencesManager.serverUrl = action.description?.toString().orEmpty()
-            ID_LAYOUT -> PreferencesManager.selectedLayout = action.description?.toString().orEmpty()
-            ID_SECONDARY -> PreferencesManager.secondaryLayout = action.description?.toString().orEmpty()
-            ID_GENRE -> PreferencesManager.genreFilter = action.description?.toString().orEmpty()
-            ID_AGE -> PreferencesManager.ageFilter = action.description?.toString().orEmpty()
-            ID_YEAR -> PreferencesManager.yearFilter = action.description?.toString().orEmpty()
+            ID_SERVER -> PreferencesManager.serverUrl = text
+            ID_LAYOUT -> PreferencesManager.selectedLayout = text
+            ID_SECONDARY -> PreferencesManager.secondaryLayout = text
+            ID_THIRD -> PreferencesManager.thirdLayout = text
+            ID_GENRE -> PreferencesManager.genreFilter = text
+            ID_AGE -> PreferencesManager.ageFilter = text
+            ID_YEAR -> PreferencesManager.yearFilter = text
+            ID_MIN_RATING -> PreferencesManager.minRating = text.toFloatOrNull() ?: 0f
+            ID_MAX_RATING -> PreferencesManager.maxRating = text.toFloatOrNull() ?: 10f
+            ID_MIX -> PreferencesManager.mixRatio = text.toIntOrNull()?.coerceIn(0, 100) ?: 30
+            ID_RECENT -> PreferencesManager.recentYears = text.toIntOrNull()?.coerceIn(1, 50) ?: 3
+            ID_EXCLUDE -> PreferencesManager.excludeDepth = text.toIntOrNull()?.coerceIn(1, 50) ?: 5
         }
         (activity as? SettingsActivity)?.requestWallpaperUpdate()
         return super.onGuidedActionEditedAndProceed(action)
@@ -78,7 +100,8 @@ class SettingsFragment : GuidedStepSupportFragment() {
         val label = action.title?.toString().orEmpty()
         when (parent.id) {
             ID_PICK -> {
-                val mode = WallpaperPickModes.ALL.firstOrNull { it.label == label }
+                val name = label.substringAfter(": ").ifBlank { label }
+                val mode = WallpaperPickModes.ALL.firstOrNull { it.label == name }
                 if (mode != null) PreferencesManager.wallpaperPickMode = mode.id
             }
             ID_CLIENT -> {
@@ -123,5 +146,12 @@ class SettingsFragment : GuidedStepSupportFragment() {
         private const val ID_YEAR = 8L
         private const val ID_CLIENT = 9L
         private const val ID_IDLE = 10L
+        private const val ID_THIRD = 11L
+        private const val ID_MIX = 12L
+        private const val ID_RECENT = 13L
+        private const val ID_EXCLUDE = 14L
+        private const val ID_MIN_RATING = 15L
+        private const val ID_MAX_RATING = 16L
+        private const val ID_FALLBACK = 17L
     }
 }

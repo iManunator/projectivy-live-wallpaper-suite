@@ -1,10 +1,14 @@
-# Copy this file to data/config.json (or bind-mount your own). Never commit real keys.
 {
   "public_base_url": "http://192.168.1.10:8787",
   "timezone": "UTC",
   "motion_wallpapers": false,
   "motion_quality": "light",
+  "motion_style": "parallax",
+  "motion_intensity": 0.55,
+  "motion_duration": null,
+  "motion_fps": 24,
   "overwrite_existing": false,
+  "editor_theme": "cinema",
   "jellyfin": {
     "url": "http://192.168.1.10:8096",
     "api_key": "YOUR_JELLYFIN_API_KEY",
@@ -29,7 +33,9 @@
       "replace_existing": false,
       "cleanup": true,
       "motion": false,
-      "limit": 20
+      "limit": 20,
+      "ids": [],
+      "skip_ids": []
     }
   ]
 }

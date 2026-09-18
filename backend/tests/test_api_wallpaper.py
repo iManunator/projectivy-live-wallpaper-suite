@@ -87,7 +87,14 @@ def test_wallpaper_status_year_and_rating_filters(client):
     assert body["title"] == "Night Relay"
 
 
-def test_wallpaper_status_video_when_mp4_present(client):
+def test_options_lists_pick_modes_and_motion(client):
+    body = client.get("/api/options").json()
+    assert "unwatched" in body["pools"]
+    assert "parallax" in body["motion_styles"]
+    assert "layout_round_robin" in body["pick_modes"]
+
+
+def test_wallpaper_status_video_includes_parallax_fields(client):
     body = client.get(
         "/api/wallpaper/status",
         params={"layout": "Prime Cinematic", "sort": "rating"},
@@ -95,7 +102,9 @@ def test_wallpaper_status_video_when_mp4_present(client):
     assert body["title"] == "Night Relay"
     assert body["mediaType"] == "video"
     assert body["videoUrl"]
-    assert body["videoUrl"].endswith(".mp4")
+    assert body["imageUrl"]
+    assert body["parallaxStyle"] in {"parallax", "kenburns", "drift"}
+    assert body["motionDuration"] >= 2
 
 
 def test_wallpaper_status_missing_layout(client):
@@ -143,3 +152,56 @@ def test_gallery_and_settings_roundtrip(client):
     saved = client.post("/api/settings", json=settings)
     assert saved.status_code == 200
     assert client.get("/api/settings").json()["public_base_url"] == "http://tv.local:8787"
+
+
+def test_wallpaper_status_watched_pool(client):
+    body = client.get(
+        "/api/wallpaper/status",
+        params={"layout": "Netflix Hero", "pool": "watched", "sort": "rating"},
+    ).json()
+    assert body["title"] == "Glass Orchard"
+
+
+def test_generate_ids_and_skip_ids(client):
+    only = client.post(
+        "/api/generate",
+        json={
+            "layout": "Status Focus",
+            "source": "demo",
+            "limit": 20,
+            "skip_existing": False,
+            "ids": ["demo-jf-1"],
+        },
+    ).json()
+    assert only["count"] == 1
+    assert only["created"] == ["Northlight"]
+    skipped = client.post(
+        "/api/generate",
+        json={
+            "layout": "Status Focus",
+            "source": "demo",
+            "limit": 20,
+            "skip_existing": False,
+            "skip_ids": ["demo-jf-1", "90001", "tt9000001"],
+            "ids": ["demo-jf-1"],
+        },
+    ).json()
+    assert skipped["count"] == 0
+
+
+def test_health_includes_version(client):
+    body = client.get("/api/health").json()
+    assert body["version"]
+
+
+def test_settings_roundtrip_motion_options(client):
+    settings = client.get("/api/settings").json()
+    settings["motion_style"] = "parallax"
+    settings["motion_intensity"] = 0.8
+    settings["motion_duration"] = 7
+    settings["editor_theme"] = "high-contrast"
+    assert client.post("/api/settings", json=settings).status_code == 200
+    saved = client.get("/api/settings").json()
+    assert saved["motion_style"] == "parallax"
+    assert saved["motion_intensity"] == 0.8
+    assert saved["editor_theme"] == "high-contrast"

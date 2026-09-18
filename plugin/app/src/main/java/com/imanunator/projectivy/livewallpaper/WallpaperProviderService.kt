@@ -6,6 +6,7 @@ import android.os.IBinder
 import android.util.Log
 import com.imanunator.projectivy.livewallpaper.core.ClientIntents
 import com.imanunator.projectivy.livewallpaper.core.ClientType
+import com.imanunator.projectivy.livewallpaper.core.MediaChoice
 import com.imanunator.projectivy.livewallpaper.core.UrlSupport
 import com.imanunator.projectivy.livewallpaper.core.WallpaperPickModes
 import retrofit2.Retrofit
@@ -59,12 +60,15 @@ class WallpaperProviderService : Service() {
     private fun toWallpaper(status: WallpaperStatus, author: String): Wallpaper? {
         val videoUrl = UrlSupport.rewriteMediaUrl(status.videoUrl, PreferencesManager.serverUrl)
         val imageUrl = UrlSupport.rewriteMediaUrl(status.imageUrl, PreferencesManager.serverUrl)
-        val useVideo = UrlSupport.shouldUseVideo(PreferencesManager.preferMotion, status.mediaType, videoUrl)
-        val mediaUrl = when {
-            useVideo -> videoUrl
-            !imageUrl.isNullOrBlank() -> imageUrl
-            else -> null
-        } ?: return null
+        val chosen = MediaChoice.choose(
+            imageUrl = imageUrl,
+            videoUrl = videoUrl,
+            mediaType = status.mediaType,
+            preferMotion = PreferencesManager.preferMotion,
+            fallbackStill = PreferencesManager.fallbackStill,
+        ) ?: return null
+        val mediaUrl = chosen.uri
+        val useVideo = chosen.isVideo
         var action = status.actionUrl
         val itemId = UrlSupport.parseJellyfinItemId(action)
         if (itemId != null) {

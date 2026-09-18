@@ -85,11 +85,9 @@ def _load_image(path_or_bytes: str | Path | bytes | None, size: tuple[int, int])
         return None
 
 
-def apply_cinematic_fade(base: Image.Image, layout: Layout) -> Image.Image:
-    width, height = base.size
+def fade_alpha_mask(layout: Layout, size: tuple[int, int]) -> Image.Image:
+    width, height = size
     bg = layout.background
-    if bg.brightness != 1.0:
-        base = ImageEnhance.Brightness(base).enhance(max(0.2, min(1.6, bg.brightness)))
     shade = Image.new("L", (width, height), 0)
     px = shade.load()
     left = max(bg.fade_left, 0.0)
@@ -115,7 +113,16 @@ def apply_cinematic_fade(base: Image.Image, layout: Layout) -> Image.Image:
             for dx in range(4):
                 if x + dx < width:
                     px[x + dx, y] = value
-    color = Image.new("RGB", (width, height), _hex_color(bg.color)[:3])
+    return shade
+
+
+def apply_cinematic_fade(base: Image.Image, layout: Layout) -> Image.Image:
+    if layout.background.brightness != 1.0:
+        base = ImageEnhance.Brightness(base).enhance(
+            max(0.2, min(1.6, layout.background.brightness))
+        )
+    shade = fade_alpha_mask(layout, base.size)
+    color = Image.new("RGB", base.size, _hex_color(layout.background.color)[:3])
     return Image.composite(color, base, shade)
 
 
@@ -142,23 +149,12 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
     return ""
 
 
-def render_still(
-    item: MediaItem,
-    layout: Layout,
-    backdrop_bytes: bytes | None = None,
-) -> Image.Image:
-    size = (layout.canvas_width, layout.canvas_height)
-    backdrop = _load_image(backdrop_bytes, size) or _load_image(item.backdrop_path, size)
-    if backdrop is None:
-        backdrop = synthetic_backdrop(item.title, size)
-    canvas = apply_cinematic_fade(backdrop, layout)
+def _draw_text_layers(canvas: Image.Image, item: MediaItem, layout: Layout) -> None:
     draw = ImageDraw.Draw(canvas, "RGBA")
     for layer in layout.layers:
         if not layer.visible:
             continue
-        if layer.slot in ("backdrop",):
-            continue
-        if layer.slot == "poster" and item.poster_url:
+        if layer.slot in ("backdrop", "poster"):
             continue
         text = slot_text(item, layer.slot, layer.max_items)
         if not text:
@@ -171,10 +167,46 @@ def render_still(
         if max_width and layer.slot == "overview":
             wrapped = _wrap(draw, text, font, max_width)
             text = "\n".join(wrapped[:4])
-        # drop shadow
         draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 180))
         draw.text((x, y), text, font=font, fill=color)
-    return canvas.convert("RGB")
+
+
+def render_plate(
+    item: MediaItem,
+    layout: Layout,
+    backdrop_bytes: bytes | None = None,
+) -> Image.Image:
+    """Artwork-only layer (moves more in parallax VIDEO)."""
+    size = (layout.canvas_width, layout.canvas_height)
+    backdrop = _load_image(backdrop_bytes, size) or _load_image(item.backdrop_path, size)
+    if backdrop is None:
+        backdrop = synthetic_backdrop(item.title, size)
+    if layout.background.brightness != 1.0:
+        backdrop = ImageEnhance.Brightness(backdrop).enhance(
+            max(0.2, min(1.6, layout.background.brightness))
+        )
+    return backdrop.convert("RGB")
+
+
+def render_chrome(item: MediaItem, layout: Layout) -> Image.Image:
+    """Transparent vignette + metadata (moves less / stays put in parallax VIDEO)."""
+    size = (layout.canvas_width, layout.canvas_height)
+    overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    mask = fade_alpha_mask(layout, size)
+    wash = Image.new("RGBA", size, (*_hex_color(layout.background.color)[:3], 255))
+    overlay = Image.composite(wash, overlay, mask)
+    _draw_text_layers(overlay, item, layout)
+    return overlay
+
+
+def render_still(
+    item: MediaItem,
+    layout: Layout,
+    backdrop_bytes: bytes | None = None,
+) -> Image.Image:
+    plate = render_plate(item, layout, backdrop_bytes=backdrop_bytes)
+    chrome = render_chrome(item, layout)
+    return Image.alpha_composite(plate.convert("RGBA"), chrome).convert("RGB")
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> list[str]:
@@ -197,4 +229,10 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
 def save_jpeg(image: Image.Image, dest: Path, quality: int = 90) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     image.save(dest, "JPEG", quality=quality, optimize=True)
+    return dest
+
+
+def save_png(image: Image.Image, dest: Path) -> Path:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    image.save(dest, "PNG")
     return dest

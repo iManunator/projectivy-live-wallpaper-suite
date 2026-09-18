@@ -13,7 +13,9 @@ from app.config import load_settings, public_base_url, save_settings
 from app.generate import collect_items, run_generate
 from app.jobs import reload_jobs
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
+from app import __version__
 from app.models import AppSettings, GenerateRequest, Layout, WallpaperStatus
+from app.motion import generate_motion, profile_from_settings
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
@@ -54,7 +56,7 @@ def _public_url(request: Request, layout: str, filename: str) -> str:
 
 @router.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "projectivy-live-wallpaper-suite"}
+    return {"ok": True, "service": "projectivy-live-wallpaper-suite", "version": __version__}
 
 
 @router.get("/api/layouts/list")
@@ -99,6 +101,64 @@ def layouts_delete(name: str) -> dict[str, Any]:
     if not delete_layout(name):
         raise HTTPException(400, "Cannot delete a bundled preset (save a copy first)")
     return {"status": "ok"}
+
+
+@router.get("/api/options")
+def suite_options() -> dict[str, Any]:
+    return {
+        "sort": ["random", "latest", "oldest", "rating", "rating_asc", "year", "year_asc"],
+        "pools": [
+            "unwatched",
+            "partial",
+            "watched",
+            "in_library",
+            "seerr_only",
+            "requestable",
+            "available",
+            "source:jellyfin",
+            "source:jellyseerr",
+            "source:plex",
+        ],
+        "motion_styles": ["parallax", "kenburns", "drift"],
+        "motion_qualities": ["light", "standard", "cinematic"],
+        "pick_modes": [
+            "random",
+            "latest",
+            "oldest",
+            "rating_high",
+            "rating_low",
+            "year_new",
+            "year_old",
+            "unwatched",
+            "partial",
+            "watched",
+            "in_library",
+            "seerr_only",
+            "requestable",
+            "available_seerr",
+            "source_jellyfin",
+            "source_seerr",
+            "source_plex",
+            "recent_years",
+            "high_rated",
+            "alt_random_latest",
+            "alt_library_unwatched",
+            "alt_library_seerr",
+            "alt_two_layouts",
+            "mix_weighted",
+            "layout_round_robin",
+            "genre_round_robin",
+            "no_repeat_bag",
+        ],
+        "clients": [
+            {"name": "Moonfin", "package": "org.moonfin.androidtv", "type": "deep_link"},
+            {"name": "Jellyfin", "package": "org.jellyfin.androidtv", "type": "deep_link"},
+            {"name": "Fladder", "package": "nl.jknaapen.fladder", "type": "launch"},
+            {"name": "Kodi", "package": "org.xbmc.kodi", "type": "launch"},
+            {"name": "Wholphin", "package": "com.github.damontecres.wholphin", "type": "launch"},
+            {"name": "Void", "package": "com.hritwik.avoid", "type": "launch"},
+        ],
+    }
 
 
 @router.get("/api/genres/list")
@@ -161,6 +221,10 @@ def wallpaper_status(
     if selected.has_video or (mp4.is_file() and mp4.stat().st_size > 1000):
         status.videoUrl = _public_url(request, selected.layout, mp4.name)
         status.mediaType = "video"
+        settings = load_settings()
+        status.parallaxStyle = selected.parallax_style or settings.motion_style
+        profile = profile_from_settings(settings)
+        status.motionDuration = profile.duration
     return status
 
 
@@ -230,9 +294,13 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
 
 @router.post("/api/wallpaper/generate-motion")
 def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
-    from app.motion import generate_motion
+    from app.motion import generate_motion, profile_from_settings
+    from app.render import render_chrome, render_plate, save_jpeg, save_png
+    from app.layouts import load_layout
+    from app.models import MediaItem
 
     settings = load_settings()
+    profile = profile_from_settings(settings)
     done = []
     for rec in catalog_store.load_catalog():
         if rec.layout.lower() != layout.lower():
@@ -240,9 +308,31 @@ def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
         jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
         if not jpg:
             continue
-        ok, msg = generate_motion(jpg, quality=settings.motion_quality)
+        item = MediaItem(
+            title=rec.title,
+            year=rec.year,
+            overview=rec.overview,
+            rating=rec.rating,
+            genres=rec.genres,
+            official_rating=rec.official_rating,
+            watch_state=rec.watch_state,
+            source=rec.source,
+        )
+        layout_obj = load_layout(rec.layout)
+        plate = chrome = None
+        if layout_obj:
+            plate = jpg.with_name(jpg.stem + "_plate.jpg")
+            chrome = jpg.with_name(jpg.stem + "_chrome.png")
+            save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
+            save_png(render_chrome(item, layout_obj), chrome)
+        ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+        if plate:
+            plate.unlink(missing_ok=True)
+        if chrome:
+            chrome.unlink(missing_ok=True)
         if ok:
             rec.has_video = True
+            rec.parallax_style = profile.normalized_style()
             catalog_store.upsert(rec)
             done.append(rec.filename)
-    return {"status": "ok", "generated": done}
+    return {"status": "ok", "generated": done, "style": profile.normalized_style()}

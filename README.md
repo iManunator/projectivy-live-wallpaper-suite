@@ -1,8 +1,10 @@
 # Projectivy Live Wallpaper Suite
 
-A self-hosted **cinematic wallpaper** suite for [Projectivy Launcher](https://play.google.com/store/apps/details?id=com.spocky.projengmenu): generate stills (and optional Ken Burns MP4 loops) from **Jellyfin** and **Jellyseerr/Seerr**, edit layouts in a modern web UI, and serve the wallpaper HTTP API consumed by a dedicated Android TV plugin.
+A self-hosted **cinematic wallpaper** suite for [Projectivy Launcher](https://play.google.com/store/apps/details?id=com.spocky.projengmenu): generate stills (and optional **parallax / Ken Burns VIDEO** loops) from **Jellyfin** and **Jellyseerr/Seerr**, edit layouts in a modern web UI, and serve the wallpaper HTTP API consumed by a dedicated Android TV plugin.
 
 This is a clean-room overhaul of the older TV Background Suite stack ([androidtvbackgroundWebGui](https://github.com/iManunator/androidtvbackgroundWebGui) + [projectivy-tvbgsuite-plugin](https://github.com/iManunator/projectivy-tvbgsuite-plugin)). It keeps the Projectivy plugin API contract and pick-mode semantics, with a maintainable FastAPI + React + Kotlin layout.
+
+**Version:** 1.0.0 — see [CHANGELOG.md](CHANGELOG.md). Install steps: [docs/INSTALL.md](docs/INSTALL.md). Parallax / IMAGE vs VIDEO: [docs/MOTION.md](docs/MOTION.md).
 
 ## Architecture
 
@@ -16,8 +18,7 @@ This is a clean-room overhaul of the older TV Background Suite stack ([androidtv
 │  Web editor      │──────────────►│  Jellyfin / Seerr / TMDB│
 │  (React, / )     │               └───────────┬─────────────┘
 └──────────────────┘                           │
-                                               ▼
-                                     gallery JPEGs + catalog.json
+                                     gallery JPEGs + MP4s + catalog.json
 ```
 
 | Piece | Path | Role |
@@ -26,32 +27,37 @@ This is a clean-room overhaul of the older TV Background Suite stack ([androidtv
 | Web UI | `web/` | Layout editor, gallery, generate, settings |
 | Plugin | `plugin/` | Projectivy wallpaper provider (`com.imanunator.projectivy.livewallpaper`) |
 
-Wallpaper plugins **do not** publish Preview Channel rows. For Jellyfin/Jellyseerr channel rows in Projectivy, use **[SeerChannel](https://github.com/iManunator/SeerChannel)** alongside this suite.
+Wallpaper plugins **do not** publish Preview Channel rows. For Jellyfin/Jellyseerr channel rows in Projectivy, use **[SeerChannel](https://github.com/iManunator/SeerChannel)** alongside this suite. SeerChannel is **out of scope** here; this repo still ships the wallpaper plugin APK.
 
-## Docker quickstart
+## Install tonight
+
+### Server image
+
+Published as `ghcr.io/imanunator/projectivy-live-wallpaper-suite` (`:latest` on `main`, semver on `v*` tags). CI on pull requests also uploads a loadable `projectivy-live-wallpaper-suite-image` artifact.
 
 ```bash
-cp config.example.json data/config.json   # then edit keys in the UI or this file
-cp .env.example .env                      # set PUBLIC_BASE_URL to a LAN URL the TV can reach
-docker compose up --build -d
+mkdir -p data
+cp config.example.json data/config.json
+cp .env.example .env          # set PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787
+docker compose pull           # or: docker compose up --build -d
+docker compose up -d
 ```
 
-Open `http://YOUR_LAN_IP:8787`. First boot seeds a **demo catalog** (no Jellyfin required) so the plugin and gallery work immediately.
+Open `http://YOUR_LAN_IP:8787`. First boot seeds a **demo catalog** (no Jellyfin required). Bind-mount `./data` holds `config.json`, layouts, and generated images. **Never commit `data/config.json` or real API keys.**
 
-Bind-mount `./data` holds `config.json`, layouts, and generated images. **Never commit `data/config.json` or real API keys.**
+### Plugin APK
 
-### Projectivy setup
+Download from a **GitHub Release** (`live-wallpaper-plugin-release.apk`) or the Actions artifact **`live-wallpaper-plugin-apk`**. Sideload on Android TV / Google TV, then:
 
-1. Build the plugin: `cd plugin && ./gradlew :app:assembleDebug`
-2. Install `plugin/app/build/outputs/apk/debug/app-debug.apk` on the TV.
-3. Projectivy → Appearance → Wallpaper → **Live Wallpaper Suite**.
-4. Plugin settings:
-   - **Server URL**: `http://YOUR_LAN_IP:8787` (must match `PUBLIC_BASE_URL`)
-   - Layout, pick mode, filters, preferred client, prefer motion
-5. Set Projectivy’s wallpaper change interval. The plugin answers `TimeElapsed`; it does not run its own timer.
+1. Projectivy → Appearance → Wallpaper → **Live Wallpaper Suite**
+2. **Server URL**: `http://YOUR_LAN_IP:8787`
+3. Layout, pick mode, filters, preferred client, prefer VIDEO / fallback still
+4. Set Projectivy’s wallpaper change interval. The plugin answers `TimeElapsed`; it does not run its own timer.
 
 Package: `com.imanunator.projectivy.livewallpaper`  
 UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
+
+Local APK: `cd plugin && ./gradlew :app:assembleRelease` → `plugin/app/build/outputs/apk/release/app-release.apk` (debug-keystore signed for sideload).
 
 ### Migrating from `com.butch708.projectivy.tvbgsuite`
 
@@ -59,7 +65,7 @@ The older plugin talked to the Flask WebGUI on port **5000**. This suite default
 
 ## API contract
 
-See [docs/API.md](docs/API.md). Minimum Projectivy endpoints:
+See [docs/API.md](docs/API.md). Minimum Projectivy endpoints (tvbgsuite-compatible):
 
 - `GET /api/layouts/list`
 - `GET /api/layouts/with-images`
@@ -68,7 +74,21 @@ See [docs/API.md](docs/API.md). Minimum Projectivy endpoints:
 - `GET /api/year/list`
 - `GET /api/wallpaper/status` — `imageUrl`, `actionUrl`, `path`, optional `mediaType` / `videoUrl`
 
+When a motion clip exists, status also includes `parallaxStyle` and `motionDuration`. Clients that ignore unknown fields keep working.
+
 Query params on status: `layout`, `genre`, `age_rating`, `min_year`, `max_year`, `min_rating`, `max_rating`, `sort`, `pool`, `exclude`.
+
+## Options
+
+**Web UI → Settings / Generate** and the **plugin settings** cover:
+
+- Wallpaper pick modes: random, latest/oldest, rating, year, unwatched/partial/watched, library/Seerr/source pools, mix / round-robin layouts, no-repeat bag
+- Filters: genre, age rating, year range, min/max rating, primary + secondary + third layouts
+- Motion: enable, style (parallax / Ken Burns / drift), intensity, duration, fps, quality; plugin prefer-VIDEO + fallback still
+- Providers: Jellyfin, Jellyseerr/Seerr, TMDB + connection tests
+- Cron/batch: skip by media id, overwrite/replace, cleanup, schedule, id allow/deny lists
+- Deep links / preferred client (Jellyfin, Moonfin, Fladder, Kodi, Wholphin, Void)
+- Editor theme
 
 ## Local development
 
@@ -88,7 +108,7 @@ npm run dev
 ## Tests
 
 ```bash
-# backend (no Jellyfin)
+# backend (no Jellyfin; ffmpeg optional but used for parallax encode tests)
 cd backend && pip install -r requirements-dev.txt && pytest -q
 
 # frontend
@@ -97,10 +117,10 @@ cd web && npm install && npm test
 # Android plugin (JVM core always; full APK needs Android SDK)
 cd plugin
 ./gradlew :core:test
-./gradlew :app:testDebugUnitTest :app:assembleDebug   # if SDK present
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
 ```
 
-GitHub Actions runs all three jobs on push/PR.
+GitHub Actions runs backend, frontend, Android APK upload, and a Docker image build (push to GHCR on `main` / tags; loadable image artifact on PRs). Tag `v*` to cut a GitHub Release with APKs + compose/config.
 
 ### Manual QA still needed
 

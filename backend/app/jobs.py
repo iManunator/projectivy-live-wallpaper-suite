@@ -45,6 +45,12 @@ def reload_jobs() -> None:
             trigger = CronTrigger.from_crontab(expr)
         except Exception:
             continue
+        ids = job.get("ids") or []
+        skip_ids = job.get("skip_ids") or []
+        if isinstance(ids, str):
+            ids = [part.strip() for part in ids.split(",") if part.strip()]
+        if isinstance(skip_ids, str):
+            skip_ids = [part.strip() for part in skip_ids.split(",") if part.strip()]
         _scheduler.add_job(
             _run_job,
             trigger=trigger,
@@ -58,6 +64,8 @@ def reload_jobs() -> None:
                 "cleanup": bool(job.get("cleanup", False)),
                 "motion": bool(job.get("motion", False)),
                 "limit": int(job.get("limit") or 20),
+                "ids": list(ids),
+                "skip_ids": list(skip_ids),
             },
         )
 

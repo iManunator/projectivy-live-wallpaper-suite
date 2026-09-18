@@ -128,3 +128,54 @@ class ClientIntentsTest {
         assertNull(ClientIntents.deepLinkIntent("org.xbmc.kodi", "x"))
     }
 }
+
+class MediaChoiceTest {
+    @Test
+    fun prefersVideoWhenClipExists() {
+        val chosen = MediaChoice.choose(
+            imageUrl = "http://x/a.jpg",
+            videoUrl = "http://x/a.mp4",
+            mediaType = "video",
+            preferMotion = true,
+            fallbackStill = true,
+        )
+        assertEquals(true, chosen!!.isVideo)
+        assertTrue(chosen.uri.endsWith(".mp4"))
+    }
+
+    @Test
+    fun fallsBackToStillWhenMotionMissing() {
+        val chosen = MediaChoice.choose(
+            imageUrl = "http://x/a.jpg",
+            videoUrl = null,
+            mediaType = "image",
+            preferMotion = true,
+            fallbackStill = true,
+        )
+        assertEquals(false, chosen!!.isVideo)
+    }
+
+    @Test
+    fun returnsNullWhenNothingAvailable() {
+        val chosen = MediaChoice.choose(
+            imageUrl = null,
+            videoUrl = null,
+            mediaType = "image",
+            preferMotion = true,
+            fallbackStill = true,
+        )
+        assertNull(chosen)
+    }
+
+    @Test
+    fun stillPreferredWhenMotionDisabled() {
+        val chosen = MediaChoice.choose(
+            imageUrl = "http://x/a.jpg",
+            videoUrl = "http://x/a.mp4",
+            mediaType = "video",
+            preferMotion = false,
+            fallbackStill = true,
+        )
+        assertEquals(false, chosen!!.isVideo)
+    }
+}

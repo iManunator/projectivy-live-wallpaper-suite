@@ -1,7 +1,7 @@
 services:
   wallpaper-suite:
     build: .
-    image: projectivy-live-wallpaper-suite:local
+    image: ghcr.io/imanunator/projectivy-live-wallpaper-suite:latest
     container_name: projectivy-live-wallpaper-suite
     ports:
       - "8787:8787"

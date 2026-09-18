@@ -46,7 +46,22 @@ export type WallpaperRecord = {
   library_state: string;
   source: string;
   has_video: boolean;
+  parallax_style?: string | null;
   action_url?: string | null;
+};
+
+export type CronJob = {
+  enabled?: boolean;
+  cron?: string;
+  layout?: string;
+  source?: string;
+  skip_existing?: boolean;
+  replace_existing?: boolean;
+  cleanup?: boolean;
+  motion?: boolean;
+  limit?: number;
+  ids?: string[] | string;
+  skip_ids?: string[] | string;
 };
 
 export type AppSettings = {
@@ -54,11 +69,16 @@ export type AppSettings = {
   timezone: string;
   motion_wallpapers: boolean;
   motion_quality: string;
+  motion_style: string;
+  motion_intensity: number;
+  motion_duration: number | null;
+  motion_fps: number;
   overwrite_existing: boolean;
+  editor_theme: string;
   jellyfin: Record<string, string>;
   jellyseerr: Record<string, string>;
   tmdb: Record<string, string>;
-  cron_jobs: Array<Record<string, unknown>>;
+  cron_jobs: CronJob[];
 };
 
 export type GenerateRequest = {
@@ -69,6 +89,8 @@ export type GenerateRequest = {
   replace_existing: boolean;
   cleanup: boolean;
   motion: boolean;
+  ids?: string[];
+  skip_ids?: string[];
 };
 
 export const SLOTS = [

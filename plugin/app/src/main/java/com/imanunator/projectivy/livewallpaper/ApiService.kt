@@ -11,6 +11,11 @@ data class WallpaperStatus(
     val path: String? = null,
     val mediaType: String? = null,
     val videoUrl: String? = null,
+    val parallaxStyle: String? = null,
+    val motionDuration: Float? = null,
+    val sort: String? = null,
+    val pool: String? = null,
+    val layout: String? = null,
 )
 
 interface ApiService {

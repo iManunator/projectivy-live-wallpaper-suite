@@ -24,6 +24,9 @@ export const api = {
     json("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
   generate: (body: GenerateRequest) =>
     json("/api/generate", { method: "POST", body: JSON.stringify(body) }),
+  generateMotion: (layout: string) =>
+    json(`/api/wallpaper/generate-motion?layout=${encodeURIComponent(layout)}`, { method: "POST" }),
+  options: () => json<Record<string, unknown>>("/api/options"),
   media: (source: string) => json<Array<Record<string, unknown>>>(`/api/media?source=${source}`),
   testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
   wallpaperImage: (layout: string, filename: string) =>

@@ -21,6 +21,9 @@ android {
 
     buildTypes {
         release {
+            // Sideload-signed with the debug keystore so CI can ship a loadable APK
+            // without a stored release key. Replace with a real keystore for Play.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -60,6 +63,7 @@ dependencies {
 
 tasks.register("printApkPath") {
     doLast {
-        println("APK: app/build/outputs/apk/debug/app-debug.apk")
+        println("DEBUG_APK: app/build/outputs/apk/debug/app-debug.apk")
+        println("RELEASE_APK: app/build/outputs/apk/release/app-release.apk")
     }
 }

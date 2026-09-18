@@ -164,6 +164,34 @@ input, select, textarea {
 .status { color: var(--ok); font-size: 13px; }
 .error { color: var(--danger); font-size: 13px; }
 
+.app[data-theme="midnight"] {
+  --bg: #05060a;
+  --panel: #0c1018;
+  --panel-2: #141a26;
+  --accent: #7aa2ff;
+  --accent-2: #9b8cff;
+}
+.app[data-theme="studio"] {
+  --bg: #16120e;
+  --panel: #221c16;
+  --panel-2: #2c241c;
+  --accent: #ff8a4c;
+  --accent-2: #e2b657;
+}
+.app[data-theme="high-contrast"] {
+  --bg: #000000;
+  --panel: #111111;
+  --panel-2: #1a1a1a;
+  --line: rgba(255, 255, 255, 0.4);
+  --text: #ffffff;
+  --muted: #d0d0d0;
+  --accent: #ffe14d;
+  --accent-2: #7affc5;
+}
+
+.card h3 { margin: 0 0 12px; font-size: 16px; }
+label input[type="checkbox"] { width: auto; margin-right: 8px; }
+
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
   .nav { display: flex; gap: 8px; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }

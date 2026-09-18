@@ -134,6 +134,74 @@ def test_exclude_falls_back_when_all_excluded():
     assert picked.title == "Only"
 
 
+def test_combined_genre_year_and_exclude(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(
+            layout="Prime Cinematic",
+            genre="Sci-Fi",
+            min_year=2020,
+            max_year=2025,
+            sort="rating",
+            exclude="relay.jpg",
+        ),
+    )
+    assert picked is not None
+    assert picked.title == "Signal Country"
+
+
+def test_pool_plus_rating(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(layout="Netflix Hero", pool="in_library", min_rating=8.0, sort="rating"),
+    )
+    assert picked is not None
+    assert picked.title == "Northlight"
+
+
+def test_pool_watched(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(layout="Netflix Hero", pool="watched", sort="rating"),
+    )
+    assert picked is not None
+    assert picked.title == "Glass Orchard"
+
+
+def test_pool_requestable(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(layout="Prime Cinematic", pool="requestable", sort="random"),
+    )
+    assert picked is not None
+    assert picked.title == "Signal Country"
+
+
+def test_pool_source_plex(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(layout="Prime Cinematic", pool="source:plex", sort="random"),
+    )
+    assert picked is not None
+    assert picked.source == "plex"
+
+
+def test_age_and_genre_and_year_together(seeded_catalog):
+    picked = select_wallpaper(
+        seeded_catalog,
+        SelectionQuery(
+            layout="Netflix Hero",
+            genre="Drama",
+            age_rating="TV-14",
+            min_year=2020,
+            max_year=2023,
+            sort="rating",
+        ),
+    )
+    assert picked is not None
+    assert picked.title == "Harbor Season"
+
+
 def test_unique_genres(seeded_catalog):
     genres = unique_values(seeded_catalog, "genres")
     assert "Sci-Fi" in genres

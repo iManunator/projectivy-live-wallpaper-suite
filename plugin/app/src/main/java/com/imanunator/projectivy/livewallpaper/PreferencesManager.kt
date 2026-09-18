@@ -85,6 +85,10 @@ object PreferencesManager {
         get() = preferences.getBoolean("pref_prefer_motion", true)
         set(value) = preferences.put("pref_prefer_motion", value)
 
+    var fallbackStill: Boolean
+        get() = preferences.getBoolean("pref_fallback_still", true)
+        set(value) = preferences.put("pref_fallback_still", value)
+
     var wallpaperPickMode: String
         get() = preferences.getString("wallpaper_pick_mode", "random") ?: "random"
         set(value) = preferences.put("wallpaper_pick_mode", value)

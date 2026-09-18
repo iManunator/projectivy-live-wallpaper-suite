@@ -89,6 +89,7 @@ class WallpaperRecord(BaseModel):
     overview: str = ""
     mtime: float = 0.0
     has_video: bool = False
+    parallax_style: str | None = None
 
     def media_ids(self) -> set[str]:
         return {
@@ -108,6 +109,8 @@ class WallpaperStatus(BaseModel):
     sort: str | None = None
     pool: str | None = None
     layout: str | None = None
+    parallaxStyle: str | None = None
+    motionDuration: float | None = None
 
 
 class GenerateRequest(BaseModel):
@@ -119,6 +122,7 @@ class GenerateRequest(BaseModel):
     cleanup: bool = False
     motion: bool = False
     ids: list[str] = Field(default_factory=list)
+    skip_ids: list[str] = Field(default_factory=list)
 
 
 class AppSettings(BaseModel):
@@ -126,7 +130,12 @@ class AppSettings(BaseModel):
     timezone: str = "UTC"
     motion_wallpapers: bool = False
     motion_quality: str = "light"
+    motion_style: str = "parallax"
+    motion_intensity: float = 0.55
+    motion_duration: float | None = None
+    motion_fps: int = 24
     overwrite_existing: bool = False
+    editor_theme: str = "cinema"
     jellyfin: dict[str, Any] = Field(default_factory=dict)
     jellyseerr: dict[str, Any] = Field(default_factory=dict)
     tmdb: dict[str, Any] = Field(default_factory=dict)

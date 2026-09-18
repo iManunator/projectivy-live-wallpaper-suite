@@ -10,13 +10,13 @@ from app import catalog as catalog_store
 from app.config import load_settings
 from app.layouts import load_layout
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
-from app.motion import generate_motion, has_motion
+from app.motion import generate_motion, has_motion, profile_from_settings
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
 from app.providers.tmdb import TmdbProvider
-from app.render import render_still, save_jpeg
-from app.skip import matching_records, records_to_cleanup, should_skip
+from app.render import render_chrome, render_plate, render_still, save_jpeg, save_png
+from app.skip import matching_records, media_ids_of, records_to_cleanup, should_skip
 
 
 def _providers_from_settings():
@@ -104,9 +104,25 @@ def generate_one(
     settings = load_settings()
     want_motion = motion or settings.motion_wallpapers
     video = False
+    style = None
     if want_motion:
-        ok, _ = generate_motion(dest, quality=settings.motion_quality)
+        profile = profile_from_settings(settings)
+        plate_path = dest.with_name(dest.stem + "_plate.jpg")
+        chrome_path = dest.with_name(dest.stem + "_chrome.png")
+        save_jpeg(render_plate(item, layout, backdrop_bytes=backdrop_bytes), plate_path)
+        save_png(render_chrome(item, layout), chrome_path)
+        ok, _ = generate_motion(
+            dest,
+            profile=profile,
+            force=True,
+            plate=plate_path,
+            chrome=chrome_path,
+        )
+        plate_path.unlink(missing_ok=True)
+        chrome_path.unlink(missing_ok=True)
         video = ok and has_motion(dest)
+        if video:
+            style = profile.normalized_style()
     record = WallpaperRecord(
         id=uuid.uuid4().hex,
         layout=layout_name,
@@ -127,6 +143,7 @@ def generate_one(
         overview=item.overview,
         mtime=time.time(),
         has_video=video,
+        parallax_style=style,
     )
     catalog_store.upsert(record)
     return record
@@ -143,6 +160,9 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
             or (item.tmdb_id or "").lower() in wanted
             or (item.imdb_id or "").lower() in wanted
         ]
+    if request.skip_ids:
+        banned = {i.lower() for i in request.skip_ids}
+        items = [item for item in items if not (media_ids_of(item) & banned)]
     catalog = catalog_store.load_catalog()
     created: list[str] = []
     skipped: list[str] = []
