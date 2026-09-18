@@ -8,15 +8,25 @@ The owner’s assistant can run this on a machine with Docker. It **builds the r
 ./scripts/verify.sh
 ```
 
-That script is:
+That script prefers **Docker Compose v2** (`docker compose up --build`). `docker-compose.yml` sets `build: .` and `pull_policy: build`, so Compose **always builds from `Dockerfile`** even if GHCR is unpublished.
+
+If the Compose v2 plugin is missing, the same script falls back to:
 
 ```bash
 mkdir -p data
 cp -n config.example.json data/config.json || true
-docker compose up --build -d
+docker build -t wallpaparr:local .
+docker run --rm -p 8787:8787 \
+  -v "$PWD/data:/data" \
+  -e PUBLIC_BASE_URL=http://127.0.0.1:8787 \
+  -e SUITE_DATA=/data \
+  -e SUITE_LAYOUTS=/data/layouts \
+  -e SUITE_GALLERY=/data/gallery \
+  -e SUITE_CONFIG=/data/config.json \
+  wallpaparr:local
 ```
 
-`docker-compose.yml` sets `build: .` and `pull_policy: build`, so Compose **always builds from `Dockerfile`**. It will not fail just because `ghcr.io/imanunator/wallpaparr` is not public yet.
+You can run those two commands by hand as well.
 
 ## 2. Healthcheck
 
@@ -36,7 +46,7 @@ Compose healthcheck: `curl -sf http://127.0.0.1:8787/api/health` inside the cont
 
 ## 3. Demo wallpaper status (fixture catalog)
 
-First boot seeds six demo titles into the **Netflix Hero** layout when the catalog is empty (`SUITE_SKIP_SEED` is unset). No Jellyfin/Seerr keys required.
+First boot seeds six demo titles into the **Netflix Hero** layout when the catalog is empty (`SUITE_SKIP_SEED` is unset). Generation is last-to-first so `sort=latest` is **Northlight**. No Jellyfin/Seerr keys required.
 
 ```bash
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
@@ -53,15 +63,18 @@ curl -sf http://127.0.0.1:8787/api/dashboard
 
 ## 4. Unit tests (no Docker)
 
+`./scripts/test.sh` creates `backend/.venv` if it is missing (PEP 668 / distro Python), installs pytest there, then runs backend / frontend / plugin `:core` tests.
+
 ```bash
-# first time on a machine
-cd backend && python3 -m pip install -r requirements-dev.txt && cd ..
+# equivalent first-time setup
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements-dev.txt
 cd web && npm install && cd ..
 
 ./scripts/test.sh
 ```
 
-Runs backend pytest, frontend vitest, and `plugin` `:core:test`.
+If `python3 -m venv` fails, install `python3-venv` (Debian/Ubuntu) and retry.
 
 ## 5. Plugin APK
 
@@ -71,4 +84,6 @@ After GitHub Actions is green on the PR:
 2. Artifact **`wallpaparr-plugin-apk`**
 3. Files: **`wallpaparr-plugin-release.apk`** (sideload) and `wallpaparr-plugin-debug.apk`
 
-Same filenames on a GitHub Release (`v*` tag). Sideload: `adb install -r wallpaparr-plugin-release.apk`, then Projectivy → Wallpaper → **Wallpaparr**.
+Image artifact on the same run: **`wallpaparr-image`** (`wallpaparr-image.tar.gz`).
+
+Same APK filenames on a GitHub Release (`v*` tag). Sideload: `adb install -r wallpaparr-plugin-release.apk`, then Projectivy → Wallpaper → **Wallpaparr**.

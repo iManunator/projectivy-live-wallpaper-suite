@@ -12,7 +12,7 @@ Step-by-step for an assistant machine: [VERIFY.md](VERIFY.md)
 ./scripts/verify.sh
 ```
 
-This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: build`; GHCR is not required), waits for health, then curls:
+This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: build`; GHCR is not required). Without Compose v2, use `docker build -t wallpaparr:local .` and `docker run` as in [VERIFY.md](VERIFY.md). The script waits for health, then curls:
 
 | Check | URL |
 | --- | --- |
@@ -22,7 +22,7 @@ This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: bu
 
 Empty data dirs auto-seed a demo catalog.
 
-Unit tests: `./scripts/test.sh`
+Unit tests: `./scripts/test.sh` (creates `backend/.venv` if needed).
 
 ## 1. Server — Docker Compose
 
@@ -36,6 +36,19 @@ docker compose up --build -d
 ```
 
 Open `http://YOUR_LAN_IP:8787`.
+
+### Tag a GitHub Release (GHCR + APKs)
+
+`.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest`, then attaches `wallpaparr-plugin-release.apk` (and debug) to a GitHub Release.
+
+```bash
+git checkout main
+git pull
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+Merges to **main** also run CI, which pushes GHCR when not a pull request.
 
 ### Pull a published image (after a release / main build)
 

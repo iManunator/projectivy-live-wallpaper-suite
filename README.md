@@ -27,7 +27,7 @@ curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
 curl -sf http://127.0.0.1:8787/api/dashboard
 ```
 
-Unit tests (no Docker): `./scripts/test.sh`
+Unit tests (no Docker): `./scripts/test.sh` (creates `backend/.venv` on PEP 668 systems).
 
 ## Install
 
