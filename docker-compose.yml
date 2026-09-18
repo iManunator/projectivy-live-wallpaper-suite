@@ -1,6 +1,6 @@
 # Wallpaparr — cinematic Projectivy wallpapers.
-# Local verify always builds the Dockerfile (`docker compose up --build`).
-# `image:` is the tag applied to that local build, and the name used if you later `docker compose pull` from GHCR.
+# Local verify: `docker compose up --build` (or ./scripts/verify.sh).
+# pull_policy: build means Compose uses the Dockerfile even if GHCR is unpublished.
 services:
   wallpaparr:
     build:
