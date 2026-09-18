@@ -13,6 +13,7 @@ Flagship Wallpaparr layer on the 1.0 wallpaper core.
 - Overlay widget hook (off by default) with a local clock card; HA / news / JSON demo stubs
 - Plugin pick modes for tonight / continue watching / newly added / Seerr trending / pinned
 - Additive status fields `queue` and `pinned`
+- Packaging: CI on `main` publishes `ghcr.io/imanunator/wallpaparr:latest` (`packages: write`); `v*` tags attach `wallpaparr-plugin-release.apk` to a GitHub Release
 
 Local verify: demo `sort=latest` is **Northlight**; `./scripts/test.sh` uses `backend/.venv`; `./scripts/verify.sh` falls back to `docker build`/`docker run` without Compose v2.
 

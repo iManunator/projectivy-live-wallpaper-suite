@@ -1,22 +1,118 @@
-# Wallpaparr
+<p align="center">
+  <img src="docs/screenshots/logo.svg" alt="Wallpaparr" width="480"/>
+</p>
 
-Cinematic **Projectivy** wallpapers — stills and optional **parallax VIDEO** loops — from Jellyfin and Jellyseerr/Seerr. An *arr-family product: generate, queue, and serve tonight’s home screen.
+<p align="center">
+  <strong>Cinematic live wallpapers for Projectivy.</strong><br/>
+  Stills and optional <em>parallax VIDEO</em> loops, generated from Jellyfin and Jellyseerr/Seerr,<br/>
+  queued with taste, previewed as tonight’s home screen, served to the TV.
+</p>
 
-This GitHub repository may still be named `projectivy-live-wallpaper-suite`; the product is **Wallpaparr**.
+<p align="center">
+  <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/iManunator/projectivy-live-wallpaper-suite/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/actions/workflows/release.yml"><img alt="Release" src="https://github.com/iManunator/projectivy-live-wallpaper-suite/actions/workflows/release.yml/badge.svg"></a>
+  <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/iManunator/projectivy-live-wallpaper-suite?display_name=tag&sort=semver&label=release"></a>
+  <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr"><img alt="GHCR" src="https://img.shields.io/badge/ghcr.io-imanunator%2Fwallpaparr-0ea5e9?logo=docker&logoColor=white"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-e2b657"></a>
+  <img alt="Version 1.1.0" src="https://img.shields.io/badge/version-1.1.0-7ad0c4"/>
+</p>
 
-**Version:** 1.1.0 — [CHANGELOG.md](CHANGELOG.md) · [Verify (no Jellyfin)](docs/VERIFY.md) · [Install](docs/INSTALL.md) · [Parallax / IMAGE vs VIDEO](docs/MOTION.md) · [Overlay widgets](docs/OVERLAYS.md)
+<p align="center">
+  <a href="#downloads">Downloads</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#api-contract">API</a> ·
+  <a href="#wallpaparr-vs-seerchannel">vs SeerChannel</a> ·
+  <a href="docs/INSTALL.md">Install</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-![Tonight’s home screen](docs/screenshots/tonight.svg)
-![Gallery with smart-queue badges](docs/screenshots/gallery.svg)
-![Health dashboard](docs/screenshots/dashboard.svg)
+The GitHub repository is still named `projectivy-live-wallpaper-suite`. The product, image, plugin, and APK are **Wallpaparr** — an *arr-family* box that sits next to Jellyfin the way Sonarr sits next to usenet.
 
-## Show off in 5 minutes (demo fixtures, no Jellyfin)
+---
 
-1. `./scripts/verify.sh` — builds the Dockerfile (`pull_policy: build`, no GHCR required), waits for health, curls demo wallpaper status.
-2. Open http://127.0.0.1:8787 — **Tonight** is the home page. You should see a 16:9 Projectivy chrome overlay (clock / rows / dock) over a demo title.
-3. Click **Netflix Hero**, **Prime Cinematic**, **Google TV Clean**, or **Projectivy Dock** to preview layout DNA. **Shuffle tonight** draws another title from the taste mix.
-4. **Generate** → source `Demo catalog` → enable *Bake parallax / motion VIDEO* if ffmpeg is in the image → Run batch. Gallery badges show Unwatched / Continue / Requestable / VIDEO.
-5. Pin or Never-show a title in the gallery; **Dashboard** shows gallery size, last cron, and provider configuration.
+## Tonight, on your home screen
+
+<p align="center">
+  <img src="docs/screenshots/tonight.svg" alt="Tonight preview with Projectivy chrome overlay (placeholder)" width="100%"/>
+</p>
+
+<p align="center">
+  <em>Placeholder capture of the Tonight page — 16:9 Projectivy chrome (clock, rows, dock) over a demo title. Swap for a PNG after <code>./scripts/verify.sh</code>.</em>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/gallery.svg" alt="Gallery with smart-queue badges (placeholder)"/></td>
+    <td width="50%"><img src="docs/screenshots/dashboard.svg" alt="Health dashboard (placeholder)"/></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Gallery — Unwatched / Continue / Requestable / VIDEO · pin · never-show</sub></td>
+    <td align="center"><sub>Health — gallery size, cron, motion preset, taste, providers</sub></td>
+  </tr>
+</table>
+
+| UI callout | What you are looking at |
+| --- | --- |
+| **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock), see the wallpaper *as the launcher will*. |
+| **Gallery** | Every generated still. Badges for smart queues and baked VIDEO. Pin a title. Hide it forever. |
+| **Editor** | Layout DNA — safe zones, fades, type slots. |
+| **Generate** | Demo catalog or live Jellyfin/Seerr. Optional parallax VIDEO bake (ffmpeg). |
+| **Dashboard** | Ops: last cron, provider config, queue counts. |
+| **Settings** | Motion intensity, taste weights, overlays, cron. |
+
+---
+
+## Downloads
+
+Durable artifacts live on **GitHub Releases** and **GHCR**. Actions artifacts expire; git does not carry APKs.
+
+| Get | Link |
+| --- | --- |
+| **Plugin APK (primary)** | [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) on the [latest GitHub Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest) |
+| Debug APK | [`wallpaparr-plugin-debug.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-debug.apk) |
+| **Container** | [`ghcr.io/imanunator/wallpaparr:latest`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) · also `:1.1.0` after tag `v1.1.0` |
+| CI fallback (before the first tag) | Green **CI** run on `main` → artifact `wallpaparr-plugin-apk` (same filenames) |
+
+```bash
+docker pull ghcr.io/imanunator/wallpaparr:latest
+adb install -r wallpaparr-plugin-release.apk
+```
+
+How GHCR + Release publishing works (permissions, tag command): **[docs/RELEASE.md](docs/RELEASE.md)**.
+
+> If `/releases/latest` 404s, the `v1.1.0` tag has not been pushed yet. CI on `main` still publishes `:latest` to GHCR and still **builds** the APK. One tag push finishes the Release:
+> `git checkout main && git pull && git tag v1.1.0 && git push origin v1.1.0`
+
+---
+
+## Quick start
+
+### 1. Server — one-liner (published image)
+
+```bash
+mkdir -p data && cp -n config.example.json data/config.json || true
+docker run --name wallpaparr --restart unless-stopped -d -p 8787:8787 \
+  -e PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787 \
+  -v "$PWD/data:/data" \
+  ghcr.io/imanunator/wallpaparr:latest
+```
+
+### 2. Or Compose (always builds the Dockerfile — no GHCR required)
+
+```bash
+git clone https://github.com/iManunator/projectivy-live-wallpaper-suite.git
+cd projectivy-live-wallpaper-suite
+mkdir -p data
+cp -n config.example.json data/config.json || true
+cp .env.example .env          # PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787 for the TV
+docker compose up --build -d
+```
+
+`pull_policy: build` means Compose uses `Dockerfile` even if GHCR is empty. After a release you can `docker compose pull` instead. Offline demo verify: `./scripts/verify.sh`.
+
+### 3. Prove it
 
 ```bash
 curl -sf http://127.0.0.1:8787/api/health
@@ -27,72 +123,159 @@ curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
 curl -sf http://127.0.0.1:8787/api/dashboard
 ```
 
-Unit tests (no Docker): `./scripts/test.sh` (creates `backend/.venv` on PEP 668 systems).
+Open **http://127.0.0.1:8787** — Tonight is the home page. Empty data dirs auto-seed a demo catalog (**Northlight** is `sort=latest`). No Jellyfin keys required.
 
-## Install
+Unit tests (no Docker): `./scripts/test.sh`.
 
-### Server
+### 4. Plugin — Projectivy on the TV
 
-```bash
-git clone https://github.com/iManunator/projectivy-live-wallpaper-suite.git
-cd projectivy-live-wallpaper-suite
-mkdir -p data
-cp -n config.example.json data/config.json || true
-cp .env.example .env                      # PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787 for the TV
-docker compose up --build -d
-```
-
-Published image (after `main` / a `v*` tag): `ghcr.io/imanunator/wallpaparr:latest`
-
-```bash
-docker pull ghcr.io/imanunator/wallpaparr:latest
-docker compose pull && docker compose up -d
-```
-
-CI pull requests also upload a loadable **`wallpaparr-image`** artifact (`wallpaparr-image.tar.gz`).
-
-### Plugin APK (Android TV / Projectivy)
-
-Download **`wallpaparr-plugin-apk`** from GitHub Actions (files `wallpaparr-plugin-release.apk` and `wallpaparr-plugin-debug.apk`) or the same names on a GitHub Release.
+1. Sideload [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk).
+2. Projectivy → Appearance → Wallpaper → **Wallpaparr**.
+3. Server URL: `http://YOUR_LAN_IP:8787` (not `127.0.0.1` — the TV has to reach it).
+4. Pick mode **Tonight’s mix**. Enable **Prefer parallax / motion VIDEO** if you baked MP4s.
 
 ```bash
 adb connect TV_IP
 adb install -r wallpaparr-plugin-release.apk
 ```
 
-Then Projectivy → Appearance → Wallpaper → **Wallpaparr**. Server URL: `http://YOUR_LAN_IP:8787`. Pick mode **Tonight’s mix** uses the suite taste profile.
+Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523afb`
 
-Package: `com.imanunator.wallpaparr`  
-UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
+---
 
-**SeerChannel** (Preview Channel rows) is **not** in this suite. Install [SeerChannel](https://github.com/iManunator/SeerChannel) separately if you want home-screen rows.
+## Features
+
+| Feature | What you get |
+| --- | --- |
+| **Tonight preview** | See the wallpaper inside Projectivy chrome before it hits the TV. Shuffle the taste mix. Switch layout DNA live. |
+| **Layout DNA** | Netflix Hero, Prime Cinematic, Google TV Clean, **Projectivy Dock** (clock / row / dock safe zones), plus custom layouts. |
+| **Smart queues** | Unwatched · Continue watching · Newly added · Seerr trending · Requestable · Pinned. Gallery badges match the queues. |
+| **Parallax motion** | Optional H.264 loops: parallax / Ken Burns / drift · Subtle / Cinematic / Bold · light-leak layer. JPEG still always kept. |
+| **Taste profiles** | `tonight` · `unwatched_heavy` · `cinephile` · `discovery` — weighted mixes, editable, `profile=` / `pool=taste:<name>`. |
+| **Plugin pick modes** | Tonight’s mix, continue watching, newly added, Seerr trending, pinned, plus sort / pool / mix / round-robin from tvbgsuite. |
+| **Demo mode** | Six fixture titles, no Jellyfin. `./scripts/verify.sh` builds the image, waits for health, curls status. |
+| **Pin / never-show** | Hidden titles never enter `/api/wallpaper/status`. Pinned pool does not silently fall back. |
+| **Overlays** | Off by default. Optional clock card + HA / news / JSON hooks. |
+| **Cron** | skip / replace / cleanup / ids / motion — generate while you sleep. |
+
+---
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  subgraph Sources
+    JF[Jellyfin]
+    SE[Jellyseerr / Seerr]
+    TM[TMDB]
+    DM[Demo catalog]
+  end
+
+  subgraph Wallpaparr
+    API["FastAPI :8787"]
+    GEN[Still JPEG + optional parallax MP4]
+    WEB[Tonight / Gallery / Editor]
+    Q[Smart queues + taste]
+    JF --> API
+    SE --> API
+    TM --> API
+    DM --> API
+    API --> GEN
+    API --> WEB
+    API --> Q
+  end
+
+  subgraph TV["Android TV / Google TV"]
+    PL["Wallpaparr plugin APK"]
+    PJ[Projectivy Launcher]
+    PL --> PJ
+  end
+
+  API -->|"GET /api/wallpaper/status"| PL
+```
+
 | Piece | Path | Role |
 | --- | --- | --- |
-| Backend | `backend/` | Generate, catalog, smart queues, taste, cron, Projectivy HTTP API |
+| Backend | `backend/` | Generate, catalog, queues, taste, cron, Projectivy HTTP API |
 | Web UI | `web/` | Tonight preview, gallery, layout editor, generate, health, settings |
-| Plugin | `plugin/` | Projectivy wallpaper provider (`com.imanunator.wallpaparr`) |
+| Plugin | `plugin/` | Projectivy wallpaper provider `com.imanunator.wallpaparr` |
+| Image | `Dockerfile` | `ghcr.io/imanunator/wallpaparr` — Python + ffmpeg + built UI |
 
-`GET /api/wallpaper/status` stays compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `path`, optional `mediaType`/`videoUrl`) and adds `parallaxStyle` / `motionDuration` / `queue` / `pinned` when relevant. See [docs/API.md](docs/API.md).
+---
 
-## Options
+## API contract
 
-| Area | What you can set |
+Compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `path`; optional `mediaType` / `videoUrl`). Additive fields: `parallaxStyle`, `motionDuration`, `queue`, `pinned`. Full tables: **[docs/API.md](docs/API.md)**.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | `{ ok, service: "wallpaparr", version }` |
+| `GET` | `/api/wallpaper/status` | Next wallpaper. Query: `layout`, `sort`, `pool`, `queue`, `profile`, `exclude`, filters |
+| `GET` | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
+| `GET` | `/api/dashboard` | Gallery size, last cron/generate, providers |
+| `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides |
+| `GET` | `/api/queues` | Smart-queue counts |
+| `GET` | `/api/options` | Pick modes, pools, motion, taste, queues, clients |
+| `POST` | `/api/generate` | Batch stills (+ optional VIDEO) |
+| `GET`/`POST` | `/api/settings` | Providers, cron, motion, taste, overlays |
+
+`GET /api/wallpaper/status?layout=Netflix%20Hero&profile=tonight` is the call the plugin makes for **Tonight’s mix**.
+
+<details>
+<summary>Example status payload</summary>
+
+```json
+{
+  "imageUrl": "http://host:8787/api/wallpaper/image/Netflix%20Hero/northlight-demo.jpg",
+  "videoUrl": "http://host:8787/api/wallpaper/image/Netflix%20Hero/northlight-demo.mp4",
+  "mediaType": "video",
+  "actionUrl": "jellyfin://items/…",
+  "title": "Northlight",
+  "path": "northlight-demo.jpg",
+  "layout": "Netflix Hero",
+  "parallaxStyle": "parallax",
+  "motionDuration": 6.0,
+  "queue": "unwatched",
+  "pinned": false
+}
+```
+
+</details>
+
+---
+
+## Wallpaparr vs SeerChannel
+
+| | **Wallpaparr** (this repo) | **[SeerChannel](https://github.com/iManunator/SeerChannel)** |
+| --- | --- | --- |
+| Job | **Wallpaper** — the 16:9 plate behind the launcher | **Preview Channels** — the rows *on* the home screen |
+| Install | Docker image + Projectivy wallpaper plugin APK | Separate Android app |
+| Talks to | Jellyfin / Seerr / TMDB / demo catalog | Jellyfin / Jellyseerr directly |
+| Bundled here? | Yes | **No** |
+
+Install both if you want cinematic backgrounds *and* home-screen rows. They do not replace each other.
+
+---
+
+## Docs
+
+| Doc | Contents |
 | --- | --- |
-| Layout DNA | Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock (safe zones), plus custom layouts |
-| Smart queues | Unwatched, Continue watching, Newly added, Seerr trending, Requestable, Pinned |
-| Taste profiles | tonight / unwatched_heavy / cinephile / discovery, with editable weights |
-| Pin / never-show | Gallery flags; hidden titles never enter `/status` |
-| No-repeat | Plugin exclude bag (recent paths decay as new ones arrive) |
-| Motion | parallax / kenburns / drift · Subtle / Cinematic / Bold · optional light-leak layer · still fallback |
-| Overlays | Off by default; optional clock card + HA/news/JSON hooks ([OVERLAYS.md](docs/OVERLAYS.md)) |
-| Plugin | Tonight’s mix, continue watching, newly added, Seerr trending, pinned, plus the original sort/pool/mix modes |
-| Cron | skip / replace / cleanup / ids / motion |
+| [Install](docs/INSTALL.md) | Server, plugin, LAN URL, migration from tvbgsuite |
+| [Release / GHCR / APK](docs/RELEASE.md) | How `:latest` publishes, how to tag `v1.1.0`, permissions |
+| [Verify](docs/VERIFY.md) | Demo mode, no Jellyfin, no GHCR |
+| [API](docs/API.md) | Status contract + editor/ops endpoints |
+| [Motion](docs/MOTION.md) | IMAGE vs VIDEO, parallax bake, intensity |
+| [Overlays](docs/OVERLAYS.md) | Clock / HA / news hooks |
+| [Projectivy plugin](docs/PROJECTIVY.md) | Pick modes, UUID, deep links |
+| [Changelog](CHANGELOG.md) | 1.1.0 · 1.0.0 |
+
+---
 
 ## Credits
 
 - Projectivy wallpaper plugin contract: [spocky/projectivy-plugin-wallpaper-provider](https://github.com/spocky/projectivy-plugin-wallpaper-provider)
-- Prior WebGUI / plugin work: [iManunator/androidtvbackgroundWebGui](https://github.com/iManunator/androidtvbackgroundWebGui), [iManunator/projectivy-tvbgsuite-plugin](https://github.com/iManunator/projectivy-tvbgsuite-plugin)
-- Channels (separate): [iManunator/SeerChannel](https://github.com/iManunator/SeerChannel)
+- Prior WebGUI / plugin work: [androidtvbackgroundWebGui](https://github.com/iManunator/androidtvbackgroundWebGui), [projectivy-tvbgsuite-plugin](https://github.com/iManunator/projectivy-tvbgsuite-plugin)
+- Channels (separate): [SeerChannel](https://github.com/iManunator/SeerChannel)
+
+MIT © 2026 iManunator

@@ -1,6 +1,9 @@
 # Wallpaparr — cinematic Projectivy wallpapers.
 # Local verify: `docker compose up --build` (or ./scripts/verify.sh).
 # pull_policy: build means Compose uses the Dockerfile even if GHCR is unpublished.
+# Published image: ghcr.io/imanunator/wallpaparr:latest (CI on main + v* Release).
+# To run GHCR instead of a local build: docker compose pull && docker compose up -d
+# (override pull_policy, or `docker run … ghcr.io/imanunator/wallpaparr:latest`).
 services:
   wallpaparr:
     build:
