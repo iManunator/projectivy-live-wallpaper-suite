@@ -4,7 +4,7 @@ Cinematic **Projectivy** wallpapers — stills and optional **parallax VIDEO** l
 
 This GitHub repository may still be named `projectivy-live-wallpaper-suite`; the product is **Wallpaparr**.
 
-**Version:** 1.0.0 — [CHANGELOG.md](CHANGELOG.md) · [Install](docs/INSTALL.md) · [Parallax / IMAGE vs VIDEO](docs/MOTION.md)
+**Version:** 1.0.0 — [CHANGELOG.md](CHANGELOG.md) · [Verify (no Jellyfin)](docs/VERIFY.md) · [Install](docs/INSTALL.md) · [Parallax / IMAGE vs VIDEO](docs/MOTION.md)
 
 ## Verify tonight (no Jellyfin)
 
@@ -14,18 +14,24 @@ One command builds the **Dockerfile** (does not need GHCR) and hits the demo cat
 ./scripts/verify.sh
 ```
 
-That is `docker compose up --build`, then:
+That is `docker compose up --build` (`pull_policy: build` so Compose never depends on a public GHCR image), then:
 
-- Health: http://127.0.0.1:8787/api/health → `{"ok":true,"service":"wallpaparr",...}`
-- Wallpaper: `curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"`
-- UI: http://127.0.0.1:8787
+```bash
+curl -sf http://127.0.0.1:8787/api/health
+# {"ok":true,"service":"wallpaparr","version":"1.0.0"}
 
-First boot seeds a demo gallery if the catalog is empty. Equivalent:
+curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
+# demo title: Northlight — imageUrl is a JPEG, no Jellyfin required
+```
+
+UI: http://127.0.0.1:8787  
+Full copy-paste: [docs/VERIFY.md](docs/VERIFY.md)
+
+Equivalent without the script:
 
 ```bash
 mkdir -p data && cp -n config.example.json data/config.json || true
 docker compose up --build -d
-# wait until healthy, then open the URLs above
 ```
 
 Unit tests (no Docker): `./scripts/test.sh`
@@ -37,7 +43,8 @@ Unit tests (no Docker): `./scripts/test.sh`
 ```bash
 git clone https://github.com/iManunator/projectivy-live-wallpaper-suite.git
 cd projectivy-live-wallpaper-suite
-cp config.example.json data/config.json   # mkdir -p data first
+mkdir -p data
+cp -n config.example.json data/config.json || true
 cp .env.example .env                      # PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787 for the TV
 docker compose up --build -d
 ```

@@ -6,11 +6,13 @@ The GitHub repository may still be named `projectivy-live-wallpaper-suite`. The 
 
 ## Local verify (offline demo, no Jellyfin)
 
+Step-by-step for an assistant machine: [VERIFY.md](VERIFY.md)
+
 ```bash
 ./scripts/verify.sh
 ```
 
-This **builds the Dockerfile** via `docker compose up --build` (GHCR is not required), waits for health, then curls:
+This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: build`; GHCR is not required), waits for health, then curls:
 
 | Check | URL |
 | --- | --- |
