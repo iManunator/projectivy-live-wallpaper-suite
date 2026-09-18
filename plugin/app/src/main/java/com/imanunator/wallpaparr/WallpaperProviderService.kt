@@ -191,7 +191,7 @@ class WallpaperProviderService : Service() {
                     return status?.let { toWallpaper(it, WallpaperPickModes.labelFor(pickMode)) }?.let { listOf(it) }
                         ?: emptyList()
                 } catch (e: Exception) {
-                    Log.e("LiveWallpaper", "getWallpapers failed", e)
+                    Log.e("Wallpaparr", "getWallpapers failed", e)
                 }
             }
             return emptyList()

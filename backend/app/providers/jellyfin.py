@@ -22,8 +22,8 @@ class JellyfinProvider:
 
     def _headers(self) -> dict[str, str]:
         auth = (
-            'MediaBrowser Client="ProjectivyLiveWallpaper", Device="suite", '
-            f'DeviceId="live-wallpaper-suite", Version="1.0.0"'
+            'MediaBrowser Client="Wallpaparr", Device="wallpaparr", '
+            f'DeviceId="wallpaparr", Version="1.0.0"'
         )
         if self.api_key:
             auth += f', Token="{self.api_key}"'
