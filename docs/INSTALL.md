@@ -12,7 +12,7 @@ Step-by-step for an assistant machine: [VERIFY.md](VERIFY.md)
 ./scripts/verify.sh
 ```
 
-This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: build`; GHCR is not required), waits for health, then curls:
+This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: build`; GHCR is not required). Without Compose v2, use `docker build -t wallpaparr:local .` and `docker run` as in [VERIFY.md](VERIFY.md). The script waits for health, then curls:
 
 | Check | URL |
 | --- | --- |
@@ -22,7 +22,7 @@ This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: bu
 
 Empty data dirs auto-seed a demo catalog.
 
-Unit tests: `./scripts/test.sh`
+Unit tests: `./scripts/test.sh` (creates `backend/.venv` if needed).
 
 ## 1. Server — Docker Compose
 

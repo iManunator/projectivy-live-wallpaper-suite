@@ -4,10 +4,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "==> backend pytest"
-if [[ ! -d "$ROOT/backend/.venv" ]]; then
-  python3 -m pip install -q -r "$ROOT/backend/requirements-dev.txt"
+VENV="$ROOT/backend/.venv"
+if [[ ! -x "$VENV/bin/python" ]]; then
+  echo "creating backend/.venv (PEP 668 — do not pip-install into the system Python)"
+  if ! python3 -m venv "$VENV"; then
+    echo "python3 -m venv failed. Install python3-venv, then: python3 -m venv backend/.venv" >&2
+    exit 1
+  fi
 fi
-(cd "$ROOT/backend" && python3 -m pytest -q)
+"$VENV/bin/python" -m pip install -q -U pip
+"$VENV/bin/python" -m pip install -q -r "$ROOT/backend/requirements-dev.txt"
+(cd "$ROOT/backend" && "$VENV/bin/python" -m pytest -q)
 
 echo "==> frontend vitest"
 if [[ ! -d "$ROOT/web/node_modules" ]]; then

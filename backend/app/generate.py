@@ -202,3 +202,18 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         "cleaned": cleaned,
         "count": len(created),
     }
+
+
+def seed_demo_catalog(layout: str = "Netflix Hero", limit: int = 6) -> dict:
+    """First-boot demo seed.
+
+    Titles are generated last-to-first so ``sort=latest`` is the first demo
+    title (Northlight), matching VERIFY.md.
+    """
+    items = list(reversed(collect_items("demo", limit)))
+    created: list[str] = []
+    for item in items:
+        record = generate_one(item, layout, motion=False, replace=False)
+        if record:
+            created.append(record.title)
+    return {"created": created, "count": len(created)}
