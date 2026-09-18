@@ -48,13 +48,15 @@ Open `http://YOUR_LAN_IP:8787`.
 
 ### Tag a GitHub Release (GHCR + APKs)
 
-`.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest` (`packages: write`), then attaches **`wallpaparr-plugin-release.apk`** (and debug) to a GitHub Release (`contents: write`). Details: [RELEASE.md](RELEASE.md).
+**`v1.1.0` is already tagged.** [Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.1.0) has **`wallpaparr-plugin-release.apk`**; GHCR has `:v1.1.0` / `:1.1.0` / `:latest`. Do not retag `v1.1.0`.
+
+`.github/workflows/release.yml` runs on future `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest` (`packages: write`), then attaches **`wallpaparr-plugin-release.apk`** (and debug) to a GitHub Release (`contents: write`). Details: [RELEASE.md](RELEASE.md).
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v1.1.0 -m "Wallpaparr 1.1.0"
-git push origin v1.1.0
+git tag -a v1.1.1 -m "Wallpaparr 1.1.1"   # next version only
+git push origin v1.1.1
 ```
 
 Merges to **main** also run CI, which pushes GHCR `:latest` when the event is not a pull request.
@@ -85,7 +87,7 @@ docker run --rm -p 8787:8787 \
 Download **one** of (prefer the Release — Actions artifacts expire):
 
 - GitHub **Release** asset (primary): [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk)
-- GitHub **Actions** artifact **`wallpaparr-plugin-apk`** (same filenames; use until the first `v*` tag)
+- GitHub **Actions** artifact **`wallpaparr-plugin-apk`** (same filenames; ephemeral)
 - Local: `cd plugin && ./gradlew :app:assembleRelease` → `plugin/app/build/outputs/apk/release/app-release.apk`
 
 Install on the TV:

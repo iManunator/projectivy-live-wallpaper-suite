@@ -27,24 +27,26 @@ Release also needs `contents: write` so it can create the GitHub Release and upl
 
 The image is named **`wallpaparr`** (lowercase). GHCR package names are case-sensitive and must be lowercase.
 
-OCI labels `org.opencontainers.image.source` / `.url` point at this repo so GitHub **links the package** under the repository Packages sidebar. Login uses `github.repository_owner` + `secrets.GITHUB_TOKEN` against `ghcr.io`.
+OCI labels `org.opencontainers.image.source` / `.url` point at this repo so GitHub **links the package** under the repository Packages sidebar. Login uses `github.actor` + `secrets.GITHUB_TOKEN` against `ghcr.io`.
 
 If a GHCR push is denied, check **Settings → Actions → General → Workflow permissions** (must allow read/write) and that the workflow YAML still has `packages: write`. First publish creates the package; visibility is already **public** for `wallpaparr`.
 
-## Tag `v1.1.0` (creates the Release + versioned image)
+## Tag `v1.1.0` — already shipped
 
-Merge the flagship docs/packaging PR to `main` first so the Release notes and workflows match what ships. Then, on a machine with push access:
+Git tag **`v1.1.0`** points at `main` (`975d4ae`). The **Release** workflow published:
+
+- Image: `ghcr.io/imanunator/wallpaparr:v1.1.0`, `:1.1.0`, and `:latest`
+- GitHub Release: https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.1.0
+- Primary APK: [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/download/v1.1.0/wallpaparr-plugin-release.apk)
+
+**Do not retag `v1.1.0`.** For a later ship, bump `VERSION` + `CHANGELOG.md` and tag `v1.1.1` (or later):
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v1.1.0 -m "Wallpaparr 1.1.0"
-git push origin v1.1.0
+git tag -a v1.1.1 -m "Wallpaparr 1.1.1"
+git push origin v1.1.1
 ```
-
-That single tag push runs **Release**: publishes `ghcr.io/imanunator/wallpaparr:v1.1.0` (and `:1.1.0`, `:latest`) and attaches **`wallpaparr-plugin-release.apk`** to https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.1.0
-
-Do **not** retag `v1.1.0` if it already exists. Bump `VERSION` + `CHANGELOG.md` and tag `v1.1.1` (or later) instead.
 
 `workflow_dispatch` on Release (from `main`) rebuilds and pushes `:latest` without creating a GitHub Release. Use a `v*` tag when you want the APK on the Releases page.
 
@@ -52,7 +54,6 @@ Do **not** retag `v1.1.0` if it already exists. Bump `VERSION` + `CHANGELOG.md` 
 
 ```bash
 docker pull ghcr.io/imanunator/wallpaparr:latest
-# after the v1.1.0 tag:
 docker pull ghcr.io/imanunator/wallpaparr:1.1.0
 ```
 
@@ -70,13 +71,13 @@ docker run --rm -p 8787:8787 \
 
 ## Download the plugin APK
 
-Primary (after the tag):
+Primary:
 
 ```text
 https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk
 ```
 
-Until the first `v*` tag exists, grab **`wallpaparr-plugin-apk`** from the latest green **CI** run on `main` (same filenames). Sideload:
+CI also uploads ephemeral artifact **`wallpaparr-plugin-apk`**. Sideload:
 
 ```bash
 adb connect TV_IP
