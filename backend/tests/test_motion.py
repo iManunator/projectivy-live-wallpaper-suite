@@ -7,7 +7,6 @@ import pytest
 from PIL import Image
 
 from app.layouts import PRESETS
-from app.models import AppSettings, MediaItem
 from app.motion import (
     MotionProfile,
     build_filtergraph,
@@ -16,10 +15,52 @@ from app.motion import (
     generate_motion,
     has_motion,
     intensity_from_preset,
+    leak_geometry,
+    max_motion_frame,
     profile_from_settings,
     zoompan_expr,
 )
+from app.models import AppSettings, Layout, LayoutBackground, MediaItem
 from app.render import render_chrome, render_plate, render_still, save_jpeg, save_png
+
+
+def _grab_frame(mp4: Path, frame: int, dest: Path) -> Image.Image:
+    result = subprocess.run(
+        [
+            ffmpeg_bin(),
+            "-y",
+            "-i",
+            str(mp4),
+            "-vf",
+            f"select=eq(n\\,{frame})",
+            "-vframes",
+            "1",
+            str(dest),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    return Image.open(dest).convert("RGB")
+
+
+def _channel_delta(a: tuple[int, ...], b: tuple[int, ...]) -> int:
+    return max(abs(x - y) for x, y in zip(a, b))
+
+
+def test_leak_geometry_pads_beyond_pan():
+    profile = MotionProfile(style="parallax", duration=6, fps=24, width=1920, height=1080, light_leak=True)
+    x, y, lw, lh = leak_geometry(profile)
+    assert lw > profile.width
+    assert lh > profile.height
+    assert x.startswith("-")
+    assert y.startswith("-")
+    assert "," not in x and "," not in y
+
+
+def test_max_motion_frame_is_peak_sine():
+    assert max_motion_frame(12) == 3
+    assert max_motion_frame(24) == 6
 
 
 def test_choose_delivery_prefers_video_when_asked():
@@ -113,14 +154,20 @@ def test_kenburns_and_drift_lock_chrome_when_layered():
         assert "zoompan=" in graph
 
 
-def test_parallax_light_leak_adds_third_layer():
+def test_parallax_light_leak_sits_under_locked_chrome():
     graph = build_filtergraph(
         MotionProfile(style="parallax", intensity=0.6, duration=6, light_leak=True),
         has_chrome=True,
     )
     assert "[2:v]" in graph
     assert "colorchannelmixer" in graph
-    assert "[mid]" in graph
+    assert "[lit]" in graph
+    assert "[mid]" not in graph
+    leak_overlay = graph.find("overlay=x='")
+    chrome_overlay = graph.rfind("overlay=x=0:y=0")
+    assert 0 <= graph.find("[2:v]") < leak_overlay < chrome_overlay
+    # Padded leak must start at a negative origin so a pan cannot uncover the frame.
+    assert "overlay=x='-" in graph
 
 
 def test_intensity_presets():
@@ -231,33 +278,131 @@ def test_ffmpeg_keeps_chrome_pinned_on_kenburns(tmp_path: Path):
     ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
     assert ok, msg
     mp4 = jpg.with_suffix(".mp4")
-
-    def grab(frame: int, dest: Path) -> None:
-        result = subprocess.run(
-            [
-                ffmpeg_bin(),
-                "-y",
-                "-i",
-                str(mp4),
-                "-vf",
-                f"select=eq(n\\,{frame})",
-                "-vframes",
-                "1",
-                str(dest),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, result.stderr[-500:]
-
-    first = tmp_path / "f0.png"
-    mid = tmp_path / "f6.png"
-    grab(0, first)
-    grab(6, mid)
-    p0 = Image.open(first).convert("RGB").getpixel((10, 8))
-    p6 = Image.open(mid).convert("RGB").getpixel((10, 8))
+    peak = max_motion_frame(profile.frames)
+    first = _grab_frame(mp4, 0, tmp_path / "f0.png")
+    moved = _grab_frame(mp4, peak, tmp_path / "fpeak.png")
+    p0 = first.getpixel((10, 8))
+    p1 = moved.getpixel((10, 8))
     assert min(p0) > 180, p0
-    assert min(p6) > 180, p6
+    assert min(p1) > 180, p1
+    assert _channel_delta(p0, p1) <= 6, (p0, p1)
+
+
+@pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
+def test_ffmpeg_keeps_vignette_and_letterbox_locked_while_plate_moves(tmp_path: Path):
+    """Atmosphere stays pinned; only the art plate Ken-Burns.
+
+    Default parallax bakes a light-leak under chrome. A same-size leak that pans
+    uncovers the frame edge and looks like a moving vignette — that must not happen.
+    """
+    from PIL import ImageDraw
+
+    width, height = 320, 180
+    plate_img = Image.new("RGB", (width, height))
+    px = plate_img.load()
+    for y in range(height):
+        for x in range(width):
+            px[x, y] = (int(255 * x / (width - 1)), int(255 * y / (height - 1)), 40)
+
+    item = MediaItem(title="Probe")
+    layout = Layout(
+        name="Locked atmosphere",
+        canvas_width=width,
+        canvas_height=height,
+        background=LayoutBackground(
+            fade_left=0.0,
+            fade_right=0.0,
+            fade_top=0.22,
+            fade_bottom=0.22,
+            fade_softness=0.2,
+            vignette=0.9,
+            overlay_opacity=0,
+            gradient_opacity=0,
+        ),
+        layers=[],
+    )
+    chrome_img = render_chrome(item, layout)
+    # Guarantee an opaque letterbox sample even if the fade falloff is soft.
+    ImageDraw.Draw(chrome_img).rectangle([0, 0, width, 16], fill=(8, 8, 8, 255))
+    ImageDraw.Draw(chrome_img).rectangle([0, height - 16, width, height], fill=(8, 8, 8, 255))
+    assert chrome_img.getpixel((8, 8))[3] == 255
+    assert chrome_img.getpixel((2, 2))[3] >= 200
+
+    jpg = tmp_path / "atm.jpg"
+    plate = tmp_path / "atm_plate.jpg"
+    chrome = tmp_path / "atm_chrome.png"
+    save_jpeg(plate_img, jpg)
+    save_jpeg(plate_img, plate)
+    save_png(chrome_img, chrome)
+    profile = MotionProfile(
+        style="parallax",
+        quality="light",
+        intensity=0.96,
+        duration=1.0,
+        fps=12,
+        width=width,
+        height=height,
+        light_leak=True,
+    )
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    mp4 = jpg.with_suffix(".mp4")
+    peak = max_motion_frame(profile.frames)
+    first = _grab_frame(mp4, 0, tmp_path / "atm0.png")
+    moved = _grab_frame(mp4, peak, tmp_path / "atm_peak.png")
+
+    # Locked letterbox / corner atmosphere.
+    for sample in ((8, 6), (width // 2, 6), (width - 8, 6), (8, height - 6), (2, 2)):
+        assert _channel_delta(first.getpixel(sample), moved.getpixel(sample)) <= 6, sample
+
+    # Plate still Ken-Burns in the open center.
+    center_delta = _channel_delta(first.getpixel((width // 2, height // 2)), moved.getpixel((width // 2, height // 2)))
+    assert center_delta >= 8, center_delta
+
+
+@pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
+def test_ffmpeg_uniform_plate_vignette_does_not_zoom(tmp_path: Path):
+    """If vignette were burned into the plate, zoom would lighten the corners."""
+    width, height = 320, 180
+    plate_img = Image.new("RGB", (width, height), (200, 40, 80))
+    layout = Layout(
+        name="Vignette only",
+        canvas_width=width,
+        canvas_height=height,
+        background=LayoutBackground(
+            fade_left=0,
+            fade_right=0,
+            fade_top=0,
+            fade_bottom=0,
+            vignette=0.9,
+            overlay_opacity=0,
+            gradient_opacity=0,
+        ),
+        layers=[],
+    )
+    jpg = tmp_path / "vig.jpg"
+    plate = tmp_path / "vig_plate.jpg"
+    chrome = tmp_path / "vig_chrome.png"
+    save_jpeg(plate_img, jpg)
+    save_jpeg(plate_img, plate)
+    save_png(render_chrome(MediaItem(title="Probe"), layout), chrome)
+    profile = MotionProfile(
+        style="parallax",
+        quality="light",
+        intensity=0.96,
+        duration=1.0,
+        fps=12,
+        width=width,
+        height=height,
+        light_leak=True,
+    )
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    peak = max_motion_frame(profile.frames)
+    first = _grab_frame(jpg.with_suffix(".mp4"), 0, tmp_path / "vig0.png")
+    moved = _grab_frame(jpg.with_suffix(".mp4"), peak, tmp_path / "vig_peak.png")
+    for sample in ((2, 2), (8, 8), (20, 16), (width - 3, 2), (width // 2, 4)):
+        assert _channel_delta(first.getpixel(sample), moved.getpixel(sample)) <= 4, sample
 
 @pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
 def test_generate_motion_survives_exdev_promote(tmp_path: Path, monkeypatch):

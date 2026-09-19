@@ -187,7 +187,9 @@ def vignette_overlay(size: tuple[int, int], amount: float) -> Image.Image | None
     if strength <= 0.001:
         return None
     shade = Image.radial_gradient("L").resize(size, Image.Resampling.BICUBIC)
-    alpha = shade.point(lambda v: int(v * strength * 0.92))
+    # Extreme corners reach amount * 255 so a strong vignette is opaque there
+    # and does not Ken-Burns with the plate after overlay.
+    alpha = shade.point(lambda v: int(min(255, v * strength)))
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
     overlay.putalpha(alpha)
     return overlay
@@ -225,7 +227,12 @@ def fade_alpha_mask(layout: Layout, size: tuple[int, int]) -> Image.Image:
             if ny > 1 - bottom:
                 edge = max(edge, (ny - (1 - bottom)) / max(bottom, 0.001))
             alpha = min(1.0, edge ** (0.35 + soft))
-            value = int(alpha * 210)
+            # Snap the darkest rim to fully opaque so baked VIDEO letterbox /
+            # corner shadows cannot leak plate motion (yuv + zoompan).
+            if alpha >= 0.97:
+                value = 255
+            else:
+                value = int(round(alpha * 255))
             for dx in range(4):
                 if x + dx < width:
                     px[x + dx, y] = value

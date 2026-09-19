@@ -7,12 +7,15 @@ Projectivy wallpaper plugins return either:
 This module bakes the VIDEO as **layers**:
 
 * **Background** — artwork plate. Subtle pan / zoom / drift (intensity presets).
-* **Foreground / target** — logo or title, watch badges, Seerr/requestable chips, metadata chrome.
-  Overlay is pinned at layout DNA coordinates (``overlay=x=0:y=0``). Chrome
-  never Ken-Burns with the plate.
+  Optional parallax light-leak is a padded wash on this layer only.
+* **Foreground / target** — logo or title, watch badges, Seerr/requestable chips,
+  metadata chrome, **and static atmosphere** (vignette, letterbox shadows, edge
+  gradients). Overlay is pinned at layout DNA coordinates (``overlay=x=0:y=0``).
+  Chrome never Ken-Burns with the plate.
 
-Do not zoompan a flat JPEG that already has text burned in — that makes the
-title swim. Animate the plate, then overlay the static chrome PNG each frame.
+Do not zoompan a flat JPEG that already has text or vignette burned in — that
+makes title and shadows swim. Animate the plate (and optional leak), then overlay
+the static chrome PNG each frame.
 """
 
 from __future__ import annotations
@@ -125,6 +128,28 @@ def zoompan_expr(amp: float, pan: float, frames: int, width: int, height: int, f
     )
 
 
+def leak_geometry(profile: MotionProfile) -> tuple[str, str, int, int]:
+    """Oversized light-leak canvas that still covers the frame while it drifts.
+
+    A WxH wash overlaid at a moving x,y uncovers the opposite edge — that reads as
+    a vignette / letterbox crawling with the Ken Burns. Pad like CSS ``inset: -18%``
+    so the leak stays under chrome and never scrapes the frame.
+    """
+    w, h, frames = profile.width, profile.height, profile.frames
+    pan_x = int(w * 0.12)
+    pan_y = int(h * 0.04)
+    mx = max(int(w * 0.18), pan_x + 8)
+    my = max(int(h * 0.18), pan_y + 8)
+    x = f"{-mx}+{pan_x}*sin(2*PI*n/{frames})"
+    y = f"{-my}+{pan_y}*cos(2*PI*n/{frames})"
+    return x, y, w + 2 * mx, h + 2 * my
+
+
+def max_motion_frame(frames: int) -> int:
+    """Frame index where zoompan sine is at +1 (peak zoom / pan)."""
+    return max(1, int(frames) // 4)
+
+
 def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
     """Return an ffmpeg -filter_complex (parallax) or -vf (single layer) graph."""
     p = MotionProfile(
@@ -142,22 +167,22 @@ def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
     leak = bool(p.light_leak) and has_chrome and p.style == "parallax"
     if has_chrome:
         bg = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
-        # Pin chrome in layout-DNA pixels. Never pan/zoom the overlay with the plate.
-        graph = (
+        # Plate (and optional leak) move. Chrome — including vignette / letterbox —
+        # is pinned in layout-DNA pixels and always composited last.
+        if leak:
+            leak_x, leak_y, _, _ = leak_geometry(p)
+            return (
+                f"[0:v]{prep},{bg}[bg];"
+                f"[2:v]format=rgba,colorchannelmixer=aa=0.16[leak];"
+                f"[bg][leak]overlay=x='{leak_x}':y='{leak_y}':shortest=1[lit];"
+                f"[1:v]scale={w}:{h},format=rgba[fg];"
+                f"[lit][fg]overlay=x=0:y=0:shortest=1,format=yuv420p"
+            )
+        return (
             f"[0:v]{prep},{bg}[bg];"
             f"[1:v]scale={w}:{h},format=rgba[fg];"
-            f"[bg][fg]overlay=x=0:y=0:shortest=1"
+            f"[bg][fg]overlay=x=0:y=0:shortest=1,format=yuv420p"
         )
-        if leak:
-            leak_x = f"{int(w * 0.12)}*sin(2*PI*n/{frames})"
-            leak_y = f"{int(h * 0.04)}*cos(2*PI*n/{frames})"
-            graph += (
-                f"[mid];[2:v]format=rgba,colorchannelmixer=aa=0.16[leak];"
-                f"[mid][leak]overlay=x='{leak_x}':y='{leak_y}':shortest=1,format=yuv420p"
-            )
-        else:
-            graph += ",format=yuv420p"
-        return graph
     # Artwork-only: no chrome PNG, so zoompan the plate (never a text-burned JPEG).
     zp = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
     return f"{prep},{zp},format=yuv420p"
@@ -214,7 +239,8 @@ def generate_motion(
         if use_chrome:
             cmd += ["-loop", "1", "-i", str(chrome)]
         if use_leak:
-            cmd += ["-f", "lavfi", "-i", f"color=c=0xff7a3a:s={profile.width}x{profile.height}:r={profile.fps}"]
+            _, _, leak_w, leak_h = leak_geometry(profile)
+            cmd += ["-f", "lavfi", "-i", f"color=c=0xff7a3a:s={leak_w}x{leak_h}:r={profile.fps}"]
         if use_chrome:
             cmd += ["-filter_complex", graph]
         else:

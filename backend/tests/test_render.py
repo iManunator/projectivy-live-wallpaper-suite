@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.layouts import PRESETS
 from app.models import GradientStop, Layout, LayoutBackground, MediaItem
 from app.providers.demo import DemoProvider
-from app.render import linear_gradient_rgba, render_chrome, render_still, synthetic_backdrop
+from app.render import linear_gradient_rgba, render_chrome, render_plate, render_still, synthetic_backdrop
 
 
 def test_render_still_is_full_hd():
@@ -102,6 +102,61 @@ def test_chrome_vignette_darkens_corners():
     corner = chrome.getpixel((1, 1))[3]
     center = chrome.getpixel((40, 22))[3]
     assert corner > center
+    assert corner >= 200
+
+
+def test_letterbox_fade_edges_are_opaque():
+    layout = Layout(
+        name="Letterbox",
+        canvas_width=80,
+        canvas_height=45,
+        background=LayoutBackground(
+            fade_left=0.48,
+            fade_right=0.04,
+            fade_top=0.1,
+            fade_bottom=0.42,
+            vignette=0,
+            overlay_opacity=0,
+            gradient_opacity=0,
+        ),
+        layers=[],
+    )
+    chrome = render_chrome(MediaItem(title="Probe"), layout)
+    assert chrome.getpixel((0, 22))[3] == 255
+    assert chrome.getpixel((0, 0))[3] == 255
+    assert chrome.getpixel((40, 44))[3] == 255
+    assert chrome.getpixel((1, 1))[3] == 255
+    assert chrome.getpixel((70, 22))[3] < 80
+
+
+def test_plate_excludes_vignette_and_letterbox():
+    layout = Layout(
+        name="Atmosphere",
+        canvas_width=64,
+        canvas_height=36,
+        background=LayoutBackground(
+            fade_left=0.5,
+            fade_bottom=0.4,
+            fade_top=0.2,
+            vignette=0.9,
+            overlay_opacity=0,
+            gradient_opacity=0,
+        ),
+        layers=[],
+    )
+    item = MediaItem(title="Probe")
+    from PIL import Image
+    import io
+
+    art = Image.new("RGB", (64, 36), (200, 80, 40))
+    buf = io.BytesIO()
+    art.save(buf, "JPEG")
+    plate = render_plate(item, layout, backdrop_bytes=buf.getvalue())
+    chrome = render_chrome(item, layout)
+    still = render_still(item, layout, backdrop_bytes=buf.getvalue())
+    assert plate.getpixel((2, 2))[0] > 150
+    assert still.getpixel((2, 2))[0] < plate.getpixel((2, 2))[0]
+    assert chrome.getpixel((2, 2))[3] > 100
 
 
 def test_demo_still_is_not_the_synthetic_fallback():
