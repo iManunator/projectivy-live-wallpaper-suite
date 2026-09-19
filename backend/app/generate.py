@@ -389,8 +389,12 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
     for rec in catalog_store.load_catalog():
         if rec.layout.lower() != layout.lower():
             continue
-        if wanted and rec.filename.lower() != wanted:
-            continue
+        if wanted:
+            rec_name = rec.filename.lower()
+            rec_stem = Path(rec.filename).stem.lower()
+            want_stem = Path(wanted).stem.lower()
+            if rec_name != wanted and rec_stem != want_stem and wanted not in rec_name and want_stem not in rec_stem:
+                continue
         scanned += 1
         jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
         if not jpg:

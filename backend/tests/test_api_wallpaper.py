@@ -378,7 +378,9 @@ def test_generate_motion_single_path_contract(client):
     ).json()
     assert body["status"] == "ok"
     assert body["scanned"] == 1
-    assert "northlight.jpg" in body["generated"] or body["count"] in {0, 1}
+    assert body["count"] in {0, 1}
+    if body["generated"]:
+        assert any("northlight" in name for name in body["generated"])
 
 
 def test_cron_run_now(client):
