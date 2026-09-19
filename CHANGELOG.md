@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Plugin settings (Leanback).** Wallpaparr settings are grouped with titles and when-to-use copy (Connection, Layouts, What to show, Filters, Mix, Motion, Home screen). Pick-mode ids and status-API mapping are unchanged; a few labels were clarified (e.g. **Play baked motion (MP4)**, **If no MP4, show the JPEG still**, **No-repeat bag (same as Random)** — Random already sends `exclude`). Open a pick mode or client row for the full hint.
+- **Smoother MP4 / wallpaper rotates.** The plugin double-buffers the next pick, downloads JPEG/MP4 into cache, and returns a local `content://` URI when ready. If the next clip is not ready or `/status` fails, the previous URI is held instead of an empty list (empty often flashes black). AIDL still has no crossfade: Projectivy tears down the previous player when the URI changes, so a short hitch can remain. Details: [PROJECTIVY.md](docs/PROJECTIVY.md).
+
 - **Baked VIDEO stutter.** The CSS preview was already smooth after the vignette-lock pass, but generated MP4s still juddered on TV and in the gallery lightbox. Root causes: ffmpeg `zoompan` is nearest-neighbour (discrete pixel steps / shimmer), x264 defaulted to B-frames + scenecut (hitch at GOP / loop join), and VBV `maxrate == bitrate` could underflow on pans. Bake now uses **subpixel bicubic** Ken Burns (CSS ping-pong, same zoom/pan numbers), encoded **CFR** H.264 Main @ L4.0 `yuv420p` `+faststart` with **no B-frames**, **no scenecut**, and 2× VBV maxrate headroom. Chrome / vignette stay locked. Automated tests cover frame-to-frame continuity, CFR, no duplicate timestamps, and seamless loop join.
 
 Tonight is a one-pick preview: what Projectivy will show next, with bake / editor / refresh as the only primary actions.

@@ -59,6 +59,16 @@
                 android:value="0" />
         </provider>
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.imanunator.wallpaparr.media"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <service
             android:name=".WallpaperProviderService"
             android:exported="true"
@@ -86,6 +96,8 @@
             <meta-data
                 android:name="authority"
                 android:value="com.imanunator.wallpaparr.wallpaper" />
+            <!-- Keep cache short: Projectivy randomly cycles the returned list.
+                 We return one wallpaper and preload the next ourselves. -->
             <meta-data
                 android:name="itemsCacheDurationMillis"
                 android:value="1000" />

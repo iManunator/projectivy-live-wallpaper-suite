@@ -80,6 +80,68 @@ class WallpaperPickModesTest {
         assertEquals("rating", trending.sort)
         assertEquals("pinned", pinned.pool)
     }
+
+    @Test
+    fun everyModeHasUniqueIdLabelAndHelp() {
+        val ids = WallpaperPickModes.ALL.map { it.id }
+        assertEquals(ids.size, ids.toSet().size)
+        WallpaperPickModes.ALL.forEach { mode ->
+            assertTrue(mode.label.isNotBlank(), mode.id)
+            assertTrue(mode.help.length > 20, mode.id)
+            assertTrue(mode.group.isNotBlank(), mode.id)
+        }
+    }
+
+    @Test
+    fun everyModeResolvesWithoutThrowingAndUnknownIsRandom() {
+        WallpaperPickModes.ALL.forEach { mode ->
+            val q = WallpaperPickModes.resolve(mode.id, "Hero", "Prime", "Dock", 40, 5, 0, 2026, 7f)
+            assertEquals(
+                if (mode.id == "alt_two_layouts" || mode.id == "layout_round_robin") {
+                    q.layout.isNotBlank()
+                } else {
+                    q.layout == "Hero" || q.layout.isNotBlank()
+                },
+                true,
+                mode.id,
+            )
+            assertTrue(q.sort.isNotBlank(), mode.id)
+        }
+        val unknown = WallpaperPickModes.resolve("not_a_real_mode", "Hero", "", "", 30, 3, 0, 2026)
+        assertEquals("random", unknown.sort)
+        assertEquals("Hero", unknown.layout)
+        assertNull(unknown.pool)
+    }
+
+    @Test
+    fun noRepeatBagAndGenreRoundRobinStayRandomOnTheStatusApi() {
+        val bag = WallpaperPickModes.resolve("no_repeat_bag", "Hero", "", "", 30, 3, 0, 2026)
+        val genre = WallpaperPickModes.resolve("genre_round_robin", "Hero", "", "", 30, 3, 0, 2026)
+        val random = WallpaperPickModes.resolve("random", "Hero", "", "", 30, 3, 0, 2026)
+        assertEquals(random, bag)
+        assertEquals(random, genre)
+    }
+
+    @Test
+    fun indexLookupMatchesIdAndRenamesDoNotBreakById() {
+        WallpaperPickModes.ALL.forEachIndexed { index, mode ->
+            assertEquals(mode, WallpaperPickModes.at(index))
+            assertEquals(index, WallpaperPickModes.indexOf(mode.id))
+            assertEquals(mode, WallpaperPickModes.byId(mode.id))
+        }
+        assertNull(WallpaperPickModes.at(-1))
+        assertNull(WallpaperPickModes.byId("missing"))
+        assertEquals("Tonight's mix", WallpaperPickModes.labelFor("tonight"))
+    }
+
+    @Test
+    fun highRatedUsesMinRatingAndSeerrOnlyKeepsPool() {
+        val rated = WallpaperPickModes.resolve("high_rated", "Hero", "", "", 30, 3, 0, 2026, 8.5f)
+        assertEquals("rating", rated.sort)
+        assertEquals(8.5f, rated.minRating)
+        val seerr = WallpaperPickModes.resolve("seerr_only", "Hero", "", "", 30, 3, 0, 2026)
+        assertEquals("seerr_only", seerr.pool)
+    }
 }
 
 class UrlSupportTest {
@@ -218,5 +280,175 @@ class MediaChoiceTest {
         )
         assertEquals(false, chosen!!.isVideo)
         assertTrue(chosen.uri.endsWith(".jpg"))
+    }
+
+    @Test
+    fun skipsStillWhenMotionPreferredAndFallbackOff() {
+        val chosen = MediaChoice.choose(
+            imageUrl = "http://x/a.jpg",
+            videoUrl = null,
+            mediaType = "image",
+            preferMotion = true,
+            fallbackStill = false,
+        )
+        assertNull(chosen)
+    }
+
+    @Test
+    fun lastResortVideoWhenNoStillExists() {
+        val chosen = MediaChoice.choose(
+            imageUrl = null,
+            videoUrl = "http://x/a.mp4",
+            mediaType = "video",
+            preferMotion = false,
+            fallbackStill = true,
+        )
+        assertEquals(true, chosen!!.isVideo)
+    }
+}
+
+class WallpaperTransitionTest {
+    @Test
+    fun displayListIsNeverTwoItemsSoProjectivyCannotSkipARotate() {
+        val a = PreparedWallpaper("http://a.mp4", "content://a", true)
+        val b = PreparedWallpaper("http://b.mp4", "content://b", true)
+        assertEquals(listOf(b), WallpaperTransition.displayList(b, a))
+        assertEquals(listOf(a), WallpaperTransition.displayList(null, a))
+        assertEquals(emptyList<PreparedWallpaper>(), WallpaperTransition.displayList(null, null))
+    }
+
+    @Test
+    fun preferCachedUriFallsBackToHttp() {
+        assertEquals("http://x/a.mp4", WallpaperTransition.preferCachedUri("http://x/a.mp4", null))
+        assertEquals("http://x/a.mp4", WallpaperTransition.preferCachedUri("http://x/a.mp4", "  "))
+        assertEquals("content://wallpaparr/a", WallpaperTransition.preferCachedUri("http://x/a.mp4", "content://wallpaparr/a"))
+        assertTrue(WallpaperTransition.isLocalPlayback("content://com.imanunator.wallpaparr.media/a"))
+        assertFalse(WallpaperTransition.isLocalPlayback("http://192.168.1.9:8787/a.mp4"))
+    }
+
+    @Test
+    fun nextCounterAdvancesPickModeTicks() {
+        assertEquals(1, WallpaperTransition.nextCounter(0))
+        assertEquals(8, WallpaperTransition.nextCounter(7))
+    }
+
+    @Test
+    fun doubleBufferConsumesPreloadWithoutReloading() {
+        val buffer = WallpaperDoubleBuffer<String>()
+        var loads = 0
+        buffer.offerPreload("next")
+        val shown = buffer.takeForDisplay(allowBlocking = true) {
+            loads += 1
+            "blocking"
+        }
+        assertEquals("next", shown)
+        assertEquals(0, loads)
+        assertEquals("next", buffer.snapshotShowing())
+        assertFalse(buffer.hasPreload())
+    }
+
+    @Test
+    fun doubleBufferHoldsPreviousWhenIncomingFails() {
+        val buffer = WallpaperDoubleBuffer<String>()
+        buffer.takeForDisplay(true) { "first" }
+        val held = buffer.takeForDisplay(true) { null }
+        assertEquals("first", held)
+    }
+
+    @Test
+    fun doubleBufferHoldSkipsBlockingWhenAFrameIsOnScreen() {
+        val buffer = WallpaperDoubleBuffer<String>()
+        buffer.takeForDisplay(true) { "first" }
+        var loads = 0
+        val held = buffer.takeForDisplay(allowBlocking = false) {
+            loads += 1
+            "should-not-run"
+        }
+        assertEquals("first", held)
+        assertEquals(0, loads)
+    }
+
+    @Test
+    fun invalidateDropsBothBuffers() {
+        val buffer = WallpaperDoubleBuffer<String>()
+        buffer.takeForDisplay(true) { "first" }
+        buffer.offerPreload("next")
+        buffer.invalidate()
+        assertNull(buffer.snapshotShowing())
+        assertFalse(buffer.hasPreload())
+    }
+}
+
+class MediaCacheNamesTest {
+    @Test
+    fun hashesUrlAndKeepsVideoExtension() {
+        val name = MediaCacheNames.fileNameFor("http://tv/api/wallpaper/image/Hero/northlight-demo.mp4")
+        assertTrue(name.endsWith(".mp4"))
+        assertEquals(24 + ".mp4".length, name.length)
+        assertEquals(
+            name,
+            MediaCacheNames.fileNameFor("http://tv/api/wallpaper/image/Hero/northlight-demo.mp4"),
+        )
+        assertTrue(
+            MediaCacheNames.fileNameFor("http://tv/other.mp4") != name,
+        )
+    }
+
+    @Test
+    fun jpegAndQueryString() {
+        assertEquals("jpg", MediaCacheNames.extensionFor("http://x/a.JPG?token=1"))
+        assertEquals("png", MediaCacheNames.extensionFor("http://x/a.png"))
+        assertEquals("bin", MediaCacheNames.extensionFor("http://x/a"))
+    }
+}
+
+class PluginSettingsCopyTest {
+    @Test
+    fun everyLeanbackFieldHasATitleAndWhenToUseHint() {
+        val fields = listOf(
+            PluginSettingsCopy.CONNECTION,
+            PluginSettingsCopy.SERVER,
+            PluginSettingsCopy.LAYOUTS,
+            PluginSettingsCopy.PRIMARY_LAYOUT,
+            PluginSettingsCopy.SECONDARY_LAYOUT,
+            PluginSettingsCopy.THIRD_LAYOUT,
+            PluginSettingsCopy.WHAT_TO_SHOW,
+            PluginSettingsCopy.PICK_MODE,
+            PluginSettingsCopy.FILTERS,
+            PluginSettingsCopy.GENRE,
+            PluginSettingsCopy.AGE,
+            PluginSettingsCopy.YEAR,
+            PluginSettingsCopy.MIN_RATING,
+            PluginSettingsCopy.MAX_RATING,
+            PluginSettingsCopy.MIX,
+            PluginSettingsCopy.MIX_RATIO,
+            PluginSettingsCopy.RECENT_YEARS,
+            PluginSettingsCopy.EXCLUDE,
+            PluginSettingsCopy.MOTION,
+            PluginSettingsCopy.PREFER_MOTION,
+            PluginSettingsCopy.FALLBACK_STILL,
+            PluginSettingsCopy.HOME,
+            PluginSettingsCopy.CLIENT,
+            PluginSettingsCopy.IDLE,
+        )
+        val titles = fields.map { it.title }
+        assertEquals(titles.size, titles.toSet().size)
+        fields.forEach { field ->
+            assertTrue(field.title.isNotBlank())
+            assertTrue(field.hint.length > 24, field.title)
+        }
+    }
+}
+
+class ClientIntentsHelpTest {
+    @Test
+    fun everyClientHasHelpAndIndexLookup() {
+        ClientIntents.SUPPORTED.forEachIndexed { index, client ->
+            assertTrue(client.help.length > 20, client.name)
+            assertEquals(client, ClientIntents.at(index))
+        }
+        assertNull(ClientIntents.at(99))
+        assertEquals(ClientType.DEEP_LINK, ClientIntents.SUPPORTED.first { it.name == "Jellyfin" }.type)
+        assertEquals(ClientType.LAUNCH, ClientIntents.SUPPORTED.first { it.name == "Kodi" }.type)
     }
 }

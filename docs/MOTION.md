@@ -1,6 +1,6 @@
 # Parallax / live VIDEO wallpapers
 
-Projectivy wallpaper plugins return **one** wallpaper at a time. The AIDL type is either:
+Projectivy wallpaper plugins return **one** wallpaper at a time (a 1-item list). The AIDL type is either:
 
 | Type | Constant | What this suite serves |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ In-library titles skip the chip. Layout DNA `show_seerr_badge` defaults on; turn
    - `videoUrl` is set
    - `mediaType` is `"video"`
    - extra fields: `parallaxStyle` (`parallax` \| `kenburns` \| `drift`), `motionDuration` (seconds)
-4. **The plugin chooses.** *Prefer parallax / motion VIDEO* uses `videoUrl` when present. *Fallback to still JPEG* uses `imageUrl` if the MP4 is missing. Projectivy then plays IMAGE or VIDEO accordingly.
+4. **The plugin chooses.** *Play baked motion (MP4)* uses `videoUrl` when present. *If no MP4, show the JPEG still* uses `imageUrl` if the clip is missing. Projectivy then plays IMAGE or VIDEO accordingly. On rotate, the plugin preloads the next file and holds the previous URI until that pick is ready; Projectivy still swaps players (no AIDL crossfade). See [PROJECTIVY.md](PROJECTIVY.md).
 
 ```
 status ──imageUrl──► JPEG  ──► WallpaperType.IMAGE

@@ -104,7 +104,7 @@ Then:
 1. Projectivy → Appearance → Wallpaper → **Wallpaparr**
 2. Plugin settings → **Server URL** `http://YOUR_LAN_IP:8787`
 3. Pick layout, pick mode, filters, preferred client (Jellyfin / Moonfin / …)
-4. Enable **Prefer parallax / motion VIDEO** if you baked MP4s; keep **Fallback to still JPEG** on
+4. Enable **Play baked motion (MP4)** if you baked MP4s; keep **If no MP4, show the JPEG still** on
 5. Set Projectivy’s wallpaper change interval (the plugin answers `TimeElapsed`)
 
 Package: `com.imanunator.wallpaparr`  

@@ -131,7 +131,7 @@ Unit tests (no Docker): `./scripts/test.sh`.
 1. Sideload [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk).
 2. Projectivy → Appearance → Wallpaper → **Wallpaparr**.
 3. Server URL: `http://YOUR_LAN_IP:8787` (not `127.0.0.1` — the TV has to reach it).
-4. Pick mode **Tonight’s mix**. Enable **Prefer parallax / motion VIDEO** if you baked MP4s.
+4. Pick mode **Tonight’s mix**. Enable **Play baked motion (MP4)** if you baked MP4s.
 
 ```bash
 adb connect TV_IP

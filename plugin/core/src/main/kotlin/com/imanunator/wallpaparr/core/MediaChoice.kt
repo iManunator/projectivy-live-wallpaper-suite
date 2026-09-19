@@ -6,7 +6,10 @@ object MediaChoice {
     /**
      * Projectivy IMAGE vs VIDEO selection.
      * IMAGE = JPEG still. VIDEO = looping MP4 (parallax / Ken Burns).
-     * Prefer motion when a clip exists; otherwise fall back to the still.
+     *
+     * preferMotion: use the clip when [videoUrl] exists.
+     * fallbackStill: if we wanted motion but there is no clip, show the JPEG
+     * instead of skipping the title (plugin then holds the previous wallpaper).
      */
     fun choose(
         imageUrl: String?,
@@ -19,13 +22,14 @@ object MediaChoice {
             mediaType.equals("video", ignoreCase = true) ||
                 videoUrl.contains(".mp4", ignoreCase = true)
             )
+        val hasImage = !imageUrl.isNullOrBlank()
         if (preferMotion && hasVideo) {
             return ChosenWallpaper(videoUrl!!, true)
         }
-        if (!imageUrl.isNullOrBlank()) {
-            return ChosenWallpaper(imageUrl, false)
+        if (hasImage && (!preferMotion || fallbackStill)) {
+            return ChosenWallpaper(imageUrl!!, false)
         }
-        if (!fallbackStill && hasVideo) {
+        if (hasVideo) {
             return ChosenWallpaper(videoUrl!!, true)
         }
         return null

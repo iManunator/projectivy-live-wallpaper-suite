@@ -4,6 +4,8 @@ data class PickMode(
     val id: String,
     val label: String,
     val group: String,
+    /** One-line Leanback description: what it does and when to use it. */
+    val help: String,
 )
 
 data class ResolvedQuery(
@@ -16,41 +18,145 @@ data class ResolvedQuery(
 
 object WallpaperPickModes {
     val ALL: List<PickMode> = listOf(
-        PickMode("tonight", "Tonight's mix", "Smart"),
-        PickMode("continue_watching", "Continue watching", "Smart"),
-        PickMode("newly_added", "Newly added", "Smart"),
-        PickMode("seerr_trending", "Seerr trending", "Smart"),
-        PickMode("pinned", "Pinned titles", "Smart"),
-        PickMode("random", "Random", "Sort"),
-        PickMode("latest", "Newest generated", "Sort"),
-        PickMode("oldest", "Oldest generated", "Sort"),
-        PickMode("rating_high", "Highest rating", "Sort"),
-        PickMode("rating_low", "Lowest rating", "Sort"),
-        PickMode("year_new", "Newest year", "Sort"),
-        PickMode("year_old", "Oldest year", "Sort"),
-        PickMode("unwatched", "Unwatched only", "Watch / Library"),
-        PickMode("partial", "Partly watched", "Watch / Library"),
-        PickMode("watched", "Watched only", "Watch / Library"),
-        PickMode("in_library", "In Jellyfin library", "Watch / Library"),
-        PickMode("seerr_only", "Seerr only / not in library", "Watch / Library"),
-        PickMode("requestable", "Requestable on Seerr", "Watch / Library"),
-        PickMode("available_seerr", "Available on Seerr", "Watch / Library"),
-        PickMode("source_jellyfin", "Jellyfin-sourced", "Source"),
-        PickMode("source_seerr", "Seerr-sourced", "Source"),
-        PickMode("source_plex", "Plex-sourced", "Source"),
-        PickMode("recent_years", "Recent years", "Source"),
-        PickMode("high_rated", "High rated (min rating)", "Source"),
-        PickMode("alt_random_latest", "Alternate random ↔ newest", "Mix"),
-        PickMode("alt_library_unwatched", "Alternate library ↔ unwatched", "Mix"),
-        PickMode("alt_library_seerr", "Alternate library ↔ Seerr-only", "Mix"),
-        PickMode("alt_two_layouts", "Alternate two layouts", "Mix"),
-        PickMode("mix_weighted", "Weighted mix (random / newest)", "Mix"),
-        PickMode("layout_round_robin", "Layout round-robin", "Mix"),
-        PickMode("genre_round_robin", "Genre round-robin", "Mix"),
-        PickMode("no_repeat_bag", "Random no-repeat bag", "Mix"),
+        PickMode(
+            "tonight", "Tonight's mix", "Smart",
+            "Best default. Taste-weighted pick — the same mix the web Tonight page previews.",
+        ),
+        PickMode(
+            "continue_watching", "Continue watching", "Smart",
+            "Titles you started but have not finished. Same pool as the Continue queue.",
+        ),
+        PickMode(
+            "newly_added", "Newly added", "Smart",
+            "Most recently generated stills in this layout. Use after a fresh Generate batch.",
+        ),
+        PickMode(
+            "seerr_trending", "Seerr trending", "Smart",
+            "Jellyseerr/Seerr titles, highest rating first. Discovery when the library is thin.",
+        ),
+        PickMode(
+            "pinned", "Pinned titles", "Smart",
+            "Only gallery pins. An empty pin list shows nothing — it does not fall back.",
+        ),
+        PickMode(
+            "unwatched", "Unwatched only", "Watch / Library",
+            "Never-played titles in this layout. Good for a ‘what should I start?’ wall.",
+        ),
+        PickMode(
+            "partial", "Partly watched", "Watch / Library",
+            "In-progress titles only (same idea as Continue watching, without the smart queue extras).",
+        ),
+        PickMode(
+            "watched", "Watched only", "Watch / Library",
+            "Finished titles. Use when you want familiar posters, not new ones.",
+        ),
+        PickMode(
+            "in_library", "In Jellyfin library", "Watch / Library",
+            "Anything already in the library. Skips Seerr-only / requestable titles.",
+        ),
+        PickMode(
+            "seerr_only", "Seerr only (not in library)", "Watch / Library",
+            "On Seerr but not in Jellyfin. Advertise requestable titles on the home screen.",
+        ),
+        PickMode(
+            "requestable", "Requestable on Seerr", "Watch / Library",
+            "Seerr titles you can still request. Narrower than Seerr only.",
+        ),
+        PickMode(
+            "available_seerr", "Available on Seerr", "Watch / Library",
+            "Marked available on Seerr. Use when availability metadata is filled in.",
+        ),
+        PickMode(
+            "source_jellyfin", "From Jellyfin", "Source",
+            "Catalog rows tagged jellyfin. Prefer In Jellyfin library unless you filter by ingest source.",
+        ),
+        PickMode(
+            "source_seerr", "From Seerr", "Source",
+            "Catalog rows tagged jellyseerr/seerr, random order. Seerr trending sorts by rating instead.",
+        ),
+        PickMode(
+            "source_plex", "From Plex (catalog tag)", "Source",
+            "Rows tagged plex (demo catalog includes some). Skip unless your suite actually stores Plex sources.",
+        ),
+        PickMode(
+            "recent_years", "Recent years", "Source",
+            "Random titles from the last N years. Set Recent-years window below (default 3).",
+        ),
+        PickMode(
+            "high_rated", "Above minimum rating", "Source",
+            "Highest rated first, cut off by Minimum rating below. Set that value first or this matches Highest rating.",
+        ),
+        PickMode(
+            "random", "Random", "Sort",
+            "Any title in this layout. Filters and the no-repeat bag still apply.",
+        ),
+        PickMode(
+            "latest", "Newest generated", "Sort",
+            "Most recently baked still first. Use right after Generate / Bake motion.",
+        ),
+        PickMode(
+            "oldest", "Oldest generated", "Sort",
+            "Oldest still first. Useful to cycle through a large library evenly.",
+        ),
+        PickMode(
+            "rating_high", "Highest rating", "Sort",
+            "Best rated first. Does not require Minimum rating — that filter still applies if you set it.",
+        ),
+        PickMode(
+            "rating_low", "Lowest rating", "Sort",
+            "Lowest rated first. Novelty / ‘so-bad-it’s-good’ wall.",
+        ),
+        PickMode(
+            "year_new", "Newest year", "Sort",
+            "Newest release year first. Different from Newest generated (file date vs title year).",
+        ),
+        PickMode(
+            "year_old", "Oldest year", "Sort",
+            "Oldest release year first. Pair with a year range if you want a decade wall.",
+        ),
+        PickMode(
+            "alt_random_latest", "Alternate random ↔ newest", "Mix",
+            "Even ticks random, odd ticks newest generated. No extra layouts needed.",
+        ),
+        PickMode(
+            "alt_library_unwatched", "Alternate library ↔ unwatched", "Mix",
+            "Flips each rotate between in-library and unwatched. Keeps the wall mixed.",
+        ),
+        PickMode(
+            "alt_library_seerr", "Alternate library ↔ Seerr-only", "Mix",
+            "Flips each rotate between in-library and Seerr-only titles.",
+        ),
+        PickMode(
+            "alt_two_layouts", "Alternate two layouts", "Mix",
+            "Flips Primary and Secondary layout each rotate. Fill Secondary layout below.",
+        ),
+        PickMode(
+            "mix_weighted", "Weighted mix: newest vs random", "Mix",
+            "Each rotate rolls against Weighted mix % below (that percent newest, the rest random).",
+        ),
+        PickMode(
+            "layout_round_robin", "Layout round-robin", "Mix",
+            "Cycles Primary → Secondary → Third each rotate. Fill the extra layout fields.",
+        ),
+        PickMode(
+            "genre_round_robin", "Genre round-robin", "Mix",
+            "Cycles the comma-separated Genre filter each rotate. Fill Genre filter first.",
+        ),
+        PickMode(
+            "no_repeat_bag", "No-repeat bag (same as Random)", "Mix",
+            "Random from this layout while skipping recently shown files. Random already uses the bag depth below — this mode is the same status-API mapping, kept for older TVs.",
+        ),
     )
 
-    fun labelFor(id: String): String = ALL.firstOrNull { it.id == id }?.label ?: id
+    fun byId(id: String): PickMode? = ALL.firstOrNull { it.id == id }
+
+    fun at(index: Int): PickMode? = ALL.getOrNull(index)
+
+    fun indexOf(id: String): Int = ALL.indexOfFirst { it.id == id }
+
+    fun labelFor(id: String): String = byId(id)?.label ?: id
+
+    fun helpFor(id: String): String = byId(id)?.help.orEmpty()
 
     fun resolve(
         modeId: String,
@@ -113,6 +219,10 @@ object WallpaperPickModes {
                 if (layouts.isEmpty()) ResolvedQuery(primary, "random")
                 else ResolvedQuery(layouts[counter % layouts.size], "random")
             }
+            // Genre is applied by the plugin from the filter CSV; mapping is random + that filter.
+            "genre_round_robin" -> ResolvedQuery(primary, "random")
+            // Exclude bag is always sent on /status; this id stays for older saved prefs.
+            "no_repeat_bag" -> ResolvedQuery(primary, "random")
             else -> ResolvedQuery(primary, "random")
         }
     }
