@@ -246,6 +246,9 @@ def test_dashboard_and_tonight(client):
     assert tonight["status"]["imageUrl"]
     assert tonight["status"]["title"]
     assert tonight["profile"]
+    assert tonight["preview"]["layered"] is True
+    assert tonight["preview"]["itemId"]
+    assert tonight["preview"]["artworkUrl"]
     ids = {q["id"] for q in tonight["queues"]}
     assert "unwatched" in ids
     assert "continue_watching" in ids
@@ -368,6 +371,8 @@ def test_generate_motion_batch_contract(client):
     assert body["status"] == "ok"
     assert "generated" in body
     assert body["style"] in {"parallax", "kenburns", "drift"}
+    assert body["layered"] is True
+    assert body["chrome_locked"] is True
     assert "message" in body
 
 

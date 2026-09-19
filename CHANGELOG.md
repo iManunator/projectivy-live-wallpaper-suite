@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Layered parallax: the 16:9 editor stage always fits its panel, CSS/ffmpeg motion pans **artwork only**, and logo/title/badges stay pinned.
+
+- **Editor preview size.** The 16:9 stage uses object-fit:contain sizing (`width: min(100%, calc(max-height * 16/9))`, max-height from remaining viewport). Centered; no page blowout or horizontal scroll from the stage on phone or desktop.
+- **Layered motion.** Background plate Ken-Burns / pans / drifts. Foreground chrome (logo, title, watch badges, metadata, overlay widgets) is static in layout DNA coordinates. Subtle / Cinematic / Bold change background amplitude only.
+- **Bake pipeline.** VIDEO is `zoompan(plate) + overlay(chrome at 0,0)`. Ken Burns and drift no longer zoompan a text-burned JPEG. “Bake motion” re-fetches original artwork instead of using the composited still as the plate. `videoUrl` still only when an MP4 exists. Additive bake fields `layered` / `chrome_locked`.
+- **Watch status on the wallpaper.** Unwatched / Continue / Watched paint as fixed chrome on IMAGE stills and VIDEO overlays (not the moving plate). Layout DNA `show_watch_badge` (default on) can hide the pill. Visible in the editor, gallery, lightbox, and demo fixtures when `watch_state` is known.
+- **Generate progress.** Batch / cron / motion bake run as pollable jobs (`POST /api/jobs`, `GET /api/jobs/{id}`, `GET /api/jobs/latest`) with a progress bar, `3/12` count, current title, and success/fail toasts. Sync generate endpoints remain.
+- **Gallery delete.** Pin, never-show, and delete are on each card and in the lightbox. Multi-select delete is available. `DELETE /api/gallery/{id}` and `POST /api/gallery/delete` remove the JPEG, companion MP4 / plate / chrome, and catalog row.
+- CSS preview (Tonight, Editor, Generate, Settings) mirrors the bake: `.stage-bg` moves, `.stage-fg` does not.
+- Docs: [MOTION.md](docs/MOTION.md). Frontend contain tests in `web/src/lib/stage.test.ts`.
+
 ## 1.2.0
 
 Flagship editor, motion preview, connection toasts, license-safe cinematic demo catalog, watch-status pills, cron/batch polish, and more cinematic TV-facing motion bake.

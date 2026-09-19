@@ -1,5 +1,21 @@
 import type { AppSettings, GenerateRequest, Layout, WallpaperRecord } from "./layout";
 
+export type JobSnapshot = {
+  id: string | null;
+  kind: string | null;
+  status: string;
+  total: number;
+  done: number;
+  current: string | null;
+  message: string;
+  created: string[];
+  failed: string[];
+  skipped: string[];
+  error: string | null;
+  result: Record<string, unknown> | null;
+  percent: number;
+};
+
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
@@ -31,6 +47,20 @@ export const api = {
   },
   runCron: (body: Record<string, unknown>) =>
     json("/api/cron/run", { method: "POST", body: JSON.stringify(body) }),
+  jobsLatest: () => json<JobSnapshot>("/api/jobs/latest"),
+  job: (id: string) => json<JobSnapshot>(`/api/jobs/${encodeURIComponent(id)}`),
+  startJob: (body: Record<string, unknown>) =>
+    json<JobSnapshot>("/api/jobs", { method: "POST", body: JSON.stringify(body) }),
+  deleteGallery: (id: string) =>
+    json<{ status: string; message: string; deleted: string[]; titles: string[]; count: number }>(
+      `/api/gallery/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
+  deleteGalleryMany: (ids: string[]) =>
+    json<{ status: string; message: string; deleted: string[]; titles: string[]; missing: string[]; count: number }>(
+      "/api/gallery/delete",
+      { method: "POST", body: JSON.stringify({ ids }) },
+    ),
   options: () => json<Record<string, unknown>>("/api/options"),
   media: (source: string, limit = 12) =>
     json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),

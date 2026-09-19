@@ -4,17 +4,27 @@ import { api } from "./lib/api";
 import { type AppSettings, type CronJob } from "./lib/layout";
 import type { WallpaperRecord } from "./lib/layout";
 import { describeBatchFlags } from "./lib/batch";
-import { errorToast, generateToast, motionToast, providerToast } from "./lib/messages";
+import { errorToast, providerToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { badgeClass } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
+import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
+import { JobProgress, JobProvider, useJobs } from "./JobProgress";
 import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
 
 type Page = "tonight" | "gallery" | "editor" | "generate" | "dashboard" | "settings";
 
-type ViewerItem = { src: string; title: string; subtitle?: string; watchState?: string };
+type ViewerItem = {
+  src: string;
+  title: string;
+  subtitle?: string;
+  watchState?: string;
+  id?: string;
+  pinned?: boolean;
+  hidden?: boolean;
+};
 
 function wallpaperSlide(item: WallpaperRecord): ViewerItem {
   return {
@@ -22,6 +32,9 @@ function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
     watchState: item.watch_state,
+    id: item.id,
+    pinned: item.pinned,
+    hidden: item.hidden,
   };
 }
 
@@ -55,7 +68,9 @@ const PAGES: Page[] = ["tonight", "gallery", "editor", "generate", "dashboard", 
 export function App() {
   return (
     <ToastProvider>
-      <AppShell />
+      <JobProvider>
+        <AppShell />
+      </JobProvider>
     </ToastProvider>
   );
 }
@@ -81,6 +96,7 @@ function AppShell() {
         ))}
       </nav>
       <main className="main">
+        <JobProgress />
         {page === "tonight" && <TonightPage />}
         {page === "gallery" && <GalleryPage onEdit={() => setPage("editor")} />}
         {page === "editor" && <EditorPage />}
@@ -107,16 +123,17 @@ type TonightPayload = {
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
   motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean };
+  preview?: { artworkUrl?: string | null; itemId?: string | null; layered?: boolean };
 };
 
 function TonightPage() {
   const notify = useToasts();
+  const { run, busy } = useJobs();
   const [layout, setLayout] = useState("Netflix Hero");
   const [layouts, setLayouts] = useState<string[]>([]);
   const [payload, setPayload] = useState<TonightPayload | null>(null);
   const [error, setError] = useState("");
   const [previewPreset, setPreviewPreset] = useState("");
-  const [bakeBusy, setBakeBusy] = useState(false);
   async function load(nextLayout = layout) {
     try {
       const data = (await api.tonight(nextLayout)) as TonightPayload;
@@ -136,6 +153,7 @@ function TonightPage() {
   }, [layout]);
   const image = payload?.status?.imageUrl;
   const video = payload?.status?.videoUrl;
+  const artwork = payload?.preview?.artworkUrl;
   const queueLabel = payload?.status?.queue ? QUEUE_LABELS[payload.status.queue] || payload.status.queue : "Tonight";
   const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
   const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
@@ -143,30 +161,24 @@ function TonightPage() {
   const duration = PRESET_DURATION[motionPreset] || defaultDuration("light");
   const motionVars = motionPreviewVars(motionStyle, intensity, duration);
   const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
+  const layeredArt = Boolean(!video && artwork);
   async function bakeTonight(wholeLayout = false) {
-    setBakeBusy(true);
     try {
-      const out = (await api.generateMotion(layout, wholeLayout ? undefined : tonightPath || undefined)) as {
-        message?: string;
-        count?: number;
-        generated?: string[];
-      };
-      const toast = motionToast(out);
-      notify(toast.kind, toast.text);
+      await run({
+        kind: "motion",
+        layout,
+        path: wholeLayout ? undefined : tonightPath || undefined,
+      });
       await load(layout);
-    } catch (err) {
-      const toast = errorToast(err, "Motion bake failed");
-      notify(toast.kind, toast.text);
-    } finally {
-      setBakeBusy(false);
+    } catch {
+      /* toast from JobProvider */
     }
   }
   return (
     <section>
       <h1>Tonight’s home screen</h1>
       <p className="lede">
-        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock — then one-click a layout DNA preset.
-        Smart queues mix unwatched, continue watching, newly added, and Seerr titles from the demo catalog or your library.
+        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock. Artwork can drift; the title and TV chrome stay put.
       </p>
       <div className="chip-row">
         {LAYOUT_DNA.map((preset) => (
@@ -189,10 +201,10 @@ function TonightPage() {
         <button className="btn tiny" onClick={() => load(layout)}>
           Shuffle tonight
         </button>
-        <button className="btn tiny" disabled={bakeBusy || !tonightPath} onClick={() => bakeTonight(false)}>
+        <button className="btn tiny" disabled={busy || !tonightPath} onClick={() => bakeTonight(false)}>
           Bake motion for tonight’s pick
         </button>
-        <button className="btn ghost tiny" disabled={bakeBusy} onClick={() => bakeTonight(true)}>
+        <button className="btn ghost tiny" disabled={busy} onClick={() => bakeTonight(true)}>
           Bake motion for this layout
         </button>
       </div>
@@ -211,20 +223,16 @@ function TonightPage() {
       </div>
       {error && <p className="error">{error}</p>}
       <div className="tonight-grid">
-        <div className="tv-preview" aria-label="Projectivy home screen preview">
-          {video ? (
-            <video className="tv-art" src={video} autoPlay muted loop playsInline />
-          ) : image ? (
-            <img
-              className="tv-art motion-art"
-              style={motionVars as CSSProperties}
-              src={image}
-              alt={payload?.status?.title || "Wallpaper"}
-            />
-          ) : (
-            <div className="tv-art tv-art-empty">Generate a batch to fill tonight</div>
-          )}
-          {payload?.motion?.light_leak && <div className="motion-leak" />}
+        <WallpaperStage
+          wrapClassName="tv-preview"
+          ariaLabel="Projectivy home screen preview"
+          artSrc={layeredArt ? artwork : image}
+          artAlt={payload?.status?.title || "Wallpaper"}
+          videoSrc={video}
+          motionOn={layeredArt}
+          motionVars={motionVars as CSSProperties}
+          lightLeak={Boolean(payload?.motion?.light_leak)}
+        >
           <div className="tv-chrome">
             <div className="tv-top">
               <span className="tv-logo">projectivy</span>
@@ -246,7 +254,7 @@ function TonightPage() {
             </div>
             <div className="tv-dock" />
           </div>
-        </div>
+        </WallpaperStage>
         <div className="card">
           <h3>Taste · {payload?.profile || "tonight"}</h3>
           <p className="muted">Weighted mix used by pick mode “Tonight’s mix” (`taste:tonight`).</p>
@@ -259,7 +267,8 @@ function TonightPage() {
           </ul>
           <p className="muted">
             Motion {motionPreset} · {motionStyle}
-            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}. CSS preview on the TV bezel; bake VIDEO for tonight’s pick or this layout so Projectivy can play a real MP4.
+            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}.
+            CSS preview pans the artwork only; title and TV chrome stay pinned. Bake VIDEO so Projectivy can play a real MP4.
           </p>
         </div>
       </div>
@@ -279,15 +288,20 @@ function TonightPage() {
 }
 
 function GalleryPage({ onEdit }: { onEdit: () => void }) {
+  const notify = useToasts();
   const [items, setItems] = useState<WallpaperRecord[]>([]);
   const [error, setError] = useState("");
   const [showHidden, setShowHidden] = useState(false);
   const [viewer, setViewer] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState("");
   async function refresh() {
     try {
       setItems(await api.gallery());
+      setError("");
     } catch (err) {
-      setError(String(err));
+      const toast = errorToast(err, "Could not load gallery");
+      setError(toast.text);
     }
   }
   useEffect(() => {
@@ -295,23 +309,97 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
   }, []);
   const visible = items.filter((item) => showHidden || !item.hidden);
   const slides = visible.map(wallpaperSlide);
+
+  function toggleSelect(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function flagItem(item: WallpaperRecord, body: { pinned?: boolean; hidden?: boolean }) {
+    setBusyId(item.id);
+    try {
+      await api.flag(item.id, body);
+      await refresh();
+    } catch (err) {
+      const toast = errorToast(err, "Could not update gallery item");
+      notify(toast.kind, toast.text);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function deleteIds(ids: string[], titles: string[]) {
+    if (!ids.length) return;
+    const label = titles.length === 1 ? `Delete “${titles[0]}”?` : `Delete ${ids.length} wallpapers?`;
+    if (!window.confirm(`${label} This cannot be undone.`)) return;
+    setBusyId(ids[0]);
+    try {
+      const out = ids.length === 1 ? await api.deleteGallery(ids[0]) : await api.deleteGalleryMany(ids);
+      notify("ok", out.message || `Deleted ${out.count} wallpaper${out.count === 1 ? "" : "s"}.`);
+      setSelected((current) => {
+        const next = new Set(current);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (viewer !== null) {
+        const remaining = visible.filter((item) => !ids.includes(item.id));
+        setViewer(remaining.length ? Math.min(viewer, remaining.length - 1) : null);
+      }
+      await refresh();
+    } catch (err) {
+      const toast = errorToast(err, "Could not delete");
+      notify(toast.kind, toast.text);
+    } finally {
+      setBusyId("");
+    }
+  }
+
   return (
     <section>
       <h1>Gallery</h1>
       <p className="lede">
-        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation, or mark never-show so it drops out of every queue. Click a still for a full-screen view.
+        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation,
+        mark never-show so it drops out of every queue, or delete a still (and its companion MP4) from disk. Click a
+        still for a full-screen view.
       </p>
-      <div className="row" style={{ marginBottom: 18 }}>
+      <div className="row" style={{ marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
         <button className="btn" onClick={onEdit}>Open editor</button>
         <span className="muted">{visible.length} wallpapers</span>
         <label className="inline">
           <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show never-show
         </label>
+        {selected.size > 0 && (
+          <button
+            className="btn danger tiny"
+            disabled={Boolean(busyId)}
+            onClick={() => {
+              const chosen = visible.filter((item) => selected.has(item.id));
+              void deleteIds(
+                chosen.map((item) => item.id),
+                chosen.map((item) => item.title),
+              );
+            }}
+          >
+            Delete selected ({selected.size})
+          </button>
+        )}
       </div>
       {error && <p className="error">{error}</p>}
       <div className="thumb-grid">
         {visible.map((item, index) => (
-          <article className="thumb" key={item.id}>
+          <article className={`thumb ${selected.has(item.id) ? "selected" : ""}`} key={item.id}>
+            <label className="thumb-select inline">
+              <input
+                type="checkbox"
+                checked={selected.has(item.id)}
+                onChange={() => toggleSelect(item.id)}
+                aria-label={`Select ${item.title}`}
+              />
+            </label>
             <button type="button" className="thumb-hit" onClick={() => setViewer(index)} aria-label={`View ${item.title} full screen`}>
               <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
               <WatchBadge state={item.watch_state} className="thumb-watch" />
@@ -327,24 +415,27 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
                   <span className={badgeClass(badge)} key={badge}>{badge}</span>
                 ))}
               </div>
-              <div className="row" style={{ marginTop: 8 }}>
+              <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
                 <button
                   className="btn ghost tiny"
-                  onClick={async () => {
-                    await api.flag(item.id, { pinned: !item.pinned });
-                    refresh();
-                  }}
+                  disabled={busyId === item.id}
+                  onClick={() => flagItem(item, { pinned: !item.pinned })}
                 >
                   {item.pinned ? "Unpin" : "Pin"}
                 </button>
                 <button
                   className="btn ghost tiny"
-                  onClick={async () => {
-                    await api.flag(item.id, { hidden: !item.hidden });
-                    refresh();
-                  }}
+                  disabled={busyId === item.id}
+                  onClick={() => flagItem(item, { hidden: !item.hidden })}
                 >
                   {item.hidden ? "Allow again" : "Never show"}
+                </button>
+                <button
+                  className="btn danger tiny"
+                  disabled={busyId === item.id}
+                  onClick={() => deleteIds([item.id], [item.title])}
+                >
+                  Delete
                 </button>
               </div>
             </div>
@@ -352,7 +443,23 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
         ))}
       </div>
       {viewer !== null && (
-        <FullscreenViewer items={slides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
+        <FullscreenViewer
+          items={slides}
+          index={viewer}
+          onClose={() => setViewer(null)}
+          onIndex={setViewer}
+          onPin={(slide) => {
+            const item = visible.find((row) => row.id === slide.id);
+            if (item) void flagItem(item, { pinned: !item.pinned });
+          }}
+          onHide={(slide) => {
+            const item = visible.find((row) => row.id === slide.id);
+            if (item) void flagItem(item, { hidden: !item.hidden });
+          }}
+          onDelete={(slide) => {
+            if (slide.id) void deleteIds([slide.id], [slide.title]);
+          }}
+        />
       )}
     </section>
   );
@@ -367,6 +474,7 @@ function csvToIds(value: string): string[] {
 
 function GeneratePage() {
   const notify = useToasts();
+  const { run, busy } = useJobs();
   const [layouts, setLayouts] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [form, setForm] = useState({
@@ -381,7 +489,6 @@ function GeneratePage() {
     skip_ids: "",
   });
   const [result, setResult] = useState("");
-  const [busy, setBusy] = useState(false);
   useEffect(() => {
     api.layouts().then((names) => {
       setLayouts(names);
@@ -436,9 +543,9 @@ function GeneratePage() {
               className="btn"
               disabled={busy}
               onClick={async () => {
-                setBusy(true);
                 try {
-                  const out = (await api.generate({
+                  const out = await run({
+                    kind: "generate",
                     layout: form.layout,
                     source: form.source,
                     limit: form.limit,
@@ -448,16 +555,10 @@ function GeneratePage() {
                     motion: form.motion,
                     ids: csvToIds(form.ids),
                     skip_ids: csvToIds(form.skip_ids),
-                  })) as { message?: string; count?: number; warnings?: string[] };
-                  const toast = generateToast(out);
-                  notify(toast.kind, toast.text);
-                  setResult(out.message || JSON.stringify(out, null, 2));
+                  });
+                  setResult(out.message || String((out.result as { message?: string } | null)?.message || ""));
                 } catch (err) {
-                  const toast = errorToast(err, "Generate failed");
-                  notify(toast.kind, toast.text);
-                  setResult(toast.text);
-                } finally {
-                  setBusy(false);
+                  setResult(errorToast(err, "Generate failed").text);
                 }
               }}
             >
@@ -467,23 +568,11 @@ function GeneratePage() {
               className="btn ghost"
               disabled={busy}
               onClick={async () => {
-                setBusy(true);
                 try {
-                  const out = (await api.generateMotion(form.layout)) as {
-                    message?: string;
-                    generated?: string[];
-                    count?: number;
-                    style?: string;
-                  };
-                  const toast = motionToast(out);
-                  notify(toast.kind, toast.text);
-                  setResult(toast.text);
+                  const out = await run({ kind: "motion", layout: form.layout });
+                  setResult(out.message || String((out.result as { message?: string } | null)?.message || ""));
                 } catch (err) {
-                  const toast = errorToast(err, "Motion bake failed");
-                  notify(toast.kind, toast.text);
-                  setResult(toast.text);
-                } finally {
-                  setBusy(false);
+                  setResult(errorToast(err, "Motion bake failed").text);
                 }
               }}
             >
@@ -493,7 +582,6 @@ function GeneratePage() {
               className="btn ghost"
               disabled={busy}
               onClick={async () => {
-                setBusy(true);
                 try {
                   const tonight = (await api.tonight(form.layout)) as { status?: { path?: string | null } };
                   const path = tonight.status?.path || "";
@@ -502,20 +590,10 @@ function GeneratePage() {
                     setResult(`No tonight pick for ${form.layout}.`);
                     return;
                   }
-                  const out = (await api.generateMotion(form.layout, path)) as {
-                    message?: string;
-                    generated?: string[];
-                    count?: number;
-                  };
-                  const toast = motionToast(out);
-                  notify(toast.kind, toast.text);
-                  setResult(toast.text);
+                  const out = await run({ kind: "motion", layout: form.layout, path });
+                  setResult(out.message || String((out.result as { message?: string } | null)?.message || ""));
                 } catch (err) {
-                  const toast = errorToast(err, "Motion bake failed");
-                  notify(toast.kind, toast.text);
-                  setResult(toast.text);
-                } finally {
-                  setBusy(false);
+                  setResult(errorToast(err, "Motion bake failed").text);
                 }
               }}
             >
@@ -526,15 +604,17 @@ function GeneratePage() {
         </div>
         <div className="card">
           <h3>Motion preview</h3>
-          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops.</p>
-          <div className="canvas-wrap generate-preview">
-            <img
-              className="canvas-art motion-art"
-              style={motionVars as CSSProperties}
-              src={api.mediaArtwork("demo-jf-1")}
-              alt="Northlight motion preview"
-            />
-            {settings?.light_leak && <div className="motion-leak" />}
+          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops. Artwork moves; title chrome stays put.</p>
+          <WallpaperStage
+            className="generate-preview"
+            wrapClassName="canvas-wrap generate-preview"
+            artSrc={api.mediaArtwork("demo-jf-1")}
+            artAlt="Northlight motion preview"
+            motionOn
+            motionVars={motionVars as CSSProperties}
+            lightLeak={Boolean(settings?.light_leak)}
+          >
+            <SampleLockedChrome title="Northlight" />
             <div className="tv-chrome editor-tv" aria-hidden="true">
               <div className="tv-top">
                 <span className="tv-logo">projectivy</span>
@@ -542,7 +622,7 @@ function GeneratePage() {
               </div>
               <div className="tv-dock" />
             </div>
-          </div>
+          </WallpaperStage>
         </div>
       </div>
     </section>
@@ -604,10 +684,10 @@ function DashboardPage() {
 
 function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   const notify = useToasts();
+  const { run, busy } = useJobs();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [msg, setMsg] = useState("");
   const [layouts, setLayouts] = useState<string[]>([]);
-  const [cronBusy, setCronBusy] = useState(false);
   useEffect(() => {
     api.settings().then((loaded) => setSettings({ ...EMPTY_SETTINGS, ...loaded })).catch(() => setSettings(EMPTY_SETTINGS));
     api.layouts().then(setLayouts).catch(() => undefined);
@@ -681,9 +761,9 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           </label>
           <label>Motion style</label>
           <select value={settings.motion_style || "parallax"} onChange={(e) => setSettings({ ...settings, motion_style: e.target.value })}>
-            <option value="parallax">Parallax — artwork drifts, chrome stays</option>
-            <option value="kenburns">Ken Burns — single-layer zoom</option>
-            <option value="drift">Drift — slow pan, tiny zoom</option>
+            <option value="parallax">Parallax — artwork drifts, chrome stays locked</option>
+            <option value="kenburns">Ken Burns — artwork zoom; chrome locked</option>
+            <option value="drift">Drift — slow pan of artwork; chrome locked</option>
           </select>
           <label>Intensity preset</label>
           <select
@@ -735,15 +815,18 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             value={settings.motion_fps || 24}
             onChange={(e) => setSettings({ ...settings, motion_fps: Number(e.target.value) })}
           />
-          <p className="muted">{describeMotion(style, intensity, duration)}</p>
-          <div className="canvas-wrap generate-preview" style={{ marginTop: 12 }}>
-            <img
-              className="canvas-art motion-art"
-              style={motionVars as CSSProperties}
-              src={api.mediaArtwork("demo-jf-1")}
-              alt="Motion intensity preview"
-            />
-            {settings.light_leak && <div className="motion-leak" />}
+          <p className="muted">{describeMotion(style, intensity, duration)}. Intensity changes background amplitude only.</p>
+          <div style={{ marginTop: 12 }}>
+            <WallpaperStage
+              wrapClassName="canvas-wrap generate-preview"
+              artSrc={api.mediaArtwork("demo-jf-1")}
+              artAlt="Motion intensity preview"
+              motionOn
+              motionVars={motionVars as CSSProperties}
+              lightLeak={Boolean(settings.light_leak)}
+            >
+              <SampleLockedChrome title="Northlight" />
+            </WallpaperStage>
           </div>
         </div>
         <div className="card">
@@ -929,11 +1012,11 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <button
             className="btn tiny"
             style={{ marginTop: 12 }}
-            disabled={cronBusy}
+            disabled={busy}
             onClick={async () => {
-              setCronBusy(true);
               try {
-                const out = (await api.runCron({
+                const out = await run({
+                  kind: "cron",
                   layout: cron.layout,
                   source: cron.source,
                   limit: cron.limit,
@@ -943,16 +1026,10 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
                   motion: cron.motion,
                   ids: Array.isArray(cron.ids) ? cron.ids : csvToIds(String(cron.ids || "")),
                   skip_ids: Array.isArray(cron.skip_ids) ? cron.skip_ids : csvToIds(String(cron.skip_ids || "")),
-                })) as { message?: string; count?: number; warnings?: string[] };
-                const toast = generateToast(out);
-                notify(toast.kind, toast.text);
-                setMsg(toast.text);
+                });
+                setMsg(out.message || String((out.result as { message?: string } | null)?.message || ""));
               } catch (err) {
-                const toast = errorToast(err, "Cron run failed");
-                notify(toast.kind, toast.text);
-                setMsg(toast.text);
-              } finally {
-                setCronBusy(false);
+                setMsg(errorToast(err, "Cron run failed").text);
               }
             }}
           >

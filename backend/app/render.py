@@ -275,6 +275,8 @@ def _draw_text_layers(
             continue
         if layer.slot in skip:
             continue
+        if layer.slot in ("watch_status", "watch_state") and not getattr(layout, "show_watch_badge", True):
+            continue
         text = slot_text(item, layer.slot, layer.max_items)
         if not text:
             continue
@@ -371,15 +373,56 @@ def render_chrome(item: MediaItem, layout: Layout, logo_bytes: bytes | None = No
     overlay = Image.composite(wash, overlay, mask)
     title = title_layer(layout)
     used_logo, y_delta = _draw_logo_layer(overlay, layout, logo_bytes)
+    skip = {"title"} if used_logo else set()
     _draw_text_layers(
         overlay,
         item,
         layout,
-        skip_slots={"title"} if used_logo else set(),
+        skip_slots=skip,
+        shift_after_y=title.y if used_logo and title else None,
+        y_delta=y_delta,
+    )
+    _ensure_watch_badge(
+        overlay,
+        item,
+        layout,
         shift_after_y=title.y if used_logo and title else None,
         y_delta=y_delta,
     )
     return overlay
+
+
+def _ensure_watch_badge(
+    canvas: Image.Image,
+    item: MediaItem,
+    layout: Layout,
+    *,
+    shift_after_y: float | None = None,
+    y_delta: int = 0,
+) -> None:
+    """Paint Unwatched / Continue / Watched on the chrome layer when status is known.
+
+    Layout DNA may already have a watch_status layer. If it does not (or it is
+    hidden) but ``show_watch_badge`` is on, drop a pill in a safe default spot
+    so baked IMAGE/VIDEO still carry the badge.
+    """
+    if not getattr(layout, "show_watch_badge", True):
+        return
+    if not watch_badge(item.watch_state):
+        return
+    has_visible = any(
+        layer.visible and layer.slot in ("watch_status", "watch_state") for layer in layout.layers
+    )
+    if has_visible:
+        return
+    title = title_layer(layout)
+    x, y = 80, 318
+    if title:
+        x, y = int(title.x), int(title.y) + max(int(title.font_size or 64) + 36, 96)
+    if y_delta and shift_after_y is not None and y > shift_after_y:
+        y += y_delta
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    _draw_watch_pill(draw, item, x, y, _font(22), (255, 255, 255, 255))
 
 
 def render_still(

@@ -9,12 +9,14 @@ import {
   type Layout,
   type WallpaperRecord,
 } from "./lib/layout";
-import { errorToast, motionToast } from "./lib/messages";
+import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 import { LAYOUT_DNA } from "./lib/queues";
 import { watchBadge } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
+import { WallpaperStage } from "./WallpaperStage";
+import { useJobs } from "./JobProgress";
 import { useToasts } from "./toasts";
 
 type MediaRow = {
@@ -35,7 +37,15 @@ type MediaRow = {
   media_type?: string | null;
 };
 
-type ViewerItem = { src: string; title: string; subtitle?: string; watchState?: string };
+type ViewerItem = {
+  src: string;
+  title: string;
+  subtitle?: string;
+  watchState?: string;
+  id?: string;
+  pinned?: boolean;
+  hidden?: boolean;
+};
 
 const SAMPLE: Record<string, string> = {
   title: "Northlight",
@@ -77,6 +87,9 @@ function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
     watchState: item.watch_state,
+    id: item.id,
+    pinned: item.pinned,
+    hidden: item.hidden,
   };
 }
 
@@ -85,11 +98,17 @@ export function FullscreenViewer({
   index,
   onClose,
   onIndex,
+  onPin,
+  onHide,
+  onDelete,
 }: {
   items: ViewerItem[];
   index: number;
   onClose: () => void;
   onIndex: (next: number) => void;
+  onPin?: (item: ViewerItem) => void;
+  onHide?: (item: ViewerItem) => void;
+  onDelete?: (item: ViewerItem) => void;
 }) {
   const item = items[index];
   useEffect(() => {
@@ -141,6 +160,25 @@ export function FullscreenViewer({
           {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
           <WatchBadge state={item.watchState} />
         </figcaption>
+        {(onPin || onHide || onDelete) && (
+          <div className="lightbox-actions" onClick={(event) => event.stopPropagation()}>
+            {onPin && (
+              <button type="button" className="btn ghost tiny" onClick={() => onPin(item)}>
+                {item.pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            {onHide && (
+              <button type="button" className="btn ghost tiny" onClick={() => onHide(item)}>
+                {item.hidden ? "Allow again" : "Never show"}
+              </button>
+            )}
+            {onDelete && (
+              <button type="button" className="btn danger tiny" onClick={() => onDelete(item)}>
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </figure>
     </div>
   );
@@ -148,6 +186,7 @@ export function FullscreenViewer({
 
 export function EditorPage() {
   const notify = useToasts();
+  const { run, busy } = useJobs();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [names, setNames] = useState<string[]>([]);
   const [layout, setLayout] = useState<Layout>(normalizeLayout(null));
@@ -168,7 +207,6 @@ export function EditorPage() {
   const [duration, setDuration] = useState(6);
   const [logoSrc, setLogoSrc] = useState("");
   const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
-  const [bakeBusy, setBakeBusy] = useState(false);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
@@ -203,6 +241,24 @@ export function EditorPage() {
   }, [layout.name]);
 
   const errors = useMemo(() => validateLayout(layout), [layout]);
+  const showWatch = layout.show_watch_badge !== false;
+  const hasWatchLayer = layout.layers.some(
+    (row) => row.visible && (row.slot === "watch_status" || row.slot === "watch_state"),
+  );
+
+  async function deleteCreated(item: WallpaperRecord) {
+    if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return;
+    try {
+      const out = await api.deleteGallery(item.id);
+      notify("ok", out.message || `Deleted “${item.title}”.`);
+      const next = await api.gallery(layout.name);
+      setCreated(next);
+      if (viewer !== null) setViewer(next.length ? Math.min(viewer, next.length - 1) : null);
+    } catch (err) {
+      const toast = errorToast(err, "Could not delete");
+      notify(toast.kind, toast.text);
+    }
+  }
   const layer = layout.layers[selected];
   const preview = catalog.find((row) => mediaKey(row) === previewId) || catalog[0];
   const sample = preview ? sampleFromMedia(preview) : SAMPLE;
@@ -319,8 +375,8 @@ export function EditorPage() {
     <section>
       <h1>Layout editor</h1>
       <p className="lede">
-        Flagship 16:9 stage for Projectivy: multi-stop gradients, vignette, edge fades, movie logos, and a motion
-        preview so you can see parallax / Ken Burns without a TV. Drag metadata chips. Save persists the layout JSON.
+        Flagship 16:9 stage for Projectivy: the preview always fits this panel. Artwork pans/zooms; logo, title, and
+        badges stay locked. Drag metadata chips. Save persists the layout JSON.
       </p>
       <div className="grid two">
         <div className="card">
@@ -338,20 +394,14 @@ export function EditorPage() {
             </button>
             <button
               className="btn ghost tiny"
-              disabled={bakeBusy || created.length === 0}
+              disabled={busy || created.length === 0}
               onClick={async () => {
-                setBakeBusy(true);
                 try {
-                  const out = (await api.generateMotion(layout.name)) as { message?: string; count?: number; generated?: string[] };
-                  const toast = motionToast(out);
-                  notify(toast.kind, toast.text);
-                  setStatus(toast.text);
+                  const out = await run({ kind: "motion", layout: layout.name });
+                  setStatus(out.message || "Baked motion.");
                   setCreated(await api.gallery(layout.name));
                 } catch (err) {
-                  const toast = errorToast(err, "Motion bake failed");
-                  notify(toast.kind, toast.text);
-                } finally {
-                  setBakeBusy(false);
+                  setStatus(errorToast(err, "Motion bake failed").text);
                 }
               }}
             >
@@ -427,6 +477,13 @@ export function EditorPage() {
             <button type="button" className={`chip ${showTv ? "active" : ""}`} onClick={() => setShowTv((v) => !v)}>
               TV chrome
             </button>
+            <button
+              type="button"
+              className={`chip ${layout.show_watch_badge !== false ? "active" : ""}`}
+              onClick={() => setLayout({ ...layout, show_watch_badge: layout.show_watch_badge === false })}
+            >
+              Watch badge
+            </button>
             <button type="button" className={`chip ${showGuides ? "active" : ""}`} onClick={() => setShowGuides((v) => !v)}>
               Safe zone
             </button>
@@ -441,72 +498,76 @@ export function EditorPage() {
               </button>
             ))}
           </div>
-          <div className="canvas-wrap" ref={stageRef} style={{ marginTop: 14 }}>
-            {artSrc && (
-              <img
-                className={`canvas-art ${motionOn ? "motion-art" : ""}`}
-                style={motionOn ? (motionVars as CSSProperties) : undefined}
-                src={artSrc}
-                alt={`${preview?.title || "Library"} artwork`}
-              />
-            )}
-            <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={stageOverlayStyle(layout.background)}>
-              {showGuides && (
-                <div className="safe-guides" aria-hidden="true">
-                  <span className="safe-clock" />
-                  <span className="safe-dock" />
+          <div style={{ marginTop: 14 }}>
+            <WallpaperStage
+              stageRef={stageRef}
+              className="editor-stage"
+              artSrc={artSrc}
+              artAlt={`${preview?.title || "Library"} artwork`}
+              motionOn={motionOn}
+              motionVars={motionVars as CSSProperties}
+              lightLeak={lightLeak}
+            >
+              <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={stageOverlayStyle(layout.background)}>
+                {showGuides && (
+                  <div className="safe-guides" aria-hidden="true">
+                    <span className="safe-clock" />
+                    <span className="safe-dock" />
+                  </div>
+                )}
+                {layout.layers
+                  .map((item, index) => ({ item, index }))
+                  .filter(({ item }) => item.visible && (showWatch || (item.slot !== "watch_status" && item.slot !== "watch_state")))
+                  .map(({ item, index }) => {
+                    const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
+                    const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
+                    const x = isLogoTitle && logoBox ? logoBox.x : item.x;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
+                        onMouseDown={(event) => startDrag(event, index)}
+                        style={{
+                          left: `${(x / layout.canvas_width) * 100}%`,
+                          top: `${(y / layout.canvas_height) * 100}%`,
+                          fontSize: Math.max(10, item.font_size * 0.35),
+                          fontWeight: item.font_weight === "bold" ? 700 : 500,
+                          color: item.color,
+                          width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
+                          maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
+                          whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
+                        }}
+                      >
+                        {isLogoTitle ? (
+                          <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
+                        ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
+                          watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
+                        ) : (
+                          sample[item.slot] || item.slot
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              {showTv && (
+                <div className="tv-chrome editor-tv" aria-hidden="true">
+                  <div className="tv-top">
+                    <span className="tv-logo">projectivy</span>
+                    <span className="tv-clock">9:41</span>
+                  </div>
+                  <div className="tv-dock" />
                 </div>
               )}
-              {layout.layers
-                .map((item, index) => ({ item, index }))
-                .filter(({ item }) => item.visible)
-                .map(({ item, index }) => {
-                  const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
-                  const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
-                  const x = isLogoTitle && logoBox ? logoBox.x : item.x;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
-                      onMouseDown={(event) => startDrag(event, index)}
-                      style={{
-                        left: `${(x / layout.canvas_width) * 100}%`,
-                        top: `${(y / layout.canvas_height) * 100}%`,
-                        fontSize: Math.max(10, item.font_size * 0.35),
-                        fontWeight: item.font_weight === "bold" ? 700 : 500,
-                        color: item.color,
-                        width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
-                        maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
-                        whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
-                      }}
-                    >
-                      {isLogoTitle ? (
-                        <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
-                      ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
-                        watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
-                      ) : (
-                        sample[item.slot] || item.slot
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-            {showTv && (
-              <div className="tv-chrome editor-tv" aria-hidden="true">
-                <div className="tv-top">
-                  <span className="tv-logo">projectivy</span>
-                  <span className="tv-clock">9:41</span>
-                </div>
-                <div className="tv-dock" />
-              </div>
-            )}
-            {motionOn && lightLeak && <div className="motion-leak" />}
-            <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+              {showWatch && !hasWatchLayer && (
+                <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+              )}
+            </WallpaperStage>
           </div>
           <p className="muted">
             {describeMotion(motionStyle, intensity, previewDuration)}
-            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} is a CSS preview — bake VIDEO for this layout
-            so Projectivy can play a real MP4 (<code>videoUrl</code> is set only when the file exists).
+            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} moves the <strong>background</strong> only —
+            logo, title, and badges stay pinned. Bake VIDEO for this layout so Projectivy can play a real MP4 (
+            <code>videoUrl</code> is set only when the file exists).
           </p>
           {created.length > 0 && (
             <div className="created-strip">
@@ -814,7 +875,28 @@ export function EditorPage() {
         </div>
       </div>
       {viewer !== null && (
-        <FullscreenViewer items={createdSlides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
+        <FullscreenViewer
+          items={createdSlides}
+          index={viewer}
+          onClose={() => setViewer(null)}
+          onIndex={setViewer}
+          onPin={async (slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (!item) return;
+            await api.flag(item.id, { pinned: !item.pinned });
+            setCreated(await api.gallery(layout.name));
+          }}
+          onHide={async (slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (!item) return;
+            await api.flag(item.id, { hidden: !item.hidden });
+            setCreated(await api.gallery(layout.name));
+          }}
+          onDelete={(slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (item) void deleteCreated(item);
+          }}
+        />
       )}
     </section>
   );

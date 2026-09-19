@@ -27,6 +27,12 @@ describe("layout validation", () => {
     expect(layout.background.vignette).toBeGreaterThanOrEqual(0);
     expect(layout.canvas_width).toBe(1920);
     expect(layout.title_display).toBe("auto");
+    expect(layout.show_watch_badge).toBe(true);
+  });
+
+  it("normalizeLayout keeps watch badge off when explicitly disabled", () => {
+    const layout = normalizeLayout({ name: "Hero", show_watch_badge: false } as never);
+    expect(layout.show_watch_badge).toBe(false);
   });
 });
 

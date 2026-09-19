@@ -57,7 +57,7 @@ The GitHub repository is still named `projectivy-live-wallpaper-suite`. The prod
 | --- | --- |
 | **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock, Status Focus, Jellyfin Dense), see the wallpaper *as the launcher will*. One-tap **bake motion** for tonight’s pick or the whole layout. |
 | **Gallery** | Every generated still. Click a still for a full-screen view. Watch-status pills (unwatched / continue / watched) plus smart-queue and VIDEO badges. Pin a title. Hide it forever. |
-| **Editor** | Flagship 16:9 stage — linear/radial multi-stop gradients, vignette, overlays, edge fades, **title display** (logo / text / auto), watch pills, TV chrome, motion preview, layout DNA chips. Demo or Jellyfin artwork. Drag metadata; save persists the layout. Bake VIDEO for this layout. |
+| **Editor** | Flagship 16:9 stage (fits the panel on phone and desktop) — linear/radial multi-stop gradients, vignette, overlays, edge fades, **title display** (logo / text / auto), watch pills, TV chrome, layered motion preview (artwork moves; logo/text stay), layout DNA chips. Demo or Jellyfin artwork. Drag metadata; save persists the layout. Bake VIDEO for this layout. |
 | **Generate** | Demo catalog (real public-domain cinematic stills) or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Skip / replace / cleanup / ids with toasts. Optional parallax VIDEO bake (ffmpeg). |
 | **Dashboard** | Ops: last cron, provider config, queue counts. |
 | **Settings** | Motion intensity, taste weights, overlays, cron. |
@@ -149,7 +149,7 @@ Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523af
 | **Tonight preview** | See the wallpaper inside Projectivy chrome before it hits the TV. Shuffle the taste mix. Switch layout DNA live. |
 | **Layout DNA** | Netflix Hero, Prime Cinematic, Google TV Clean, **Projectivy Dock**, Status Focus, Jellyfin Dense — watch pills on the flagship four, plus custom layouts. |
 | **Smart queues** | Unwatched · Continue watching · Newly added · Seerr trending · Requestable · Pinned. Gallery badges match the queues, including **Watched**. |
-| **Parallax motion** | Optional H.264 loops: parallax / Ken Burns / drift · Subtle / Cinematic / Bold (clearly different zoom/pan) · longer seamless loops · light-leak layer. JPEG still always kept. `videoUrl` only when an MP4 exists. |
+| **Parallax motion** | Optional H.264 loops: layered plate + locked chrome · parallax / Ken Burns / drift of the **artwork only** · Subtle / Cinematic / Bold (background zoom/pan) · JPEG still always kept. `videoUrl` only when an MP4 exists. |
 | **Taste profiles** | `tonight` · `unwatched_heavy` · `cinephile` · `discovery` — weighted mixes, editable, `profile=` / `pool=taste:<name>`. |
 | **Plugin pick modes** | Tonight’s mix, continue watching, newly added, Seerr trending, pinned, plus sort / pool / mix / round-robin from tvbgsuite. |
 | **Demo mode** | Six fixture titles, no Jellyfin. `./scripts/verify.sh` builds the image, waits for health, curls status. |
@@ -214,7 +214,9 @@ Compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `
 | `GET` | `/api/wallpaper/status` | Next wallpaper. Query: `layout`, `sort`, `pool`, `queue`, `profile`, `exclude`, filters |
 | `GET` | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
 | `GET` | `/api/dashboard` | Gallery size, last cron/generate, providers |
-| `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides |
+| `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides; `DELETE /api/gallery/{id}` removes the still + MP4 |
+| `GET` | `/api/jobs/latest` | Latest generate / motion / cron job (`idle` if none) |
+| `POST` | `/api/jobs` | Start a pollable generate / motion / cron job |
 | `GET` | `/api/media` | Live provider preview (`source=jellyfin` / `demo` / `jellyseerr`) |
 | `GET` | `/api/media/artwork/{id}` | Same-origin Jellyfin backdrop/poster proxy for the editor |
 | `GET` | `/api/queues` | Smart-queue counts |

@@ -84,6 +84,7 @@ class Layout(BaseModel):
     logo_max_width: int = 1200
     logo_max_height: int = 450
     logo_padding: int = 25
+    show_watch_badge: bool = True
 
 
 class WallpaperRecord(BaseModel):

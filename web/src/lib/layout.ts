@@ -50,6 +50,7 @@ export type Layout = {
   logo_max_width?: number;
   logo_max_height?: number;
   logo_padding?: number;
+  show_watch_badge?: boolean;
 };
 
 export type WallpaperRecord = {
@@ -190,6 +191,7 @@ export function emptyLayout(name = "Untitled"): Layout {
     logo_max_width: 1200,
     logo_max_height: 450,
     logo_padding: 25,
+    show_watch_badge: true,
   };
 }
 
@@ -240,5 +242,6 @@ export function normalizeLayout(raw: Partial<Layout> | Layout | null | undefined
     logo_max_width: raw.logo_max_width || base.logo_max_width,
     logo_max_height: raw.logo_max_height || base.logo_max_height,
     logo_padding: raw.logo_padding || base.logo_padding,
+    show_watch_badge: raw.show_watch_badge !== false,
   };
 }

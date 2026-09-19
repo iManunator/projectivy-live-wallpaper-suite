@@ -195,3 +195,38 @@ def test_generate_one_uses_bundled_demo_still(suite_dirs):
     painted = Image.open(path)
     synth = synthetic_backdrop(item.title, painted.size)
     assert painted.getpixel((1500, 360)) != synth.getpixel((1500, 360))
+
+
+def test_bake_motion_uses_source_artwork_not_composite(suite_dirs, monkeypatch):
+    from app import generate as generate_mod
+    from app.generate import bake_motion, generate_one
+    from app.models import MediaItem
+
+    item = MediaItem(
+        title="Northlight",
+        year=2024,
+        overview="Maps.",
+        rating=8.4,
+        genres=["Sci-Fi"],
+        jellyfin_id="demo-jf-1",
+        source="demo",
+    )
+    record = generate_one(item, "Netflix Hero", motion=False)
+    jpg = suite_dirs["gallery"] / "Netflix Hero" / record.filename
+    composite = jpg.read_bytes()
+    captured: dict = {}
+    real_plate = generate_mod.render_plate
+
+    def spy(media, layout, backdrop_bytes=None):
+        captured["bytes"] = backdrop_bytes
+        return real_plate(media, layout, backdrop_bytes=backdrop_bytes)
+
+    monkeypatch.setattr(generate_mod, "render_plate", spy)
+    monkeypatch.setattr(generate_mod, "generate_motion", lambda *a, **k: (True, "ok"))
+    monkeypatch.setattr(generate_mod, "has_motion", lambda p: True)
+    out = bake_motion("Netflix Hero", record.filename)
+    assert out["layered"] is True
+    assert out["chrome_locked"] is True
+    assert captured.get("bytes")
+    assert captured["bytes"] != composite
+

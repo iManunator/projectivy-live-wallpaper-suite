@@ -73,20 +73,20 @@ def _job_kwargs(job: dict | None) -> dict:
     }
 
 
-def run_now(job: dict | None = None) -> dict:
+def run_now(job: dict | None = None, job_id: str | None = None) -> dict:
     """Run a cron-shaped generate immediately (Settings → Run now)."""
     settings = load_settings()
     spec = dict(job or {})
     if not spec and settings.cron_jobs:
         spec = dict(settings.cron_jobs[0] or {})
-    return _run_job(**_job_kwargs(spec))
+    return _run_job(job_id=job_id, **_job_kwargs(spec))
 
 
-def _run_job(**kwargs) -> dict:
+def _run_job(job_id: str | None = None, **kwargs) -> dict:
     from app.ops import record_event
 
-    request = GenerateRequest(**kwargs)
-    result = run_generate(request)
+    request = GenerateRequest(**{k: v for k, v in kwargs.items() if k in GenerateRequest.model_fields})
+    result = run_generate(request, job_id=job_id)
     record_event(
         "cron",
         {
