@@ -228,7 +228,7 @@ def fade_alpha_mask(layout: Layout, size: tuple[int, int]) -> Image.Image:
                 edge = max(edge, (ny - (1 - bottom)) / max(bottom, 0.001))
             alpha = min(1.0, edge ** (0.35 + soft))
             # Snap the darkest rim to fully opaque so baked VIDEO letterbox /
-            # corner shadows cannot leak plate motion (yuv + zoompan).
+            # corner shadows cannot leak plate motion when the plate Ken-Burns.
             if alpha >= 0.97:
                 value = 255
             else:

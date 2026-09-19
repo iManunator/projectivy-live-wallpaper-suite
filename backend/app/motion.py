@@ -10,21 +10,29 @@ This module bakes the VIDEO as **layers**:
   Optional parallax light-leak is a padded wash on this layer only.
 * **Foreground / target** — logo or title, watch badges, Seerr/requestable chips,
   metadata chrome, **and static atmosphere** (vignette, letterbox shadows, edge
-  gradients). Overlay is pinned at layout DNA coordinates (``overlay=x=0:y=0``).
-  Chrome never Ken-Burns with the plate.
+  gradients). Overlay is pinned at layout DNA coordinates. Chrome never Ken-Burns
+  with the plate.
 
-Do not zoompan a flat JPEG that already has text or vignette burned in — that
+Do not Ken-Burns a flat JPEG that already has text or vignette burned in — that
 makes title and shadows swim. Animate the plate (and optional leak), then overlay
 the static chrome PNG each frame.
+
+Ken Burns is **subpixel** (Pillow EXTENT + bicubic), not ffmpeg ``zoompan``.
+zoompan is nearest-neighbour and stair-steps slow pans into stutter. Frames are
+piped to x264 as constant-frame-rate H.264 Main @ L4.0 with no B-frames and no
+scenecut so TV loop playback does not hitch at GOP boundaries.
 """
 
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from PIL import Image
 
 from app.fsutil import promote_temp
 
@@ -39,7 +47,10 @@ _PRESET_DURATION = {"subtle": 16.0, "cinematic": 12.0, "bold": 10.0}
 _X264_PRESET = {"light": "fast", "standard": "medium", "cinematic": "slow"}
 # 30fps 1080p Main@L4.0 is Android TV safe and closer to the CSS preview.
 _DEFAULT_FPS = 30
+# Working plate multiplier. Float EXTENT samples this bitmap; not zoompan 2× NN.
 _SUPER_SAMPLE = 2
+_LEAK_RGB = (255, 122, 58)
+_LEAK_ALPHA = 41  # ffmpeg colorchannelmixer=aa=0.16
 
 
 def intensity_from_preset(name: str | None) -> float:
@@ -110,6 +121,18 @@ class MotionProfile:
         return style if style in STYLES else "parallax"
 
 
+@dataclass(frozen=True)
+class KenBurnsWindow:
+    """Float source-pixel crop mapped onto the output frame (subpixel Ken Burns)."""
+
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    zoom: float
+    ease: float
+
+
 def profile_from_settings(settings) -> MotionProfile:
     quality = str(getattr(settings, "motion_quality", None) or "light").strip().lower()
     if quality not in QUALITIES:
@@ -147,64 +170,36 @@ def profile_from_settings(settings) -> MotionProfile:
     )
 
 
-def pingpong_ease(frames: int, clock: str = "n") -> str:
+def pingpong_ease_t(t: float) -> float:
     """0 at loop ends, 1 at midpoint — CSS ease-in-out 0% / 50% / 100%.
 
-    ``sin(2*PI*t)`` zooms *out* for half the clip. Squared half-angle sine does not.
-    No commas (ffmpeg filtergraph).
+    ``sin(2πt)`` zooms *out* for half the clip. Squared half-angle sine does not.
+    ``t`` is loop phase in ``[0, 1]`` (frame ``n / frames``).
     """
+    return math.sin(math.pi * t) ** 2
+
+
+def pingpong_ease(frames: int, clock: str = "n") -> str:
+    """ffmpeg-style expression of :func:`pingpong_ease_t` (no commas)."""
     return f"sin(PI*{clock}/{frames})*sin(PI*{clock}/{frames})"
 
 
-def zoompan_expr(
-    amp: float,
-    pan: float,
-    frames: int,
-    width: int,
-    height: int,
-    fps: int,
-    z0: float = 1.04,
-) -> str:
-    """Ken-Burns zoompan. Ping-pong ease; no commas inside z/x/y (ffmpeg filtergraph).
-
-    ffmpeg 6 zoompan has no interpolator (nearest-neighbour). Callers should
-    run it at 2× and lanczos-down so the path is not stair-stepped.
-    """
-    ease = pingpong_ease(frames, "on")
-    # 0.14 ≈ CSS --motion-y / --motion-x (panY*0.4 vs panX).
-    return (
-        f"zoompan=z='{z0}+{amp}*{ease}':"
-        f"x='iw/2-(iw/zoom/2)+({pan})*{ease}':"
-        f"y='ih/2-(ih/zoom/2)+({round(pan * 0.14, 2)})*{ease}':"
-        f"d=1:s={width}x{height}:fps={fps}"
-    )
-
-
-def plate_kenburns_filters(profile: MotionProfile) -> str:
-    """Cover-crop, lanczos 2×, ping-pong zoompan at 2×, lanczos down (CSS-like)."""
-    p = MotionProfile(
-        style=profile.normalized_style(),
-        quality=profile.quality,
-        intensity=profile.intensity,
-        duration=profile.duration,
-        fps=profile.fps,
-        width=profile.width,
-        height=profile.height,
-        light_leak=profile.light_leak,
-    )
-    w, h, fps, frames = p.width, p.height, p.fps, p.frames
-    ss = max(int(p.super_sample), 1)
-    sw, sh = w * ss, h * ss
-    # Pan is in zoompan-input pixels; 2× super-sample must scale CSS travel.
-    pan = round(p.bg_pan * ss, 2)
-    zp = zoompan_expr(p.bg_zoom_amp, pan, frames, sw, sh, fps, z0=p.zoom_from)
-    return (
-        f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
-        f"crop={w}:{h},"
-        f"scale={sw}:{sh}:flags=lanczos,"
-        f"{zp},"
-        f"scale={w}:{h}:flags=lanczos"
-    )
+def ken_burns_window(n: int, profile: MotionProfile, src_w: int, src_h: int) -> KenBurnsWindow:
+    """Subpixel source window for frame ``n``. ``n == frames`` matches ``n == 0``."""
+    frames = max(int(profile.frames), 2)
+    ease = pingpong_ease_t(n / frames)
+    zoom = profile.zoom_from + profile.bg_zoom_amp * ease
+    win_w = src_w / zoom
+    win_h = src_h / zoom
+    pan_x = profile.bg_pan * (src_w / max(profile.width, 1)) * ease
+    pan_y = profile.bg_pan * 0.14 * (src_h / max(profile.height, 1)) * ease
+    x0 = src_w / 2.0 + pan_x - win_w / 2.0
+    y0 = src_h / 2.0 + pan_y - win_h / 2.0
+    max_x = max(0.0, src_w - win_w)
+    max_y = max(0.0, src_h - win_h)
+    x0 = min(max(x0, 0.0), max_x)
+    y0 = min(max(y0, 0.0), max_y)
+    return KenBurnsWindow(x0, y0, x0 + win_w, y0 + win_h, zoom, ease)
 
 
 def leak_geometry(profile: MotionProfile) -> tuple[str, str, int, int]:
@@ -225,49 +220,126 @@ def leak_geometry(profile: MotionProfile) -> tuple[str, str, int, int]:
     return x, y, w + 2 * mx, h + 2 * my
 
 
+def leak_offset(n: int, profile: MotionProfile) -> tuple[float, float]:
+    """Subpixel top-left of the padded leak on the output frame."""
+    w, h, frames = profile.width, profile.height, profile.frames
+    pan_x = w * 0.12
+    pan_y = h * 0.04
+    mx = max(w * 0.18, pan_x + 8)
+    my = max(h * 0.18, pan_y + 8)
+    ease = pingpong_ease_t(n / max(frames, 2))
+    return -mx + pan_x * ease, -my + pan_y * ease
+
+
 def max_motion_frame(frames: int) -> int:
     """Frame index where ping-pong ease is at 1 (peak zoom / pan, CSS 50%)."""
     return max(1, int(frames) // 2)
 
 
-def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
-    """Return an ffmpeg -filter_complex (parallax) or -vf (single layer) graph."""
-    p = MotionProfile(
-        style=profile.normalized_style(),
-        quality=profile.quality,
-        intensity=profile.intensity,
-        duration=profile.duration,
-        fps=profile.fps,
-        width=profile.width,
-        height=profile.height,
-        light_leak=profile.light_leak,
+def _rate_bits(rate: str) -> int:
+    raw = str(rate).strip().lower()
+    if raw.endswith("k"):
+        return int(float(raw[:-1]) * 1000)
+    if raw.endswith("m"):
+        return int(float(raw[:-1]) * 1_000_000)
+    return int(float(raw))
+
+
+def encoder_args(profile: MotionProfile, *, frames: int | None = None) -> list[str]:
+    """Projectivy-safe x264: Main L4.0 yuv420p +faststart, CFR, no B-frames.
+
+    ``maxrate`` is 2× the target so VBV does not underflow on pans. ``scenecut=0``
+    plus closed GOP keeps keyframes on a cadence instead of hitching mid-motion.
+    """
+    nframes = int(frames if frames is not None else profile.frames)
+    avg = _rate_bits(profile.bitrate)
+    gop = max(int(profile.fps) * 2, 24)
+    params = (
+        f"keyint={gop}:min-keyint={gop}:scenecut=0:bframes=0:"
+        f"open-gop=0:ref=1:weightp=0"
     )
-    w, h = p.width, p.height
-    ken = plate_kenburns_filters(p)
-    leak = bool(p.light_leak) and has_chrome and p.style == "parallax"
-    if has_chrome:
-        # Plate (and optional leak) move. Chrome — including vignette / letterbox —
-        # is pinned in layout-DNA pixels and always composited last.
-        if leak:
-            leak_x, leak_y, _, _ = leak_geometry(p)
-            return (
-                f"[0:v]{ken}[bg];"
-                f"[2:v]format=rgba,colorchannelmixer=aa=0.16[leak];"
-                f"[bg][leak]overlay=x='{leak_x}':y='{leak_y}':shortest=1[lit];"
-                f"[1:v]scale={w}:{h}:flags=lanczos,format=rgba[fg];"
-                f"[lit][fg]overlay=x=0:y=0:shortest=1,format=yuv420p"
-            )
-        return (
-            f"[0:v]{ken}[bg];"
-            f"[1:v]scale={w}:{h}:flags=lanczos,format=rgba[fg];"
-            f"[bg][fg]overlay=x=0:y=0:shortest=1,format=yuv420p"
+    return [
+        "-fps_mode", "cfr",
+        "-frames:v", str(nframes),
+        "-c:v", "libx264",
+        "-preset", profile.x264_preset,
+        "-pix_fmt", "yuv420p",
+        "-profile:v", "main",
+        "-level", "4.0",
+        "-bf", "0",
+        "-g", str(gop),
+        "-b:v", profile.bitrate,
+        "-maxrate", f"{(avg * 2) // 1000}k",
+        "-bufsize", f"{max(avg * 4, 8_000_000) // 1000}k",
+        "-x264-params", params,
+        "-movflags", "+faststart",
+        "-an",
+    ]
+
+
+def cover_rgb(image: Image.Image, width: int, height: int) -> Image.Image:
+    """object-fit: cover into ``width`` × ``height`` RGB."""
+    src = image.convert("RGB")
+    sw, sh = src.size
+    if sw == width and sh == height:
+        return src
+    scale = max(width / max(sw, 1), height / max(sh, 1))
+    resized = src.resize((max(1, int(round(sw * scale))), max(1, int(round(sh * scale)))), Image.Resampling.LANCZOS)
+    left = max(0, (resized.width - width) // 2)
+    top = max(0, (resized.height - height) // 2)
+    return resized.crop((left, top, left + width, top + height))
+
+
+def make_leak_layer(profile: MotionProfile) -> Image.Image:
+    _, _, lw, lh = leak_geometry(profile)
+    leak = Image.new("RGBA", (lw, lh), (*_LEAK_RGB, _LEAK_ALPHA))
+    return leak
+
+
+def render_motion_frame(
+    plate: Image.Image,
+    n: int,
+    profile: MotionProfile,
+    *,
+    chrome: Image.Image | None = None,
+    leak: Image.Image | None = None,
+) -> Image.Image:
+    """One composited RGB frame: Ken-Burns plate, optional leak, locked chrome."""
+    w, h = profile.width, profile.height
+    window = ken_burns_window(n, profile, plate.width, plate.height)
+    frame = plate.transform(
+        (w, h),
+        Image.Transform.EXTENT,
+        (window.x0, window.y0, window.x1, window.y1),
+        Image.Resampling.BICUBIC,
+    )
+    if leak is not None:
+        lx, ly = leak_offset(n, profile)
+        placed = leak.transform(
+            (w, h),
+            Image.Transform.AFFINE,
+            (1.0, 0.0, -lx, 0.0, 1.0, -ly),
+            Image.Resampling.BILINEAR,
         )
-    # Artwork-only: never Ken-Burns a text-burned JPEG.
-    return f"{ken},format=yuv420p"
+        rgba = frame.convert("RGBA")
+        rgba.alpha_composite(placed)
+        frame = rgba
+    else:
+        frame = frame.convert("RGBA")
+    if chrome is not None:
+        overlay = chrome.convert("RGBA")
+        if overlay.size != (w, h):
+            overlay = overlay.resize((w, h), Image.Resampling.LANCZOS)
+        frame.alpha_composite(overlay)
+    return frame.convert("RGB")
 
 
 def ffmpeg_bin() -> str | None:
     return shutil.which("ffmpeg")
+
+
+def ffprobe_bin() -> str | None:
+    return shutil.which("ffprobe")
 
 
 def mp4_path_for(jpg: Path) -> Path:
@@ -308,47 +380,65 @@ def generate_motion(
             style="kenburns" if not chrome else "parallax",
         )
     use_chrome = bool(chrome and Path(chrome).is_file())
-    graph = build_filtergraph(profile, has_chrome=use_chrome)
-    # Prefer the artwork plate. Never Ken-Burns the composited JPEG when a plate exists.
     src = plate if plate and Path(plate).is_file() else jpg
+    try:
+        plate_img = Image.open(src).convert("RGB")
+    except OSError as exc:
+        return False, f"plate unreadable: {exc}"
+    w, h = profile.width, profile.height
+    ss = max(int(profile.super_sample), 1)
+    working = cover_rgb(plate_img, w, h)
+    if ss > 1:
+        working = working.resize((w * ss, h * ss), Image.Resampling.LANCZOS)
+    chrome_img: Image.Image | None = None
+    if use_chrome:
+        try:
+            chrome_img = Image.open(chrome).convert("RGBA")
+        except OSError as exc:
+            return False, f"chrome unreadable: {exc}"
+        if chrome_img.size != (w, h):
+            chrome_img = chrome_img.resize((w, h), Image.Resampling.LANCZOS)
+    use_leak = bool(use_chrome and profile.light_leak and profile.normalized_style() == "parallax")
+    leak_img = make_leak_layer(profile) if use_leak else None
+    nframes = profile.frames
     mp4 = mp4_path_for(jpg)
-    use_leak = use_chrome and profile.light_leak and "[2:v]" in graph
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         tmp_path = Path(tmp.name)
+    cmd = [
+        ff, "-y",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgb24",
+        "-s", f"{w}x{h}",
+        "-r", str(profile.fps),
+        "-i", "-",
+        *encoder_args(profile, frames=nframes),
+        str(tmp_path),
+    ]
     try:
-        cmd = [
-            ff, "-y", "-sws_flags", "lanczos",
-            "-loop", "1", "-framerate", str(profile.fps), "-i", str(src),
-        ]
-        if use_chrome:
-            cmd += ["-loop", "1", "-framerate", str(profile.fps), "-i", str(chrome)]
-        if use_leak:
-            _, _, leak_w, leak_h = leak_geometry(profile)
-            cmd += ["-f", "lavfi", "-i", f"color=c=0xff7a3a:s={leak_w}x{leak_h}:r={profile.fps}"]
-        if use_chrome:
-            cmd += ["-filter_complex", graph]
-        else:
-            cmd += ["-vf", graph]
-        gop = max(profile.fps * 2, 24)
-        cmd += [
-            "-t", str(profile.duration),
-            "-r", str(profile.fps),
-            "-c:v", "libx264",
-            "-preset", profile.x264_preset,
-            "-pix_fmt", "yuv420p",
-            "-profile:v", "main",
-            "-level", "4.0",
-            "-b:v", profile.bitrate,
-            "-maxrate", profile.bitrate,
-            "-bufsize", "4M",
-            "-g", str(gop),
-            "-movflags", "+faststart",
-            "-an",
-            str(tmp_path),
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=480)
-        if result.returncode != 0 or not tmp_path.is_file() or tmp_path.stat().st_size < 1000:
-            tail = (result.stderr or result.stdout or "ffmpeg failed").strip().splitlines()[-8:]
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert proc.stdin is not None
+        try:
+            for n in range(nframes):
+                frame = render_motion_frame(
+                    working, n, profile, chrome=chrome_img, leak=leak_img,
+                )
+                proc.stdin.write(frame.tobytes())
+            proc.stdin.close()
+            stderr = proc.stderr.read() if proc.stderr else b""
+            stdout = proc.stdout.read() if proc.stdout else b""
+            rc = proc.wait(timeout=480)
+        except BrokenPipeError:
+            stderr = proc.stderr.read() if proc.stderr else b""
+            stdout = proc.stdout.read() if proc.stdout else b""
+            rc = proc.wait(timeout=60)
+        if rc != 0 or not tmp_path.is_file() or tmp_path.stat().st_size < 1000:
+            text = (stderr or stdout or b"ffmpeg failed").decode("utf-8", "replace").strip()
+            tail = text.splitlines()[-8:]
             return False, " | ".join(tail) or "ffmpeg failed"
         promote_temp(tmp_path, mp4)
         return True, str(mp4)
