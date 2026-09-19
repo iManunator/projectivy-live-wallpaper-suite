@@ -78,13 +78,12 @@ If `python3 -m venv` fails, install `python3-venv` (Debian/Ubuntu) and retry.
 
 ## 5. Plugin APK
 
-**Primary:** GitHub **Release** asset [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) after tag `v1.1.0`. See [RELEASE.md](RELEASE.md).
+**Primary:** GitHub **Release** asset [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/download/v1.1.0/wallpaparr-plugin-release.apk) (`v1.1.0`). See [RELEASE.md](RELEASE.md).
 
-Until that tag exists, use CI:
+CI also uploads:
 
-1. Open a green **CI** run on `main` or the PR
-2. Artifact **`wallpaparr-plugin-apk`**
-3. Files: **`wallpaparr-plugin-release.apk`** (sideload) and `wallpaparr-plugin-debug.apk`
+1. Artifact **`wallpaparr-plugin-apk`** on green **CI** runs
+2. Files: **`wallpaparr-plugin-release.apk`** (sideload) and `wallpaparr-plugin-debug.apk`
 
 Image artifact on PR runs: **`wallpaparr-image`** (`wallpaparr-image.tar.gz`). Pushes to `main` publish `ghcr.io/imanunator/wallpaparr:latest` instead.
 
