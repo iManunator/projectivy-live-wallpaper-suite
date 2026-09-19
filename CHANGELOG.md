@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Jellyfin stills now use real library art, and the editor stays an in-page 16:9 stage.
+
+- **Generate** downloads backdrop (then poster) by default, with Jellyfin auth headers. Batches no longer paint titles on a synthetic gradient when artwork exists.
+- Jellyfin items request `ImageTags`. Missing Backdrop uses Primary/Thumb so poster-only titles still render.
+- **Editor** shows a same-origin Jellyfin backdrop on the in-page 16:9 canvas (dropdown to switch titles). The stage does not go fullscreen.
+- **Gallery** (and the generated strip under the editor) opens stills in a full-screen lightbox (arrows / Esc).
+- New `GET /api/media/artwork/{item_id}` proxies Jellyfin Primary/Backdrop for the web UI.
+
 ## 1.1.0
 
 Flagship Wallpaparr layer on the 1.0 wallpaper core.

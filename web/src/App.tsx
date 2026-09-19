@@ -20,6 +20,114 @@ const SAMPLE: Record<string, string> = {
   age: "PG-13",
 };
 
+type MediaRow = {
+  title?: string;
+  year?: number | null;
+  overview?: string;
+  rating?: number;
+  genres?: string[];
+  official_rating?: string;
+  runtime?: string;
+  watch_state?: string;
+  source?: string;
+  jellyfin_id?: string | null;
+  backdrop_url?: string | null;
+  poster_url?: string | null;
+};
+
+type ViewerItem = { src: string; title: string; subtitle?: string };
+
+function sampleFromMedia(item: MediaRow): Record<string, string> {
+  const genres = (item.genres || []).slice(0, 3).join("  ·  ");
+  const watch = (item.watch_state || "").replace(/_/g, " ");
+  const watchLabel = watch ? watch.charAt(0).toUpperCase() + watch.slice(1) : "";
+  const source = item.source || "jellyfin";
+  return {
+    title: item.title || "Untitled",
+    year: item.year ? String(item.year) : "",
+    genres,
+    runtime: item.runtime || "",
+    rating: item.rating ? Number(item.rating).toFixed(1) : "",
+    overview: item.overview || "",
+    watch_status: watchLabel,
+    source: source.charAt(0).toUpperCase() + source.slice(1),
+    age: item.official_rating || "",
+  };
+}
+
+function wallpaperSlide(item: WallpaperRecord): ViewerItem {
+  return {
+    src: api.wallpaperImage(item.layout, item.filename),
+    title: item.title,
+    subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
+  };
+}
+
+function FullscreenViewer({
+  items,
+  index,
+  onClose,
+  onIndex,
+}: {
+  items: ViewerItem[];
+  index: number;
+  onClose: () => void;
+  onIndex: (next: number) => void;
+}) {
+  const item = items[index];
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (!items.length) return;
+      if (event.key === "ArrowRight") onIndex((index + 1) % items.length);
+      if (event.key === "ArrowLeft") onIndex((index - 1 + items.length) % items.length);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, items, onClose, onIndex]);
+  if (!item) return null;
+  return (
+    <div className="lightbox" role="dialog" aria-modal="true" aria-label={`${item.title} full screen`} onClick={onClose}>
+      <button type="button" className="lightbox-close btn ghost tiny" onClick={onClose} aria-label="Close full screen">
+        Close
+      </button>
+      {items.length > 1 && (
+        <>
+          <button
+            type="button"
+            className="lightbox-nav prev btn ghost"
+            aria-label="Previous wallpaper"
+            onClick={(event) => {
+              event.stopPropagation();
+              onIndex((index - 1 + items.length) % items.length);
+            }}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="lightbox-nav next btn ghost"
+            aria-label="Next wallpaper"
+            onClick={(event) => {
+              event.stopPropagation();
+              onIndex((index + 1) % items.length);
+            }}
+          >
+            ›
+          </button>
+        </>
+      )}
+      <figure className="lightbox-frame" onClick={(event) => event.stopPropagation()}>
+        <img src={item.src} alt={item.title} />
+        <figcaption>
+          <strong>{item.title}</strong>
+          {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
+        </figcaption>
+      </figure>
+    </div>
+  );
+}
+
 const EMPTY_SETTINGS: AppSettings = {
   public_base_url: "http://127.0.0.1:8787",
   timezone: "UTC",
@@ -205,6 +313,7 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
   const [items, setItems] = useState<WallpaperRecord[]>([]);
   const [error, setError] = useState("");
   const [showHidden, setShowHidden] = useState(false);
+  const [viewer, setViewer] = useState<number | null>(null);
   async function refresh() {
     try {
       setItems(await api.gallery());
@@ -216,11 +325,12 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
     refresh();
   }, []);
   const visible = items.filter((item) => showHidden || !item.hidden);
+  const slides = visible.map(wallpaperSlide);
   return (
     <section>
       <h1>Gallery</h1>
       <p className="lede">
-        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation, or mark never-show so it drops out of every queue.
+        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation, or mark never-show so it drops out of every queue. Click a still for a full-screen view.
       </p>
       <div className="row" style={{ marginBottom: 18 }}>
         <button className="btn" onClick={onEdit}>Open editor</button>
@@ -231,9 +341,11 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
       </div>
       {error && <p className="error">{error}</p>}
       <div className="thumb-grid">
-        {visible.map((item) => (
+        {visible.map((item, index) => (
           <article className="thumb" key={item.id}>
-            <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
+            <button type="button" className="thumb-hit" onClick={() => setViewer(index)} aria-label={`View ${item.title} full screen`}>
+              <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
+            </button>
             <div className="meta">
               <strong>{item.title}</strong>
               <div className="muted">
@@ -269,6 +381,9 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
           </article>
         ))}
       </div>
+      {viewer !== null && (
+        <FullscreenViewer items={slides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
+      )}
     </section>
   );
 }
@@ -279,16 +394,41 @@ function EditorPage() {
   const [selected, setSelected] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [jellyfin, setJellyfin] = useState<MediaRow[]>([]);
+  const [created, setCreated] = useState<WallpaperRecord[]>([]);
+  const [previewId, setPreviewId] = useState("");
+  const [viewer, setViewer] = useState<number | null>(null);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
       setNames(list);
       if (list[0]) setLayout(await api.layout(list[0]));
     });
+    api
+      .media("jellyfin", 16)
+      .then((rows) => {
+        const usable = (rows as MediaRow[]).filter((row) => row.jellyfin_id && (row.backdrop_url || row.poster_url));
+        setJellyfin(usable);
+        if (usable[0]?.jellyfin_id) setPreviewId(String(usable[0].jellyfin_id));
+      })
+      .catch(() => setJellyfin([]));
   }, []);
+
+  useEffect(() => {
+    api.gallery(layout.name).then(setCreated).catch(() => setCreated([]));
+  }, [layout.name]);
 
   const errors = useMemo(() => validateLayout(layout), [layout]);
   const layer = layout.layers[selected];
+  const preview = jellyfin.find((row) => String(row.jellyfin_id) === previewId) || jellyfin[0];
+  const sample = preview ? sampleFromMedia(preview) : SAMPLE;
+  const artSrc = preview?.jellyfin_id ? api.mediaArtwork(String(preview.jellyfin_id)) : "";
+  const createdSlides = created.map(wallpaperSlide);
+  const fadeStyle = artSrc
+    ? {
+        backgroundImage: `linear-gradient(90deg, rgba(5,5,5,0.88) 0%, rgba(5,5,5,0.35) ${Math.round(layout.background.fade_left * 100)}%, transparent ${Math.round((layout.background.fade_left + 0.18) * 100)}%), linear-gradient(0deg, rgba(5,5,5,0.72) 0%, transparent ${Math.round(layout.background.fade_bottom * 100)}%)`,
+      }
+    : undefined;
 
   async function load(name: string) {
     setLayout(await api.layout(name));
@@ -309,7 +449,7 @@ function EditorPage() {
   return (
     <section>
       <h1>Layout editor</h1>
-      <p className="lede">WYSIWYG-style chrome over a 16:9 stage. Layout DNA presets (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock) keep metadata in Projectivy-safe zones. Parallax VIDEO keeps this chrome nearly still while the artwork drifts.</p>
+      <p className="lede">WYSIWYG-style chrome over a 16:9 stage. Layout DNA presets keep metadata in Projectivy-safe zones. When Jellyfin is connected, the stage uses a real library backdrop.</p>
       <div className="grid two">
         <div className="card">
           <div className="row" style={{ marginBottom: 12 }}>
@@ -323,10 +463,27 @@ function EditorPage() {
             </button>
             <button className="btn tiny" onClick={save}>Save layout</button>
           </div>
+          {jellyfin.length > 0 && (
+            <>
+              <label>Jellyfin preview</label>
+              <select value={previewId} onChange={(e) => setPreviewId(e.target.value)} aria-label="Jellyfin preview">
+                {jellyfin.map((item) => (
+                  <option key={String(item.jellyfin_id)} value={String(item.jellyfin_id)}>
+                    {item.title}
+                    {item.year ? ` (${item.year})` : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {jellyfin.length === 0 && (
+            <p className="muted">No Jellyfin artwork yet — connect Jellyfin in Settings, or keep editing on the sample stage.</p>
+          )}
           <label>Layout name</label>
           <input value={layout.name} onChange={(e) => setLayout({ ...layout, name: e.target.value })} />
           <div className="canvas-wrap" style={{ marginTop: 14 }}>
-            <div className="canvas-stage">
+            {artSrc && <img className="canvas-art" src={artSrc} alt={`${preview?.title || "Library"} artwork`} />}
+            <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={fadeStyle}>
               {layout.layers.filter((l) => l.visible).map((l) => (
                 <div
                   key={l.id}
@@ -341,11 +498,32 @@ function EditorPage() {
                     whiteSpace: l.slot === "overview" ? "normal" : "nowrap",
                   }}
                 >
-                  {SAMPLE[l.slot] || l.slot}
+                  {sample[l.slot] || l.slot}
                 </div>
               ))}
             </div>
           </div>
+          {created.length > 0 && (
+            <div className="created-strip">
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <strong>Generated for this layout</strong>
+                <span className="muted">{created.length} stills · click for full screen</span>
+              </div>
+              <div className="created-row">
+                {created.map((item, index) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className="created-thumb"
+                    onClick={() => setViewer(index)}
+                    aria-label={`View ${item.title} full screen`}
+                  >
+                    <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {status && <p className="status">{status}</p>}
           {error && <p className="error">{error}</p>}
         </div>
@@ -474,6 +652,9 @@ function EditorPage() {
           )}
         </div>
       </div>
+      {viewer !== null && (
+        <FullscreenViewer items={createdSlides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
+      )}
     </section>
   );
 }

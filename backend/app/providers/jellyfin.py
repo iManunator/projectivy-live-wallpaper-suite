@@ -45,7 +45,7 @@ class JellyfinProvider:
         params = {
             "IncludeItemTypes": "Movie,Series",
             "Recursive": "true",
-            "Fields": "Overview,Genres,OfficialRating,CommunityRating,ProviderIds,RunTimeTicks,UserData",
+            "Fields": "Overview,Genres,OfficialRating,CommunityRating,ProviderIds,RunTimeTicks,UserData,ImageTags",
             "Limit": str(limit),
             "SortBy": "DateLastContentAdded,SortName",
             "SortOrder": "Descending",
@@ -92,6 +92,7 @@ class JellyfinProvider:
             hours, mins = divmod(minutes, 60)
             runtime = f"{hours}h {mins}m" if hours else f"{mins}m"
         year = raw.get("ProductionYear")
+        backdrop_url, logo_url, poster_url = self._artwork_urls(item_id, raw)
         return MediaItem(
             title=str(raw.get("Name") or "Untitled"),
             year=int(year) if year else None,
@@ -109,7 +110,30 @@ class JellyfinProvider:
             tmdb_id=str(providers.get("Tmdb") or "") or None,
             imdb_id=str(providers.get("Imdb") or "") or None,
             action_url=f"jellyfin://items/{item_id}",
-            backdrop_url=f"{self.url}/Items/{item_id}/Images/Backdrop?maxWidth=1920" if self.url else None,
-            logo_url=f"{self.url}/Items/{item_id}/Images/Logo" if self.url else None,
-            poster_url=f"{self.url}/Items/{item_id}/Images/Primary?maxHeight=600" if self.url else None,
+            backdrop_url=backdrop_url,
+            logo_url=logo_url,
+            poster_url=poster_url,
         )
+
+    def _image_url(self, item_id: str, kind: str, query: str = "") -> str | None:
+        if not self.url:
+            return None
+        suffix = f"?{query}" if query else ""
+        return f"{self.url}/Items/{item_id}/Images/{kind}{suffix}"
+
+    def _artwork_urls(self, item_id: str, raw: dict) -> tuple[str | None, str | None, str | None]:
+        tags = raw.get("ImageTags")
+        backdrops = raw.get("BackdropImageTags")
+        poster = self._image_url(item_id, "Primary", "maxHeight=600") if (not isinstance(tags, dict) or tags.get("Primary")) else None
+        logo = self._image_url(item_id, "Logo") if (not isinstance(tags, dict) or tags.get("Logo")) else None
+        if backdrops:
+            backdrop = self._image_url(item_id, "Backdrop", "maxWidth=1920")
+        elif isinstance(tags, dict) and tags.get("Primary"):
+            backdrop = self._image_url(item_id, "Primary", "maxWidth=1920")
+        elif isinstance(tags, dict) and tags.get("Thumb"):
+            backdrop = self._image_url(item_id, "Thumb", "maxWidth=1920")
+        elif tags is None and backdrops is None:
+            backdrop = self._image_url(item_id, "Backdrop", "maxWidth=1920")
+        else:
+            backdrop = None
+        return backdrop, logo, poster

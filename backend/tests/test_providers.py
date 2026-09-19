@@ -41,6 +41,8 @@ def test_jellyfin_parses_watch_state_and_deep_link():
     assert items[0].action_url == "jellyfin://items/abc"
     assert items[0].tmdb_id == "438631"
     assert items[0].source == "jellyfin"
+    assert items[0].backdrop_url == "http://jf:8096/Items/abc/Images/Backdrop?maxWidth=1920"
+    assert items[0].poster_url == "http://jf:8096/Items/abc/Images/Primary?maxHeight=600"
 
 
 def test_seerr_marks_requestable_when_not_in_library():
@@ -115,3 +117,20 @@ def test_tmdb_enrich_fills_missing_artwork():
     assert out.poster_url.endswith("/poster.jpg")
     skipped = TmdbProvider(api_key="").enrich(item)
     assert skipped.overview == ""
+
+
+def test_jellyfin_uses_primary_when_no_backdrop_tag():
+    payload = {
+        "Items": [
+            {
+                "Id": "poster-only",
+                "Name": "Still",
+                "ImageTags": {"Primary": "aaa"},
+                "BackdropImageTags": [],
+            }
+        ]
+    }
+    item = JellyfinProvider(url="http://jf:8096", api_key="k", user_id="u", client=FakeClient(payload)).list_items()[0]
+    assert item.backdrop_url == "http://jf:8096/Items/poster-only/Images/Primary?maxWidth=1920"
+    assert item.poster_url == "http://jf:8096/Items/poster-only/Images/Primary?maxHeight=600"
+    assert item.logo_url is None
