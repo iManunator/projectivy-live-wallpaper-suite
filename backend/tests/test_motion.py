@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -9,18 +11,21 @@ from PIL import Image
 from app.layouts import PRESETS
 from app.motion import (
     MotionProfile,
-    build_filtergraph,
     choose_delivery,
+    encoder_args,
     ffmpeg_bin,
+    ffprobe_bin,
     generate_motion,
     has_motion,
     intensity_from_preset,
+    ken_burns_window,
     leak_geometry,
+    leak_offset,
     max_motion_frame,
     pingpong_ease,
-    plate_kenburns_filters,
+    pingpong_ease_t,
     profile_from_settings,
-    zoompan_expr,
+    render_motion_frame,
 )
 from app.models import AppSettings, Layout, LayoutBackground, MediaItem
 from app.render import render_chrome, render_plate, render_still, save_jpeg, save_png
@@ -48,6 +53,64 @@ def _grab_frame(mp4: Path, frame: int, dest: Path) -> Image.Image:
 
 def _channel_delta(a: tuple[int, ...], b: tuple[int, ...]) -> int:
     return max(abs(x - y) for x, y in zip(a, b))
+
+
+def _probe_stream(mp4: Path) -> dict:
+    result = subprocess.run(
+        [
+            ffprobe_bin() or "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=avg_frame_rate,r_frame_rate,nb_frames,has_b_frames,profile,level,pix_fmt,codec_name",
+            "-of",
+            "json",
+            str(mp4),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    return json.loads(result.stdout)["streams"][0]
+
+
+def _probe_frame_pts(mp4: Path) -> list[float]:
+    result = subprocess.run(
+        [
+            ffprobe_bin() or "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "frame=pts_time,pkt_pts_time,pict_type,key_frame",
+            "-of",
+            "json",
+            str(mp4),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    pts = []
+    for frame in json.loads(result.stdout).get("frames", []):
+        raw = frame.get("pts_time") or frame.get("pkt_pts_time")
+        if raw not in (None, "N/A"):
+            pts.append(float(raw))
+    return pts
+
+
+def _stripe_plate(width: int, height: int) -> Image.Image:
+    plate = Image.new("RGB", (width, height))
+    px = plate.load()
+    for y in range(height):
+        for x in range(width):
+            v = 220 if (x // 4) % 2 == 0 else 40
+            h = 220 if (y // 4) % 2 == 0 else 40
+            px[x, y] = (v, h, 80)
+    return plate
 
 
 def test_leak_geometry_pads_beyond_pan():
@@ -130,52 +193,86 @@ def test_profile_from_settings_defaults():
     assert profile.quality == "cinematic"
 
 
-def test_parallax_filtergraph_has_two_layers():
-    graph = build_filtergraph(
-        MotionProfile(style="parallax", intensity=0.6, duration=6, light_leak=False),
-        has_chrome=True,
-    )
-    assert "[0:v]" in graph
-    assert "[1:v]" in graph
-    assert "[2:v]" not in graph
-    assert "overlay=x=0:y=0" in graph
-    assert "zoompan=" in graph
-    assert "flags=lanczos" in graph
-    assert "eval=frame" not in graph
-    assert "[mid],format" not in graph
-    assert "overlay=x='" not in graph
-    z_expr = zoompan_expr(0.05, 20, 48, 1920, 1080, 30).split("z=")[1].split(":")[0]
-    assert "," not in z_expr
-    assert "sin(2*PI" not in z_expr
-    assert "sin(PI*on/" in z_expr
+def test_encoder_is_projectivy_cfr_without_bframes():
+    profile = MotionProfile(style="parallax", quality="cinematic", duration=12, fps=30)
+    args = encoder_args(profile)
+    joined = " ".join(args)
+    assert "-profile:v main" in joined
+    assert "-level 4.0" in joined
+    assert "-pix_fmt yuv420p" in joined
+    assert "+faststart" in joined
+    assert "-fps_mode cfr" in joined
+    assert "-bf 0" in joined
+    assert "bframes=0" in joined
+    assert "scenecut=0" in joined
+    assert "open-gop=0" in joined
+    assert "zoompan" not in joined
+    # VBV headroom: maxrate is 2× target so pans do not underflow.
+    assert "-maxrate 11000k" in joined
+    assert "-b:v 5500k" in joined
+    assert "-frames:v 360" in joined
 
 
-def test_kenburns_and_drift_lock_chrome_when_layered():
-    for style in ("kenburns", "drift", "parallax"):
-        graph = build_filtergraph(
-            MotionProfile(style=style, intensity=0.8, duration=6, light_leak=False),
-            has_chrome=True,
-        )
-        assert "[1:v]" in graph
-        assert "overlay=x=0:y=0" in graph
-        assert "zoompan=" in graph
-        assert "sin(2*PI" not in graph
+def test_ken_burns_window_is_subpixel_pingpong():
+    """Bake must zoom *in* and rest at the loop join — not a bipolar sine zoom-out."""
+    profile = MotionProfile(style="parallax", intensity=0.55, duration=12, fps=30, width=1920, height=1080)
+    start = ken_burns_window(0, profile, 1920, 1080)
+    peak = ken_burns_window(max_motion_frame(profile.frames), profile, 1920, 1080)
+    last = ken_burns_window(profile.frames - 1, profile, 1920, 1080)
+    wrap = ken_burns_window(profile.frames, profile, 1920, 1080)
+    assert pingpong_ease_t(0.0) == 0.0
+    assert pingpong_ease_t(0.5) == pytest.approx(1.0)
+    assert pingpong_ease_t(1.0) == pytest.approx(0.0)
+    assert "sin(2*PI" not in pingpong_ease(profile.frames, "on")
+    assert start.zoom == pytest.approx(profile.zoom_from)
+    assert peak.zoom == pytest.approx(profile.zoom_from + profile.bg_zoom_amp)
+    assert peak.zoom > start.zoom
+    assert wrap.zoom == pytest.approx(start.zoom)
+    assert wrap.x0 == pytest.approx(start.x0)
+    assert abs(last.x0 - start.x0) < 1.0
+    xs = [ken_burns_window(n, profile, 1920, 1080).x0 for n in range(profile.frames)]
+    adj = [abs(xs[i + 1] - xs[i]) for i in range(len(xs) - 1)]
+    span = abs(xs[max_motion_frame(profile.frames)] - xs[0])
+    assert span > 8
+    assert max(adj) < span * 0.12
+    # True subpixel path — windows are not snapped to integer source pixels.
+    assert any(abs(x - round(x)) > 0.02 for x in xs)
+
+
+def test_locked_chrome_does_not_ken_burns():
+    profile = MotionProfile(style="kenburns", intensity=0.96, duration=2, fps=12, width=64, height=36, light_leak=False)
+    plate = Image.new("RGB", (64, 36), (200, 24, 24))
+    chrome = Image.new("RGBA", (64, 36), (0, 0, 0, 0))
+    from PIL import ImageDraw
+
+    ImageDraw.Draw(chrome).rectangle([0, 0, 20, 12], fill=(250, 250, 250, 255))
+    first = render_motion_frame(plate, 0, profile, chrome=chrome)
+    moved = render_motion_frame(plate, max_motion_frame(profile.frames), profile, chrome=chrome)
+    assert _channel_delta(first.getpixel((4, 4)), moved.getpixel((4, 4))) <= 6
 
 
 def test_parallax_light_leak_sits_under_locked_chrome():
-    graph = build_filtergraph(
-        MotionProfile(style="parallax", intensity=0.6, duration=6, light_leak=True),
-        has_chrome=True,
-    )
-    assert "[2:v]" in graph
-    assert "colorchannelmixer" in graph
-    assert "[lit]" in graph
-    assert "[mid]" not in graph
-    leak_overlay = graph.find("overlay=x='")
-    chrome_overlay = graph.rfind("overlay=x=0:y=0")
-    assert 0 <= graph.find("[2:v]") < leak_overlay < chrome_overlay
-    # Padded leak must start at a negative origin so a pan cannot uncover the frame.
-    assert "overlay=x='-" in graph
+    profile = MotionProfile(style="parallax", intensity=0.96, duration=2, fps=12, width=80, height=45, light_leak=True)
+    x, y, lw, lh = leak_geometry(profile)
+    assert lw > profile.width
+    assert lh > profile.height
+    assert x.startswith("-")
+    assert "," not in x and "," not in y
+    lx0, ly0 = leak_offset(0, profile)
+    lx1, _ = leak_offset(max_motion_frame(profile.frames), profile)
+    assert lx0 < 0 and ly0 < 0
+    assert lx1 > lx0
+    plate = Image.new("RGB", (80, 45), (10, 10, 10))
+    chrome = Image.new("RGBA", (80, 45), (0, 0, 0, 0))
+    from PIL import ImageDraw
+    from app.motion import make_leak_layer
+
+    ImageDraw.Draw(chrome).rectangle([0, 0, 80, 10], fill=(8, 8, 8, 255))
+    leak = make_leak_layer(profile)
+    first = render_motion_frame(plate, 0, profile, chrome=chrome, leak=leak)
+    moved = render_motion_frame(plate, max_motion_frame(profile.frames), profile, chrome=chrome, leak=leak)
+    # Opaque letterbox chrome stays put while the leak drifts underneath.
+    assert _channel_delta(first.getpixel((8, 4)), moved.getpixel((8, 4))) <= 4
 
 
 def test_intensity_presets():
@@ -196,30 +293,16 @@ def test_intensity_presets_change_output_clearly():
     assert bold.bg_pan > subtle.bg_pan * 2
 
 
-def test_kenburns_without_chrome_is_single_layer():
-    graph = build_filtergraph(MotionProfile(style="kenburns"), has_chrome=False)
-    assert "[0:v]" not in graph
-    assert "overlay=" not in graph
-    assert "zoompan=" in graph
-    assert "flags=lanczos" in graph
-
-
-def test_kenburns_path_matches_css_pingpong():
-    """Bake must zoom *in* and rest at the loop join — not a bipolar sine zoom-out."""
-    profile = MotionProfile(style="parallax", intensity=0.55, duration=12, fps=30)
-    graph = plate_kenburns_filters(profile)
-    assert "zoompan=" in graph
-    assert "flags=lanczos" in graph
-    assert pingpong_ease(profile.frames, "on") in graph
-    assert "sin(2*PI" not in graph
-    assert profile.zoom_from >= 1.0
-    assert f"z='{profile.zoom_from}+" in graph
-    sw, sh = profile.width * 2, profile.height * 2
-    assert f"scale={sw}:{sh}:flags=lanczos" in graph
-    # zoompan is nearest-neighbour: Ken Burns at 2× then lanczos down.
-    assert f"s={sw}x{sh}" in graph
-    after_zp = graph.split("zoompan=", 1)[1]
-    assert f"scale={profile.width}:{profile.height}:flags=lanczos" in after_zp
+def test_kenburns_without_chrome_is_plate_only():
+    profile = MotionProfile(style="kenburns", intensity=0.8, duration=2, fps=12, width=48, height=27, light_leak=False)
+    plate = Image.new("RGB", (48, 27))
+    px = plate.load()
+    for y in range(27):
+        for x in range(48):
+            px[x, y] = (int(255 * x / 47), int(255 * y / 26), 40)
+    first = render_motion_frame(plate, 0, profile)
+    moved = render_motion_frame(plate, max_motion_frame(profile.frames), profile)
+    assert _channel_delta(first.getpixel((24, 13)), moved.getpixel((24, 13))) >= 4
 
 
 def test_bake_amplitude_tracks_css_preview():
@@ -461,13 +544,9 @@ def test_ffmpeg_uniform_plate_vignette_does_not_zoom(tmp_path: Path):
 
 @pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
 def test_ffmpeg_kenburns_is_temporally_smooth(tmp_path: Path):
-    """Adjacent frames move less than the 0→peak travel (CSS-like ping-pong, not choppy jumps)."""
+    """Adjacent-frame travel follows ping-pong speed — no duplicate/jump stutter."""
     width, height = 320, 180
-    plate_img = Image.new("RGB", (width, height))
-    px = plate_img.load()
-    for y in range(height):
-        for x in range(width):
-            px[x, y] = (int(255 * x / (width - 1)), int(255 * y / (height - 1)), 40)
+    plate_img = _stripe_plate(width, height)
     jpg = tmp_path / "smooth.jpg"
     plate = tmp_path / "smooth_plate.jpg"
     chrome = tmp_path / "smooth_chrome.png"
@@ -478,8 +557,8 @@ def test_ffmpeg_kenburns_is_temporally_smooth(tmp_path: Path):
         style="kenburns",
         quality="light",
         intensity=0.96,
-        duration=1.0,
-        fps=12,
+        duration=2.0,
+        fps=24,
         width=width,
         height=height,
         light_leak=False,
@@ -488,19 +567,72 @@ def test_ffmpeg_kenburns_is_temporally_smooth(tmp_path: Path):
     assert ok, msg
     mp4 = jpg.with_suffix(".mp4")
     grabbed = [_grab_frame(mp4, n, tmp_path / f"sm{n}.png") for n in range(profile.frames)]
-    sample = (width // 2, height // 2)
+
+    def region_sad(a: Image.Image, b: Image.Image) -> int:
+        ca = a.crop((48, 36, width - 48, height - 36))
+        cb = b.crop((48, 36, width - 48, height - 36))
+        return sum(abs(p - q) for p, q in zip(ca.tobytes(), cb.tobytes()))
+
     peak = max_motion_frame(profile.frames)
-    span = _channel_delta(grabbed[0].getpixel(sample), grabbed[peak].getpixel(sample))
-    assert span >= 8, span
-    adjacent = [
-        _channel_delta(grabbed[i].getpixel(sample), grabbed[i + 1].getpixel(sample))
-        for i in range(len(grabbed) - 1)
-    ]
+    span = region_sad(grabbed[0], grabbed[peak])
+    assert span >= 50_000, span
+    adjacent = [region_sad(grabbed[i], grabbed[i + 1]) for i in range(len(grabbed) - 1)]
+    assert min(adjacent) > 0
     assert max(adjacent) < span
     assert sum(adjacent) / len(adjacent) <= span * 0.55
-    # Seamless loop: last frame is closer to the start than to peak travel.
-    join = _channel_delta(grabbed[0].getpixel(sample), grabbed[-1].getpixel(sample))
-    assert join < span
+    join = region_sad(grabbed[0], grabbed[-1])
+    assert join < span * 0.35
+    # Speed envelope matches CSS ease-in-out (not zoompan stair-steps).
+    speeds = [abs(math.sin(2 * math.pi * (i + 0.5) / profile.frames)) for i in range(len(adjacent))]
+    mean_s = sum(adjacent) / len(adjacent)
+    mean_v = sum(speeds) / len(speeds)
+    num = sum((s - mean_s) * (v - mean_v) for s, v in zip(adjacent, speeds))
+    den_s = math.sqrt(sum((s - mean_s) ** 2 for s in adjacent))
+    den_v = math.sqrt(sum((v - mean_v) ** 2 for v in speeds))
+    corr = num / (den_s * den_v)
+    assert corr >= 0.93, corr
+
+
+@pytest.mark.skipif(ffmpeg_bin() is None or ffprobe_bin() is None, reason="ffmpeg not installed")
+def test_ffmpeg_loop_is_cfr_without_bframes_or_dupes(tmp_path: Path):
+    """Player vs encoder: constant frame rate, no B-frames, no duplicate timestamps."""
+    width, height = 320, 180
+    plate_img = _stripe_plate(width, height)
+    jpg = tmp_path / "cfr.jpg"
+    plate = tmp_path / "cfr_plate.jpg"
+    chrome = tmp_path / "cfr_chrome.png"
+    save_jpeg(plate_img, jpg)
+    save_jpeg(plate_img, plate)
+    save_png(Image.new("RGBA", (width, height), (0, 0, 0, 0)), chrome)
+    profile = MotionProfile(
+        style="parallax",
+        quality="light",
+        intensity=0.55,
+        duration=2.0,
+        fps=30,
+        width=width,
+        height=height,
+        light_leak=False,
+    )
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    mp4 = jpg.with_suffix(".mp4")
+    stream = _probe_stream(mp4)
+    assert stream["codec_name"] == "h264"
+    assert stream["profile"] == "Main"
+    assert int(stream["level"]) == 40
+    assert stream["pix_fmt"] == "yuv420p"
+    assert stream["r_frame_rate"] == "30/1"
+    assert stream["avg_frame_rate"] == "30/1"
+    assert int(stream["has_b_frames"]) == 0
+    assert int(stream.get("nb_frames") or 0) == profile.frames
+    pts = _probe_frame_pts(mp4)
+    assert len(pts) == profile.frames
+    step = 1.0 / profile.fps
+    deltas = [pts[i + 1] - pts[i] for i in range(len(pts) - 1)]
+    assert all(abs(d - step) < 0.0008 for d in deltas), deltas[:8]
+    assert all(d > 0 for d in deltas)
+
 
 @pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
 def test_generate_motion_survives_exdev_promote(tmp_path: Path, monkeypatch):
