@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
-from app.models import Layout, MediaItem
+from app.models import GradientStop, Layout, LayoutBackground, MediaItem
 
 CANVAS = (1920, 1080)
 
@@ -83,6 +83,104 @@ def _load_image(path_or_bytes: str | Path | bytes | None, size: tuple[int, int])
         return resized.crop((left, top, left + target_w, top + target_h))
     except Exception:
         return None
+
+
+def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, value))
+
+
+def _normalized_stops(bg: LayoutBackground) -> list[tuple[float, tuple[int, int, int, int]]]:
+    master = _clamp(bg.gradient_opacity)
+    raw = list(bg.gradient_stops or [])
+    if not raw:
+        raw = [
+            GradientStop(color=bg.color, position=0.0, opacity=0.92),
+            GradientStop(color=bg.color, position=1.0, opacity=0.0),
+        ]
+    stops: list[tuple[float, tuple[int, int, int, int]]] = []
+    for stop in raw:
+        r, g, b, a = _hex_color(stop.color)
+        alpha = int(a * _clamp(stop.opacity) * master)
+        stops.append((_clamp(stop.position), (r, g, b, alpha)))
+    stops.sort(key=lambda item: item[0])
+    if not any(item[0] <= 0.0 for item in stops):
+        stops.insert(0, (0.0, stops[0][1]))
+    if not any(item[0] >= 1.0 for item in stops):
+        stops.append((1.0, stops[-1][1]))
+    return stops
+
+
+def _lerp_color(
+    stops: list[tuple[float, tuple[int, int, int, int]]], t: float
+) -> tuple[int, int, int, int]:
+    t = _clamp(t)
+    if t <= stops[0][0]:
+        return stops[0][1]
+    for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
+        if t <= t1:
+            span = max(t1 - t0, 1e-6)
+            u = _clamp((t - t0) / span)
+            return tuple(int(a + (b - a) * u) for a, b in zip(c0, c1))  # type: ignore[return-value]
+    return stops[-1][1]
+
+
+def linear_gradient_rgba(size: tuple[int, int], bg: LayoutBackground) -> Image.Image:
+    width, height = size
+    stops = _normalized_stops(bg)
+    diag = max(int((width**2 + height**2) ** 0.5) + 8, 8)
+    strip = Image.new("RGBA", (diag, 1))
+    px = strip.load()
+    last = diag - 1 or 1
+    for x in range(diag):
+        px[x, 0] = _lerp_color(stops, x / last)
+    band = strip.resize((diag, diag), Image.Resampling.BILINEAR)
+    # CSS: 0deg = up, 90deg = right. A left-to-right strip is 90deg.
+    rotated = band.rotate(90.0 - float(bg.gradient_angle or 90.0), resample=Image.Resampling.BICUBIC, expand=True)
+    left = (rotated.width - width) // 2
+    top = (rotated.height - height) // 2
+    return rotated.crop((left, top, left + width, top + height))
+
+
+def radial_gradient_rgba(size: tuple[int, int], bg: LayoutBackground) -> Image.Image:
+    stops = _normalized_stops(bg)
+    sample = 256
+    shade = Image.radial_gradient("L").resize((sample, sample), Image.Resampling.BICUBIC)
+    lut = [_lerp_color(stops, i / 255) for i in range(256)]
+    out = Image.new("RGBA", (sample, sample))
+    sp = shade.load()
+    op = out.load()
+    for y in range(sample):
+        for x in range(sample):
+            op[x, y] = lut[sp[x, y]]
+    return out.resize(size, Image.Resampling.BICUBIC)
+
+
+def gradient_overlay(size: tuple[int, int], bg: LayoutBackground) -> Image.Image | None:
+    if bg.gradient_opacity <= 0.001:
+        return None
+    kind = (bg.gradient_type or "linear").lower()
+    if kind == "radial":
+        return radial_gradient_rgba(size, bg)
+    return linear_gradient_rgba(size, bg)
+
+
+def vignette_overlay(size: tuple[int, int], amount: float) -> Image.Image | None:
+    strength = _clamp(amount)
+    if strength <= 0.001:
+        return None
+    shade = Image.radial_gradient("L").resize(size, Image.Resampling.BICUBIC)
+    alpha = shade.point(lambda v: int(v * strength * 0.92))
+    overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    overlay.putalpha(alpha)
+    return overlay
+
+
+def color_overlay(size: tuple[int, int], color: str, opacity: float) -> Image.Image | None:
+    amount = _clamp(opacity)
+    if amount <= 0.001:
+        return None
+    r, g, b, _ = _hex_color(color)
+    return Image.new("RGBA", size, (r, g, b, int(255 * amount)))
 
 
 def fade_alpha_mask(layout: Layout, size: tuple[int, int]) -> Image.Image:
@@ -192,8 +290,18 @@ def render_chrome(item: MediaItem, layout: Layout) -> Image.Image:
     """Transparent vignette + metadata (moves less / stays put in parallax VIDEO)."""
     size = (layout.canvas_width, layout.canvas_height)
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    bg = layout.background
+    extra = gradient_overlay(size, bg)
+    if extra is not None:
+        overlay = Image.alpha_composite(overlay, extra)
+    wash_overlay = color_overlay(size, bg.overlay_color, bg.overlay_opacity)
+    if wash_overlay is not None:
+        overlay = Image.alpha_composite(overlay, wash_overlay)
+    vignette = vignette_overlay(size, bg.vignette)
+    if vignette is not None:
+        overlay = Image.alpha_composite(overlay, vignette)
     mask = fade_alpha_mask(layout, size)
-    wash = Image.new("RGBA", size, (*_hex_color(layout.background.color)[:3], 255))
+    wash = Image.new("RGBA", size, (*_hex_color(bg.color)[:3], 255))
     overlay = Image.composite(wash, overlay, mask)
     _draw_text_layers(overlay, item, layout)
     return overlay

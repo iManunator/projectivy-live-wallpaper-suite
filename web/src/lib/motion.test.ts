@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, nearestMotionPreset, shouldPreferVideo } from "./motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, shouldPreferVideo } from "./motion";
 
 describe("motion options", () => {
   it("clamps intensity", () => {
@@ -31,5 +31,11 @@ describe("motion options", () => {
     expect(intensityFromPreset("bold")).toBe(0.88);
     expect(nearestMotionPreset(0.9)).toBe("bold");
     expect(nearestMotionPreset(0.3)).toBe("subtle");
+  });
+
+  it("builds CSS motion preview variables", () => {
+    const vars = motionPreviewVars("parallax", 0.88, 6);
+    expect(Number(vars["--motion-zoom-to"])).toBeGreaterThan(1.05);
+    expect(vars["--motion-duration"]).toBe("6s");
   });
 });

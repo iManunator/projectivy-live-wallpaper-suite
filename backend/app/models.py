@@ -47,6 +47,12 @@ class Layer(BaseModel):
     align: str = "left"
 
 
+class GradientStop(BaseModel):
+    color: str = "#000000"
+    position: float = 0.0
+    opacity: float = 1.0
+
+
 class LayoutBackground(BaseModel):
     mode: str = "backdrop"
     color: str = "#050505"
@@ -56,6 +62,13 @@ class LayoutBackground(BaseModel):
     fade_bottom: float = 0.38
     fade_softness: float = 0.45
     brightness: float = 1.0
+    gradient_type: str = "linear"
+    gradient_angle: float = 90.0
+    gradient_opacity: float = 0.0
+    gradient_stops: list[GradientStop] = Field(default_factory=list)
+    vignette: float = 0.0
+    overlay_color: str = "#000000"
+    overlay_opacity: float = 0.0
 
 
 class Layout(BaseModel):

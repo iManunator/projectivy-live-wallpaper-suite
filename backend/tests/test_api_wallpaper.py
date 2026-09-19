@@ -98,6 +98,7 @@ def test_options_lists_pick_modes_and_motion(client):
     assert "layout_round_robin" in body["pick_modes"]
     assert "tonight" in body["pick_modes"]
     assert "subtle" in body["motion_presets"]
+    assert "linear" in body["gradient_types"]
     assert "cinephile" in body["taste_profiles"]
 
 
@@ -362,6 +363,59 @@ def test_generate_motion_batch_contract(client):
 
 def test_media_artwork_requires_jellyfin(client):
     assert client.get("/api/media/artwork/abc").status_code == 404
+
+
+def test_media_artwork_serves_demo_still(client):
+    response = client.get("/api/media/artwork/demo-jf-1")
+    assert response.status_code == 200
+    assert response.content[:3] == b"\xff\xd8\xff"
+    assert response.headers["content-type"].startswith("image/")
+    assert len(response.content) > 20_000
+
+
+def test_demo_catalog_lists_licenses(client):
+    body = client.get("/api/demo/catalog").json()
+    assert body["count"] == 6
+    licenses = {row["license"] for row in body["items"]}
+    assert "Public domain" in licenses
+    assert any(row["title"] == "Northlight" for row in body["items"])
+    attr = client.get("/api/demo/attribution")
+    assert attr.status_code == 200
+    assert b"CC BY-SA 3.0" in attr.content
+    assert b"Diliff" in attr.content
+
+
+def test_media_artwork_rejects_html(client, monkeypatch):
+    from app.config import save_settings
+    from app.models import AppSettings
+
+    save_settings(AppSettings(jellyfin={"url": "http://jf:8096", "api_key": "secret", "user_id": "u"}))
+
+    class FakeHttp:
+        def __init__(self, timeout: float = 15.0):
+            self.timeout = timeout
+
+        def get_bytes(self, url, headers=None):
+            return b"<!DOCTYPE html><title>login</title>"
+
+    monkeypatch.setattr("app.api.HttpClient", FakeHttp)
+    response = client.get("/api/media/artwork/not-a-demo")
+    assert response.status_code == 404
+
+
+def test_generate_returns_message(client):
+    out = client.post(
+        "/api/generate",
+        json={"layout": "Google TV Clean", "source": "demo", "limit": 8, "skip_existing": False, "ids": ["demo-jf-2"]},
+    ).json()
+    assert out["count"] == 1
+    assert "Harbor Season" in out["message"]
+
+
+def test_provider_test_includes_message(client):
+    body = client.post("/api/settings/test/demo").json()
+    assert body["ok"] is True
+    assert "Demo catalog ready" in body["message"]
 
 
 def test_media_artwork_proxies_jellyfin_bytes(client, monkeypatch):

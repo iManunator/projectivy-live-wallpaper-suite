@@ -20,7 +20,7 @@ class JellyfinProvider:
     def is_configured(self) -> bool:
         return bool(self.url and self.api_key)
 
-    def _headers(self) -> dict[str, str]:
+    def auth_headers(self) -> dict[str, str]:
         auth = (
             'MediaBrowser Client="Wallpaparr", Device="wallpaparr", '
             f'DeviceId="wallpaparr", Version="1.0.0"'
@@ -28,6 +28,9 @@ class JellyfinProvider:
         if self.api_key:
             auth += f', Token="{self.api_key}"'
         return {"Authorization": auth, "X-Emby-Token": self.api_key}
+
+    def _headers(self) -> dict[str, str]:
+        return self.auth_headers()
 
     def test(self) -> dict:
         if not self.is_configured():

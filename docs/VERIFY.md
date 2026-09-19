@@ -52,7 +52,15 @@ First boot seeds six demo titles into the **Netflix Hero** layout when the catal
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
 ```
 
-Expected fields (tvbgsuite-compatible): `imageUrl`, `actionUrl`, `path`, `title`, `layout`. Demo `title` for `sort=latest` is **Northlight**. Open `imageUrl` in a browser — it is a JPEG from the seeded gallery.
+Expected fields (tvbgsuite-compatible): `imageUrl`, `actionUrl`, `path`, `title`, `layout`. Demo `title` for `sort=latest` is **Northlight**. Open `imageUrl` in a browser — it is a JPEG painted over a **license-safe cinematic still** (NASA aurora for Northlight), not a synthetic-only gradient.
+
+License-safe demo catalog (Wikimedia Commons: NASA, NARA, Library of Congress, one CC BY-SA photograph):
+
+```bash
+curl -sf http://127.0.0.1:8787/api/demo/catalog
+curl -sf -o /tmp/northlight.jpg http://127.0.0.1:8787/api/media/artwork/demo-jf-1
+ls -l /tmp/northlight.jpg
+```
 
 Tonight + health (same demo catalog):
 

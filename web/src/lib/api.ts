@@ -50,6 +50,13 @@ export const api = {
     }>(`/api/tonight?${params.toString()}`);
   },
   dashboard: () => json<Record<string, unknown>>("/api/dashboard"),
+  demoCatalog: () =>
+    json<{
+      ok: boolean;
+      count: number;
+      note: string;
+      items: Array<{ title: string; license: string; artist: string; artwork_url: string }>;
+    }>("/api/demo/catalog"),
   queues: (layout?: string) =>
     json<Array<{ id: string; label: string; count: number; titles: string[] }>>(
       layout ? `/api/queues?layout=${encodeURIComponent(layout)}` : "/api/queues",

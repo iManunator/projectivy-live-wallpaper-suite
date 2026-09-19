@@ -78,7 +78,7 @@ def test_run_generate_downloads_without_injected_client(suite_dirs, monkeypatch)
     monkeypatch.setattr(
         generate_mod,
         "collect_items",
-        lambda source, limit: [
+        lambda source, limit, warnings=None: [
             Item(
                 title="Silo",
                 year=2023,
@@ -120,3 +120,42 @@ def test_default_http_get_sends_jellyfin_auth(suite_dirs, monkeypatch):
     assert seen["headers"]["Authorization"].startswith("MediaBrowser")
     assert "secret" in seen["headers"]["Authorization"]
     assert seen["headers"]["X-Emby-Token"] == "secret"
+
+
+def test_fetch_artwork_rejects_html(suite_dirs):
+    from app.generate import _fetch_artwork
+    from app.models import MediaItem
+
+    item = MediaItem(
+        title="From",
+        backdrop_url="http://jf:8096/Items/x/Images/Backdrop",
+        jellyfin_id="real-1",
+        source="jellyfin",
+    )
+    data = _fetch_artwork(item, http_get=lambda url: b"<!DOCTYPE html><html>nope</html>")
+    assert data is None
+
+
+def test_jellyfin_unconfigured_generate_warns_and_uses_demo(suite_dirs):
+    from app.generate import run_generate
+    from app.models import GenerateRequest
+
+    out = run_generate(GenerateRequest(source="jellyfin", layout="Netflix Hero", limit=1, skip_existing=False))
+    assert out["count"] == 1
+    assert out["created"]
+    assert any("Jellyfin is not configured" in w for w in out["warnings"])
+    assert "Created 1 still" in out["message"]
+
+
+def test_generate_one_uses_bundled_demo_still(suite_dirs):
+    from app.generate import generate_one
+    from app.providers.demo import DemoProvider
+    from app.render import synthetic_backdrop
+    from PIL import Image
+
+    item = DemoProvider().list_items()[0]
+    record = generate_one(item, "Netflix Hero")
+    path = suite_dirs["gallery"] / "Netflix Hero" / record.filename
+    painted = Image.open(path)
+    synth = synthetic_backdrop(item.title, painted.size)
+    assert painted.getpixel((1500, 360)) != synth.getpixel((1500, 360))

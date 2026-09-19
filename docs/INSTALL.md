@@ -27,6 +27,8 @@ This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: bu
 | --- | --- |
 | Health | `http://127.0.0.1:8787/api/health` |
 | Demo wallpaper | `http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest` |
+| Demo catalog | `http://127.0.0.1:8787/api/demo/catalog` |
+| Demo still | `http://127.0.0.1:8787/api/media/artwork/demo-jf-1` |
 | UI | `http://127.0.0.1:8787` |
 
 Empty data dirs auto-seed a demo catalog.

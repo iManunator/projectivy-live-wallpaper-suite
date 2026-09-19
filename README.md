@@ -57,8 +57,8 @@ The GitHub repository is still named `projectivy-live-wallpaper-suite`. The prod
 | --- | --- |
 | **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock), see the wallpaper *as the launcher will*. |
 | **Gallery** | Every generated still. Click a still for a full-screen view. Badges for smart queues and baked VIDEO. Pin a title. Hide it forever. |
-| **Editor** | Layout DNA — safe zones, fades, type slots on an in-page 16:9 stage. With Jellyfin connected, the stage uses a real library backdrop. |
-| **Generate** | Demo catalog or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Optional parallax VIDEO bake (ffmpeg). |
+| **Editor** | Flagship 16:9 stage — linear/radial multi-stop gradients, vignette, overlays, edge fades, TV chrome, motion preview. Demo or Jellyfin artwork. Drag metadata; save persists the layout. |
+| **Generate** | Demo catalog (real public-domain cinematic stills) or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Optional parallax VIDEO bake (ffmpeg). Connection/generate toasts. |
 | **Dashboard** | Ops: last cron, provider config, queue counts. |
 | **Settings** | Motion intensity, taste weights, overlays, cron. |
 
@@ -122,7 +122,7 @@ curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
 curl -sf http://127.0.0.1:8787/api/dashboard
 ```
 
-Open **http://127.0.0.1:8787** — Tonight is the home page. Empty data dirs auto-seed a demo catalog (**Northlight** is `sort=latest`). No Jellyfin keys required.
+Open **http://127.0.0.1:8787** — Tonight is the home page. Empty data dirs auto-seed a demo catalog of **license-safe cinematic stills** (NASA aurora, NARA harbor/desert, Ortelius map, NASA Black Marble, Kew Palm House). **Northlight** is `sort=latest`. No Jellyfin keys required. Attribution: `backend/app/demo_stills/ATTRIBUTION.md`.
 
 Unit tests (no Docker): `./scripts/test.sh`.
 

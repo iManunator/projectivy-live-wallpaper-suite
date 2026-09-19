@@ -8,7 +8,10 @@ from pathlib import Path
 
 from app import catalog as catalog_store
 from app.config import load_settings
+from app.demo_art import still_path_for_item
+from app.images import looks_like_image
 from app.layouts import load_layout
+from app.messages import generate_message
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
 from app.motion import generate_motion, has_motion, profile_from_settings
 from app.providers import HttpClient
@@ -33,26 +36,52 @@ def _providers_from_settings():
     }
 
 
-def collect_items(source: str, limit: int) -> list[MediaItem]:
+def collect_items(source: str, limit: int, warnings: list[str] | None = None) -> list[MediaItem]:
     providers = _providers_from_settings()
     key = (source or "demo").lower()
     if key in ("seerr", "jellyseerr"):
         key = "jellyseerr"
+    notes = warnings if warnings is not None else []
+
+    def warn(message: str) -> None:
+        notes.append(message)
+
     if key == "all":
         items: list[MediaItem] = []
         for name in ("jellyfin", "jellyseerr", "demo"):
-            try:
-                items.extend(providers[name].list_items(limit=limit))
-            except Exception:
+            provider = providers[name]
+            if name != "demo" and not provider.is_configured():
                 continue
+            try:
+                items.extend(provider.list_items(limit=limit))
+            except Exception as exc:
+                warn(f"{name}: {exc}")
+                continue
+        if not items:
+            warn("No configured libraries returned titles; using the demo catalog.")
+            items = providers["demo"].list_items(limit=limit)
         return _dedupe(items)[:limit]
     provider = providers.get(key) or providers["demo"]
-    try:
-        items = provider.list_items(limit=limit)
-    except Exception:
-        items = []
-    if not items and key != "demo":
+    items = []
+    used_fallback = False
+    if key != "demo" and not provider.is_configured():
+        label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+        warn(f"{label} is not configured. Using the demo catalog.")
+        used_fallback = True
         items = providers["demo"].list_items(limit=limit)
+    else:
+        try:
+            items = provider.list_items(limit=limit)
+        except Exception as exc:
+            label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+            warn(f"{label} request failed: {exc}. Using the demo catalog.")
+            used_fallback = True
+            items = []
+        if not items and key != "demo":
+            if not used_fallback:
+                label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+                warn(f"{label} returned no movies or series. Using the demo catalog.")
+            items = providers["demo"].list_items(limit=limit)
     tmdb = providers["tmdb"]
     if tmdb.is_configured():
         items = [tmdb.enrich(item) for item in items]
@@ -94,18 +123,12 @@ def _headers_for_url(url: str) -> dict[str, str] | None:
     base = (jf.get("url") or "").rstrip("/")
     key = jf.get("api_key") or ""
     if base and key and url.startswith(base):
-        return JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "")._headers()
+        return JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "").auth_headers()
     return None
 
 
 def _looks_like_image(data: bytes) -> bool:
-    return bool(data) and (
-        data[:3] == b"\xff\xd8\xff"
-        or data[:8] == b"\x89PNG\r\n\x1a\n"
-        or data[:6] in (b"GIF87a", b"GIF89a")
-        or data[:4] == b"RIFF"
-        or data[:4] == b"\x00\x00\x00\x0c"
-    )
+    return looks_like_image(data)
 
 
 def _default_http_get(url: str) -> bytes:
@@ -122,8 +145,11 @@ def _fetch_artwork(item: MediaItem, http_get=None) -> bytes | None:
             data = getter(url)
         except Exception:
             continue
-        if data:
+        if data and looks_like_image(data):
             return data
+    local = still_path_for_item(item)
+    if local and local.is_file():
+        return local.read_bytes()
     return None
 
 
@@ -203,7 +229,12 @@ def generate_one(
 
 
 def run_generate(request: GenerateRequest, http_get=None) -> dict:
-    items = collect_items(request.source, request.limit)
+    warnings: list[str] = []
+    failed: list[str] = []
+    pull = request.limit
+    if request.ids:
+        pull = max(request.limit, 40)
+    items = collect_items(request.source, pull, warnings=warnings)
     if request.ids:
         wanted = {i.lower() for i in request.ids}
         items = [
@@ -226,13 +257,20 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
             continue
         if request.replace_existing and matching_records(catalog, item, request.layout):
             replaced.append(item.title)
-        record = generate_one(
-            item,
-            request.layout,
-            motion=request.motion,
-            replace=request.replace_existing,
-            http_get=http_get,
-        )
+        try:
+            record = generate_one(
+                item,
+                request.layout,
+                motion=request.motion,
+                replace=request.replace_existing,
+                http_get=http_get,
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            failed.append(item.title)
+            warnings.append(f"{item.title}: could not render ({exc})")
+            continue
         if record:
             created.append(record.title)
             catalog = catalog_store.load_catalog()
@@ -241,13 +279,17 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         doomed = records_to_cleanup(catalog_store.load_catalog(), items, request.layout)
         cleaned = [rec.title for rec in doomed]
         catalog_store.remove_records({rec.id for rec in doomed})
-    return {
+    result = {
         "created": created,
         "skipped": skipped,
         "replaced": replaced,
         "cleaned": cleaned,
+        "failed": failed,
+        "warnings": warnings,
         "count": len(created),
     }
+    result["message"] = generate_message(request.layout, result)
+    return result
 
 
 def seed_demo_catalog(layout: str = "Netflix Hero", limit: int = 6) -> dict:

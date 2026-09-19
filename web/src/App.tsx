@@ -1,59 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { EditorPage, FullscreenViewer } from "./EditorPage";
 import { api } from "./lib/api";
-import { duplicateLayout, emptyLayout, SLOTS, validateLayout, type AppSettings, type CronJob, type Layout } from "./lib/layout";
+import { type AppSettings, type CronJob } from "./lib/layout";
 import type { WallpaperRecord } from "./lib/layout";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, nearestMotionPreset, type MotionStyle } from "./lib/motion";
+import { errorToast, generateToast, providerToast } from "./lib/messages";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, type MotionStyle } from "./lib/motion";
 import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
+import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
 
 type Page = "tonight" | "gallery" | "editor" | "generate" | "dashboard" | "settings";
 
-const SAMPLE: Record<string, string> = {
-  title: "Northlight",
-  year: "2024",
-  genres: "Sci-Fi  ·  Mystery",
-  runtime: "2h 11m",
-  rating: "8.4",
-  overview: "A cartographer maps a city that rearranges itself after dusk.",
-  watch_status: "Unwatched",
-  source: "Jellyfin",
-  age: "PG-13",
-};
-
-type MediaRow = {
-  title?: string;
-  year?: number | null;
-  overview?: string;
-  rating?: number;
-  genres?: string[];
-  official_rating?: string;
-  runtime?: string;
-  watch_state?: string;
-  source?: string;
-  jellyfin_id?: string | null;
-  backdrop_url?: string | null;
-  poster_url?: string | null;
-};
-
 type ViewerItem = { src: string; title: string; subtitle?: string };
-
-function sampleFromMedia(item: MediaRow): Record<string, string> {
-  const genres = (item.genres || []).slice(0, 3).join("  ·  ");
-  const watch = (item.watch_state || "").replace(/_/g, " ");
-  const watchLabel = watch ? watch.charAt(0).toUpperCase() + watch.slice(1) : "";
-  const source = item.source || "jellyfin";
-  return {
-    title: item.title || "Untitled",
-    year: item.year ? String(item.year) : "",
-    genres,
-    runtime: item.runtime || "",
-    rating: item.rating ? Number(item.rating).toFixed(1) : "",
-    overview: item.overview || "",
-    watch_status: watchLabel,
-    source: source.charAt(0).toUpperCase() + source.slice(1),
-    age: item.official_rating || "",
-  };
-}
 
 function wallpaperSlide(item: WallpaperRecord): ViewerItem {
   return {
@@ -61,71 +19,6 @@ function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
   };
-}
-
-function FullscreenViewer({
-  items,
-  index,
-  onClose,
-  onIndex,
-}: {
-  items: ViewerItem[];
-  index: number;
-  onClose: () => void;
-  onIndex: (next: number) => void;
-}) {
-  const item = items[index];
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (!items.length) return;
-      if (event.key === "ArrowRight") onIndex((index + 1) % items.length);
-      if (event.key === "ArrowLeft") onIndex((index - 1 + items.length) % items.length);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [index, items, onClose, onIndex]);
-  if (!item) return null;
-  return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label={`${item.title} full screen`} onClick={onClose}>
-      <button type="button" className="lightbox-close btn ghost tiny" onClick={onClose} aria-label="Close full screen">
-        Close
-      </button>
-      {items.length > 1 && (
-        <>
-          <button
-            type="button"
-            className="lightbox-nav prev btn ghost"
-            aria-label="Previous wallpaper"
-            onClick={(event) => {
-              event.stopPropagation();
-              onIndex((index - 1 + items.length) % items.length);
-            }}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            className="lightbox-nav next btn ghost"
-            aria-label="Next wallpaper"
-            onClick={(event) => {
-              event.stopPropagation();
-              onIndex((index + 1) % items.length);
-            }}
-          >
-            ›
-          </button>
-        </>
-      )}
-      <figure className="lightbox-frame" onClick={(event) => event.stopPropagation()}>
-        <img src={item.src} alt={item.title} />
-        <figcaption>
-          <strong>{item.title}</strong>
-          {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
-        </figcaption>
-      </figure>
-    </div>
-  );
 }
 
 const EMPTY_SETTINGS: AppSettings = {
@@ -155,6 +48,14 @@ const EMPTY_SETTINGS: AppSettings = {
 const PAGES: Page[] = ["tonight", "gallery", "editor", "generate", "dashboard", "settings"];
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppShell />
+    </ToastProvider>
+  );
+}
+
+function AppShell() {
   const [page, setPage] = useState<Page>("tonight");
   const [theme, setTheme] = useState("cinema");
   useEffect(() => {
@@ -203,17 +104,21 @@ type TonightPayload = {
 };
 
 function TonightPage() {
+  const notify = useToasts();
   const [layout, setLayout] = useState("Netflix Hero");
   const [layouts, setLayouts] = useState<string[]>([]);
   const [payload, setPayload] = useState<TonightPayload | null>(null);
   const [error, setError] = useState("");
+  const [previewPreset, setPreviewPreset] = useState("");
   async function load(nextLayout = layout) {
     try {
       const data = (await api.tonight(nextLayout)) as TonightPayload;
       setPayload(data);
       setError("");
     } catch (err) {
-      setError(String(err));
+      const toast = errorToast(err, "Could not load tonight");
+      setError(toast.text);
+      notify(toast.kind, toast.text);
     }
   }
   useEffect(() => {
@@ -223,7 +128,13 @@ function TonightPage() {
     void load(layout);
   }, [layout]);
   const image = payload?.status?.imageUrl;
+  const video = payload?.status?.videoUrl;
   const queueLabel = payload?.status?.queue ? QUEUE_LABELS[payload.status.queue] || payload.status.queue : "Tonight";
+  const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
+  const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
+  const intensity = intensityFromPreset(motionPreset) || clampIntensity(payload?.motion?.intensity ?? 0.55);
+  const duration = defaultDuration("light");
+  const motionVars = motionPreviewVars(motionStyle, intensity, duration);
   return (
     <section>
       <h1>Tonight’s home screen</h1>
@@ -253,10 +164,35 @@ function TonightPage() {
           Shuffle tonight
         </button>
       </div>
+      <div className="chip-row">
+        <span className="muted">Motion preview</span>
+        {(["subtle", "cinematic", "bold"] as const).map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            className={`chip ${motionPreset === preset ? "active" : ""}`}
+            onClick={() => setPreviewPreset(preset)}
+          >
+            {preset}
+          </button>
+        ))}
+      </div>
       {error && <p className="error">{error}</p>}
       <div className="tonight-grid">
         <div className="tv-preview" aria-label="Projectivy home screen preview">
-          {image ? <img className="tv-art" src={image} alt={payload?.status?.title || "Wallpaper"} /> : <div className="tv-art tv-art-empty">Generate a batch to fill tonight</div>}
+          {video ? (
+            <video className="tv-art" src={video} autoPlay muted loop playsInline />
+          ) : image ? (
+            <img
+              className="tv-art motion-art"
+              style={motionVars as CSSProperties}
+              src={image}
+              alt={payload?.status?.title || "Wallpaper"}
+            />
+          ) : (
+            <div className="tv-art tv-art-empty">Generate a batch to fill tonight</div>
+          )}
+          {payload?.motion?.light_leak && <div className="motion-leak" />}
           <div className="tv-chrome">
             <div className="tv-top">
               <span className="tv-logo">projectivy</span>
@@ -289,8 +225,8 @@ function TonightPage() {
             ))}
           </ul>
           <p className="muted">
-            Motion {payload?.motion?.preset || "cinematic"} · {payload?.motion?.style || "parallax"}
-            {payload?.motion?.light_leak ? " · light leak" : ""}
+            Motion {motionPreset} · {motionStyle}
+            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}. CSS preview on the TV bezel; bake VIDEO in Generate for the real loop.
           </p>
         </div>
       </div>
@@ -388,277 +324,6 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
   );
 }
 
-function EditorPage() {
-  const [names, setNames] = useState<string[]>([]);
-  const [layout, setLayout] = useState<Layout>(emptyLayout("Netflix Hero"));
-  const [selected, setSelected] = useState(0);
-  const [status, setStatus] = useState("");
-  const [error, setError] = useState("");
-  const [jellyfin, setJellyfin] = useState<MediaRow[]>([]);
-  const [created, setCreated] = useState<WallpaperRecord[]>([]);
-  const [previewId, setPreviewId] = useState("");
-  const [viewer, setViewer] = useState<number | null>(null);
-
-  useEffect(() => {
-    api.layouts().then(async (list) => {
-      setNames(list);
-      if (list[0]) setLayout(await api.layout(list[0]));
-    });
-    api
-      .media("jellyfin", 16)
-      .then((rows) => {
-        const usable = (rows as MediaRow[]).filter((row) => row.jellyfin_id && (row.backdrop_url || row.poster_url));
-        setJellyfin(usable);
-        if (usable[0]?.jellyfin_id) setPreviewId(String(usable[0].jellyfin_id));
-      })
-      .catch(() => setJellyfin([]));
-  }, []);
-
-  useEffect(() => {
-    api.gallery(layout.name).then(setCreated).catch(() => setCreated([]));
-  }, [layout.name]);
-
-  const errors = useMemo(() => validateLayout(layout), [layout]);
-  const layer = layout.layers[selected];
-  const preview = jellyfin.find((row) => String(row.jellyfin_id) === previewId) || jellyfin[0];
-  const sample = preview ? sampleFromMedia(preview) : SAMPLE;
-  const artSrc = preview?.jellyfin_id ? api.mediaArtwork(String(preview.jellyfin_id)) : "";
-  const createdSlides = created.map(wallpaperSlide);
-  const fadeStyle = artSrc
-    ? {
-        backgroundImage: `linear-gradient(90deg, rgba(5,5,5,0.88) 0%, rgba(5,5,5,0.35) ${Math.round(layout.background.fade_left * 100)}%, transparent ${Math.round((layout.background.fade_left + 0.18) * 100)}%), linear-gradient(0deg, rgba(5,5,5,0.72) 0%, transparent ${Math.round(layout.background.fade_bottom * 100)}%)`,
-      }
-    : undefined;
-
-  async function load(name: string) {
-    setLayout(await api.layout(name));
-    setSelected(0);
-  }
-
-  async function save() {
-    setError("");
-    if (errors.length) {
-      setError(errors.join(" · "));
-      return;
-    }
-    await api.saveLayout(layout);
-    setNames(await api.layouts());
-    setStatus(`Saved “${layout.name}”`);
-  }
-
-  return (
-    <section>
-      <h1>Layout editor</h1>
-      <p className="lede">WYSIWYG-style chrome over a 16:9 stage. Layout DNA presets keep metadata in Projectivy-safe zones. When Jellyfin is connected, the stage uses a real library backdrop.</p>
-      <div className="grid two">
-        <div className="card">
-          <div className="row" style={{ marginBottom: 12 }}>
-            <select value={layout.name} onChange={(e) => load(e.target.value)} aria-label="Layout">
-              {names.map((name) => (
-                <option key={name}>{name}</option>
-              ))}
-            </select>
-            <button className="btn ghost tiny" onClick={() => setLayout(duplicateLayout(layout, `${layout.name} copy`))}>
-              Duplicate
-            </button>
-            <button className="btn tiny" onClick={save}>Save layout</button>
-          </div>
-          {jellyfin.length > 0 && (
-            <>
-              <label>Jellyfin preview</label>
-              <select value={previewId} onChange={(e) => setPreviewId(e.target.value)} aria-label="Jellyfin preview">
-                {jellyfin.map((item) => (
-                  <option key={String(item.jellyfin_id)} value={String(item.jellyfin_id)}>
-                    {item.title}
-                    {item.year ? ` (${item.year})` : ""}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          {jellyfin.length === 0 && (
-            <p className="muted">No Jellyfin artwork yet — connect Jellyfin in Settings, or keep editing on the sample stage.</p>
-          )}
-          <label>Layout name</label>
-          <input value={layout.name} onChange={(e) => setLayout({ ...layout, name: e.target.value })} />
-          <div className="canvas-wrap" style={{ marginTop: 14 }}>
-            {artSrc && <img className="canvas-art" src={artSrc} alt={`${preview?.title || "Library"} artwork`} />}
-            <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={fadeStyle}>
-              {layout.layers.filter((l) => l.visible).map((l) => (
-                <div
-                  key={l.id}
-                  className="layer-chip"
-                  style={{
-                    left: `${(l.x / layout.canvas_width) * 100}%`,
-                    top: `${(l.y / layout.canvas_height) * 100}%`,
-                    fontSize: Math.max(10, l.font_size * 0.35),
-                    fontWeight: l.font_weight === "bold" ? 700 : 500,
-                    color: l.color,
-                    maxWidth: l.width ? `${(l.width / layout.canvas_width) * 100}%` : undefined,
-                    whiteSpace: l.slot === "overview" ? "normal" : "nowrap",
-                  }}
-                >
-                  {sample[l.slot] || l.slot}
-                </div>
-              ))}
-            </div>
-          </div>
-          {created.length > 0 && (
-            <div className="created-strip">
-              <div className="row" style={{ justifyContent: "space-between" }}>
-                <strong>Generated for this layout</strong>
-                <span className="muted">{created.length} stills · click for full screen</span>
-              </div>
-              <div className="created-row">
-                {created.map((item, index) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className="created-thumb"
-                    onClick={() => setViewer(index)}
-                    aria-label={`View ${item.title} full screen`}
-                  >
-                    <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {status && <p className="status">{status}</p>}
-          {error && <p className="error">{error}</p>}
-        </div>
-        <div className="card">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <strong>Layers</strong>
-            <button
-              className="btn ghost tiny"
-              onClick={() =>
-                setLayout({
-                  ...layout,
-                  layers: [
-                    ...layout.layers,
-                    {
-                      id: `layer-${layout.layers.length + 1}`,
-                      slot: "year",
-                      x: 80,
-                      y: 200,
-                      font_size: 24,
-                      color: "#ffffff",
-                      font_weight: "regular",
-                      visible: true,
-                      align: "left",
-                    },
-                  ],
-                })
-              }
-            >
-              Add layer
-            </button>
-          </div>
-          <div className="layer-list" style={{ marginTop: 10 }}>
-            {layout.layers.map((item, index) => (
-              <button
-                key={item.id}
-                className={`layer-item ${index === selected ? "selected" : ""}`}
-                onClick={() => setSelected(index)}
-              >
-                {item.id} · {item.slot}
-              </button>
-            ))}
-          </div>
-          {layer && (
-            <div className="grid" style={{ marginTop: 14 }}>
-              <label>Slot</label>
-              <select
-                value={layer.slot}
-                onChange={(e) => {
-                  const layers = layout.layers.slice();
-                  layers[selected] = { ...layer, slot: e.target.value };
-                  setLayout({ ...layout, layers });
-                }}
-              >
-                {SLOTS.map((slot) => (
-                  <option key={slot}>{slot}</option>
-                ))}
-              </select>
-              <div className="row">
-                <div>
-                  <label>X</label>
-                  <input
-                    type="number"
-                    value={layer.x}
-                    onChange={(e) => {
-                      const layers = layout.layers.slice();
-                      layers[selected] = { ...layer, x: Number(e.target.value) };
-                      setLayout({ ...layout, layers });
-                    }}
-                  />
-                </div>
-                <div>
-                  <label>Y</label>
-                  <input
-                    type="number"
-                    value={layer.y}
-                    onChange={(e) => {
-                      const layers = layout.layers.slice();
-                      layers[selected] = { ...layer, y: Number(e.target.value) };
-                      setLayout({ ...layout, layers });
-                    }}
-                  />
-                </div>
-                <div>
-                  <label>Size</label>
-                  <input
-                    type="number"
-                    value={layer.font_size}
-                    onChange={(e) => {
-                      const layers = layout.layers.slice();
-                      layers[selected] = { ...layer, font_size: Number(e.target.value) };
-                      setLayout({ ...layout, layers });
-                    }}
-                  />
-                </div>
-              </div>
-              <label>Fade left / bottom</label>
-              <div className="row">
-                <input
-                  type="range"
-                  min={0}
-                  max={0.8}
-                  step={0.01}
-                  value={layout.background.fade_left}
-                  onChange={(e) =>
-                    setLayout({
-                      ...layout,
-                      background: { ...layout.background, fade_left: Number(e.target.value) },
-                    })
-                  }
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={0.8}
-                  step={0.01}
-                  value={layout.background.fade_bottom}
-                  onChange={(e) =>
-                    setLayout({
-                      ...layout,
-                      background: { ...layout.background, fade_bottom: Number(e.target.value) },
-                    })
-                  }
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      {viewer !== null && (
-        <FullscreenViewer items={createdSlides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
-      )}
-    </section>
-  );
-}
-
 function csvToIds(value: string): string[] {
   return value
     .split(/[,\s]+/)
@@ -667,6 +332,7 @@ function csvToIds(value: string): string[] {
 }
 
 function GeneratePage() {
+  const notify = useToasts();
   const [layouts, setLayouts] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [form, setForm] = useState({
@@ -681,6 +347,7 @@ function GeneratePage() {
     skip_ids: "",
   });
   const [result, setResult] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     api.layouts().then((names) => {
       setLayouts(names);
@@ -691,72 +358,120 @@ function GeneratePage() {
   const style = (settings?.motion_style || "parallax") as MotionStyle;
   const intensity = intensityFromPreset(settings?.motion_preset) || clampIntensity(settings?.motion_intensity ?? 0.55);
   const duration = settings?.motion_duration || defaultDuration(settings?.motion_quality || "light");
+  const motionVars = motionPreviewVars(style, intensity, Number(duration));
   return (
     <section>
       <h1>Generate</h1>
       <p className="lede">
-        Batch cinematic stills from Jellyfin, Jellyseerr, or the built-in demo catalog. Skip already-rendered titles by Jellyfin / TMDB / IMDb id, replace them in place, or bake optional parallax VIDEO loops for Projectivy.
+        Batch cinematic stills from Jellyfin, Jellyseerr, or the built-in demo catalog (NASA / NARA / Library of Congress stills). Skip already-rendered titles by Jellyfin / TMDB / IMDb id, replace them in place, or bake optional parallax VIDEO loops for Projectivy.
       </p>
-      <div className="card" style={{ maxWidth: 720 }}>
-        <label>Layout / collection</label>
-        <select value={form.layout} onChange={(e) => setForm({ ...form, layout: e.target.value })}>
-          {layouts.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </select>
-        <label style={{ marginTop: 12 }}>Source</label>
-        <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
-          <option value="demo">Demo catalog</option>
-          <option value="jellyfin">Jellyfin</option>
-          <option value="jellyseerr">Jellyseerr / Seerr</option>
-          <option value="all">All configured</option>
-        </select>
-        <label style={{ marginTop: 12 }}>Limit</label>
-        <input
-          type="number"
-          value={form.limit}
-          onChange={(e) => setForm({ ...form, limit: Number(e.target.value) })}
-        />
-        <label style={{ marginTop: 12 }}>Only these media ids (Jellyfin / TMDB / IMDb, comma-separated)</label>
-        <input value={form.ids} onChange={(e) => setForm({ ...form, ids: e.target.value })} placeholder="demo-jf-1, 90001, tt123" />
-        <label style={{ marginTop: 12 }}>Skip these media ids</label>
-        <input value={form.skip_ids} onChange={(e) => setForm({ ...form, skip_ids: e.target.value })} placeholder="leave blank to skip none extra" />
-        <label style={{ marginTop: 12 }}><input type="checkbox" checked={form.skip_existing} onChange={(e) => setForm({ ...form, skip_existing: e.target.checked })} /> Skip titles already generated (IMDb / TMDB / Jellyfin id)</label>
-        <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked })} /> Replace / overwrite same show</label>
-        <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
-        <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
-        <p className="muted">{describeMotion(style, intensity, duration)}. Stills always remain; the plugin prefers VIDEO when this is enabled. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
-        <div className="row" style={{ marginTop: 16 }}>
-          <button
-            className="btn"
-            onClick={async () => {
-              const out = await api.generate({
-                layout: form.layout,
-                source: form.source,
-                limit: form.limit,
-                skip_existing: form.skip_existing,
-                replace_existing: form.replace_existing,
-                cleanup: form.cleanup,
-                motion: form.motion,
-                ids: csvToIds(form.ids),
-                skip_ids: csvToIds(form.skip_ids),
-              });
-              setResult(JSON.stringify(out, null, 2));
-            }}
-          >
-            Run batch
-          </button>
-          <button
-            className="btn ghost"
-            onClick={async () => {
-              const out = await api.generateMotion(form.layout);
-              setResult(JSON.stringify(out, null, 2));
-            }}
-          >
-            Re-bake motion for layout
-          </button>
+      <div className="generate-grid">
+        <div className="card">
+          <label>Layout / collection</label>
+          <select value={form.layout} onChange={(e) => setForm({ ...form, layout: e.target.value })}>
+            {layouts.map((name) => (
+              <option key={name}>{name}</option>
+            ))}
+          </select>
+          <label style={{ marginTop: 12 }}>Source</label>
+          <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+            <option value="demo">Demo catalog</option>
+            <option value="jellyfin">Jellyfin</option>
+            <option value="jellyseerr">Jellyseerr / Seerr</option>
+            <option value="all">All configured</option>
+          </select>
+          <label style={{ marginTop: 12 }}>Limit</label>
+          <input
+            type="number"
+            value={form.limit}
+            onChange={(e) => setForm({ ...form, limit: Number(e.target.value) })}
+          />
+          <label style={{ marginTop: 12 }}>Only these media ids (Jellyfin / TMDB / IMDb, comma-separated)</label>
+          <input value={form.ids} onChange={(e) => setForm({ ...form, ids: e.target.value })} placeholder="demo-jf-1, 90001, tt123" />
+          <label style={{ marginTop: 12 }}>Skip these media ids</label>
+          <input value={form.skip_ids} onChange={(e) => setForm({ ...form, skip_ids: e.target.value })} placeholder="leave blank to skip none extra" />
+          <label style={{ marginTop: 12 }}><input type="checkbox" checked={form.skip_existing} onChange={(e) => setForm({ ...form, skip_existing: e.target.checked })} /> Skip titles already generated (IMDb / TMDB / Jellyfin id)</label>
+          <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked })} /> Replace / overwrite same show</label>
+          <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
+          <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
+          <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; the plugin prefers VIDEO when this is enabled. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
+          <div className="row" style={{ marginTop: 16 }}>
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const out = (await api.generate({
+                    layout: form.layout,
+                    source: form.source,
+                    limit: form.limit,
+                    skip_existing: form.skip_existing,
+                    replace_existing: form.replace_existing,
+                    cleanup: form.cleanup,
+                    motion: form.motion,
+                    ids: csvToIds(form.ids),
+                    skip_ids: csvToIds(form.skip_ids),
+                  })) as { message?: string; count?: number; warnings?: string[] };
+                  const toast = generateToast(out);
+                  notify(toast.kind, toast.text);
+                  setResult(out.message || JSON.stringify(out, null, 2));
+                } catch (err) {
+                  const toast = errorToast(err, "Generate failed");
+                  notify(toast.kind, toast.text);
+                  setResult(toast.text);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Run batch
+            </button>
+            <button
+              className="btn ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const out = (await api.generateMotion(form.layout)) as { generated?: string[]; style?: string };
+                  const n = (out.generated || []).length;
+                  const text = n ? `Baked motion VIDEO for ${n} title${n === 1 ? "" : "s"} (${out.style || style}).` : `No VIDEO clips baked for ${form.layout} (ffmpeg missing or no stills).`;
+                  notify(n ? "ok" : "info", text);
+                  setResult(text);
+                } catch (err) {
+                  const toast = errorToast(err, "Motion bake failed");
+                  notify(toast.kind, toast.text);
+                  setResult(toast.text);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Re-bake motion for layout
+            </button>
+          </div>
+          {result && <p className="status">{result}</p>}
         </div>
-        {result && <pre className="muted">{result}</pre>}
+        <div className="card">
+          <h3>Motion preview</h3>
+          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops.</p>
+          <div className="canvas-wrap generate-preview">
+            <img
+              className="canvas-art motion-art"
+              style={motionVars as CSSProperties}
+              src={api.mediaArtwork("demo-jf-1")}
+              alt="Northlight motion preview"
+            />
+            {settings?.light_leak && <div className="motion-leak" />}
+            <div className="tv-chrome editor-tv" aria-hidden="true">
+              <div className="tv-top">
+                <span className="tv-logo">projectivy</span>
+                <span className="tv-clock">9:41</span>
+              </div>
+              <div className="tv-dock" />
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -816,6 +531,7 @@ function DashboardPage() {
 }
 
 function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
+  const notify = useToasts();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [msg, setMsg] = useState("");
   useEffect(() => {
@@ -849,6 +565,19 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   const duration = Number(settings.motion_duration || defaultDuration(settings.motion_quality));
   const style = (settings.motion_style || "parallax") as MotionStyle;
   const weights = settings.taste_weights || TASTE_PRESETS[settings.taste_profile || "tonight"];
+  const motionVars = motionPreviewVars(style, intensity, duration);
+  async function testConnection(name: "jellyfin" | "jellyseerr" | "tmdb") {
+    try {
+      const result = (await api.testProvider(name)) as { ok?: boolean; message?: string; error?: string };
+      const toast = providerToast(result);
+      notify(toast.kind, toast.text);
+      setMsg(toast.text);
+    } catch (err) {
+      const toast = errorToast(err, `Could not test ${name}`);
+      notify(toast.kind, toast.text);
+      setMsg(toast.text);
+    }
+  }
   return (
     <section>
       <h1>Settings</h1>
@@ -932,6 +661,15 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             onChange={(e) => setSettings({ ...settings, motion_fps: Number(e.target.value) })}
           />
           <p className="muted">{describeMotion(style, intensity, duration)}</p>
+          <div className="canvas-wrap generate-preview" style={{ marginTop: 12 }}>
+            <img
+              className="canvas-art motion-art"
+              style={motionVars as CSSProperties}
+              src={api.mediaArtwork("demo-jf-1")}
+              alt="Motion intensity preview"
+            />
+            {settings.light_leak && <div className="motion-leak" />}
+          </div>
         </div>
         <div className="card">
           <h3>Taste profile</h3>
@@ -1012,7 +750,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <input value={settings.jellyfin.api_key || ""} onChange={(e) => patch("jellyfin", "api_key", e.target.value)} />
           <label>User id (optional)</label>
           <input value={settings.jellyfin.user_id || ""} onChange={(e) => patch("jellyfin", "user_id", e.target.value)} />
-          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={async () => setMsg(JSON.stringify(await api.testProvider("jellyfin")))}>Test Jellyfin</button>
+          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={() => testConnection("jellyfin")}>Test Jellyfin</button>
         </div>
         <div className="card">
           <h3>Jellyseerr / Seerr</h3>
@@ -1020,7 +758,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <input value={settings.jellyseerr.url || ""} onChange={(e) => patch("jellyseerr", "url", e.target.value)} placeholder="http://192.168.1.10:5055" />
           <label>API key</label>
           <input value={settings.jellyseerr.api_key || ""} onChange={(e) => patch("jellyseerr", "api_key", e.target.value)} />
-          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={async () => setMsg(JSON.stringify(await api.testProvider("jellyseerr")))}>Test Seerr</button>
+          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={() => testConnection("jellyseerr")}>Test Seerr</button>
         </div>
         <div className="card">
           <h3>TMDB (optional enrichment)</h3>
@@ -1028,7 +766,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <input value={settings.tmdb.api_key || ""} onChange={(e) => patch("tmdb", "api_key", e.target.value)} />
           <label>Language</label>
           <input value={settings.tmdb.language || "en-US"} onChange={(e) => patch("tmdb", "language", e.target.value)} />
-          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={async () => setMsg(JSON.stringify(await api.testProvider("tmdb")))}>Test TMDB</button>
+          <button className="btn ghost tiny" style={{ marginTop: 10 }} onClick={() => testConnection("tmdb")}>Test TMDB</button>
         </div>
         <div className="card">
           <h3>Cron / batch</h3>
@@ -1073,9 +811,16 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
         className="btn"
         style={{ marginTop: 18 }}
         onClick={async () => {
-          await api.saveSettings(settings);
-          setMsg("Saved");
-          onTheme(settings.editor_theme || "cinema");
+          try {
+            await api.saveSettings(settings);
+            setMsg("Saved settings");
+            notify("ok", "Saved settings");
+            onTheme(settings.editor_theme || "cinema");
+          } catch (err) {
+            const toast = errorToast(err, "Could not save settings");
+            notify(toast.kind, toast.text);
+            setMsg(toast.text);
+          }
         }}
       >
         Save settings

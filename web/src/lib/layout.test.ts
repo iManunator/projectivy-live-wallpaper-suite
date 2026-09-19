@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { duplicateLayout, emptyLayout, validateLayout } from "../lib/layout";
+import { duplicateLayout, emptyLayout, normalizeLayout, validateLayout } from "../lib/layout";
 import { shouldSkipExisting } from "../lib/skip";
 import { buildStatusQuery, parseYearRange, rememberShownPath } from "../lib/wallpaperQuery";
 
@@ -19,6 +19,13 @@ describe("layout validation", () => {
     const copy = duplicateLayout({ ...emptyLayout("A"), preset: true, preset_id: "a" }, "B");
     expect(copy.name).toBe("B");
     expect(copy.preset).toBe(false);
+  });
+
+  it("normalizeLayout fills gradient defaults", () => {
+    const layout = normalizeLayout({ name: "Hero", layers: emptyLayout().layers } as never);
+    expect(layout.background.gradient_type).toBe("linear");
+    expect(layout.background.vignette).toBeGreaterThanOrEqual(0);
+    expect(layout.canvas_width).toBe(1920);
   });
 });
 

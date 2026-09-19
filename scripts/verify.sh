@@ -56,6 +56,17 @@ echo "==> GET /api/health"
 curl -sf http://127.0.0.1:8787/api/health
 echo
 
+echo "==> GET /api/demo/catalog (license-safe cinematic stills)"
+curl -sf http://127.0.0.1:8787/api/demo/catalog
+echo
+echo "==> GET /api/media/artwork/demo-jf-1 (Northlight / NASA aurora)"
+art_bytes=$(curl -sf http://127.0.0.1:8787/api/media/artwork/demo-jf-1 | wc -c)
+echo "demo still bytes: ${art_bytes}"
+if [[ "${art_bytes}" -lt 20000 ]]; then
+  echo "demo still too small — expected a real JPEG, not an error page" >&2
+  exit 1
+fi
+
 echo "==> GET /api/wallpaper/status (demo catalog, no Jellyfin required)"
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"
 echo

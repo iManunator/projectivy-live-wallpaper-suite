@@ -2,13 +2,16 @@
 
 ## Unreleased
 
-Jellyfin stills now use real library art, and the editor stays an in-page 16:9 stage.
+Flagship editor, motion preview, connection toasts, and a license-safe cinematic demo catalog — on top of real Jellyfin artwork.
 
-- **Generate** downloads backdrop (then poster) by default, with Jellyfin auth headers. Batches no longer paint titles on a synthetic gradient when artwork exists.
+- **Generate** downloads backdrop (then poster) by default, with Jellyfin auth headers. HTML/non-image responses are rejected. Unconfigured Jellyfin/Seerr falls back to the demo catalog **with a warning**, instead of failing silently. Ids that sit past the first `limit` titles are still found.
 - Jellyfin items request `ImageTags`. Missing Backdrop uses Primary/Thumb so poster-only titles still render.
-- **Editor** shows a same-origin Jellyfin backdrop on the in-page 16:9 canvas (dropdown to switch titles). The stage does not go fullscreen.
+- **Editor** is a 16:9 Projectivy stage: linear/radial multi-stop gradients, angle, opacity, vignette, overlay wash, four-edge fades, look DNA chips, draggable metadata, TV chrome / safe-zone guides. Demo or Jellyfin artwork. Save persists the layout JSON.
+- **Motion preview** (CSS Ken Burns / parallax / drift) on Tonight, Editor, Generate, and Settings — Subtle / Cinematic / Bold visible without a TV. Baked ffmpeg VIDEO is still what Projectivy plays.
+- **Toasts** for provider tests and generate: “Connected to Jellyfin (Living Room)” / failure reasons / “Created 6 stills for Netflix Hero”.
+- **Demo catalog** paints NASA / NARA / Library of Congress public-domain stills (plus one CC BY-SA Kew photograph) instead of synthetic-only gradients. Attribution: `backend/app/demo_stills/ATTRIBUTION.md`, `GET /api/demo/catalog`.
 - **Gallery** (and the generated strip under the editor) opens stills in a full-screen lightbox (arrows / Esc).
-- New `GET /api/media/artwork/{item_id}` proxies Jellyfin Primary/Backdrop for the web UI.
+- `GET /api/media/artwork/{item_id}` serves demo stills, then proxies Jellyfin Primary/Backdrop (image sniffing, correct content-type).
 
 ## 1.1.0
 

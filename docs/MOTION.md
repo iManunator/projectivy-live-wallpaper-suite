@@ -34,6 +34,8 @@ status ──imageUrl──► JPEG  ──► WallpaperType.IMAGE
 
 Intensity presets **Subtle / Cinematic / Bold** (0.28 / 0.55 / 0.88), duration (2–20s), fps (12–30), and quality (`light` / `standard` / `cinematic`) are Settings fields. Parallax may add a third **light-leak** lavfi layer. Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
 
+The web UI plays a **CSS motion preview** of the same style/intensity on Tonight, the layout editor, Generate, and Settings so you can judge the look without a TV. That preview is not what Projectivy plays — bake a VIDEO (ffmpeg) for the real loop.
+
 ## Bake pipeline
 
 ```

@@ -89,6 +89,32 @@ def test_jellyfin_partial_and_watched():
     assert states["Finished"] == "watched"
 
 
+def test_demo_items_have_bundled_stills():
+    from pathlib import Path
+
+    from app.demo_art import load_catalog, still_path_for_item
+    from app.providers.demo import DemoProvider
+
+    catalog = load_catalog()
+    assert len(catalog) == 6
+    items = DemoProvider().list_items()
+    assert len(items) == 6
+    for item in items:
+        path = still_path_for_item(item)
+        assert path is not None, item.title
+        assert Path(item.backdrop_path).is_file()
+        assert Path(item.backdrop_path).stat().st_size > 20_000
+
+
+def test_looks_like_image_rejects_html_and_wav():
+    from app.images import looks_like_image
+
+    assert looks_like_image(b"\xff\xd8\xff" + b"\x00" * 8)
+    assert not looks_like_image(b"<!DOCTYPE html>")
+    assert not looks_like_image(b"RIFF" + b"\x00" * 4 + b"WAVE")
+    assert looks_like_image(b"RIFF" + b"\x00" * 4 + b"WEBP")
+
+
 def test_unconfigured_providers_do_not_call_network():
     assert JellyfinProvider().test()["ok"] is False
     assert SeerrProvider().test()["ok"] is False
