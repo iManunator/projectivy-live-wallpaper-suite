@@ -12,6 +12,7 @@ import {
 import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
+import { useToasts } from "./toasts";
 
 type MediaRow = {
   title?: string;

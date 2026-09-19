@@ -97,7 +97,7 @@ def test_run_generate_downloads_without_injected_client(suite_dirs, monkeypatch)
     assert pixel[2] > 80
 
 
-def _png_logo(color=(220, 30, 30, 255)) -> bytes:
+def _png_logo(color=(255, 220, 40, 255)) -> bytes:
     buf = io.BytesIO()
     image = Image.new("RGBA", (640, 160), (0, 0, 0, 0))
     image.paste(color, (8, 8, 632, 152))
@@ -128,7 +128,8 @@ def test_generate_one_composites_logo_instead_of_title(suite_dirs):
     record = generate_one(item, "Netflix Hero", http_get=http_get)
     assert record is not None
     pixel = Image.open(suite_dirs["gallery"] / "Netflix Hero" / record.filename).getpixel((120, 100))
-    assert pixel[0] > 140
+    assert pixel[0] > 180
+    assert pixel[1] > 140
     assert pixel[0] > pixel[2]
 
 

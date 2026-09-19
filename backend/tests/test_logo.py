@@ -93,11 +93,12 @@ def test_logo_preferred_over_title_text():
     layout = _layout(title_display="auto")
     item = MediaItem(title="UNIQUE_TITLE_GLYPH", year=2024, genres=["Drama"])
     text_only = render_chrome(item, layout)
-    with_logo = render_chrome(item, layout, logo_bytes=_png((500, 140), (255, 0, 0, 255)))
-    # Title slot is around (80, 70); a red logo should dominate that region.
+    with_logo = render_chrome(item, layout, logo_bytes=_png((500, 140), (255, 220, 40, 255)))
+    # Title slot is around (80, 70); a bright gold logo should dominate that region.
     logo_px = with_logo.getpixel((120, 100))
     text_px = text_only.getpixel((120, 100))
-    assert logo_px[0] > 150
+    assert logo_px[0] > 200
+    assert logo_px[1] > 150
     assert logo_px[0] > logo_px[2]
     assert logo_px != text_px
 
@@ -107,7 +108,10 @@ def test_missing_logo_falls_back_to_title_text():
     item = MediaItem(title="UNIQUE_TITLE_GLYPH", year=2024)
     chrome = render_chrome(item, layout, logo_bytes=None)
     empty = render_chrome(MediaItem(title=""), layout)
-    assert chrome.getpixel((90, 80)) != empty.getpixel((90, 80))
+    title_region = chrome.crop((70, 50, 900, 180))
+    empty_region = empty.crop((70, 50, 900, 180))
+    assert title_region.getbbox() is not None
+    assert empty_region.getbbox() is None
 
 
 def test_title_display_text_ignores_logo():

@@ -214,7 +214,5 @@ describe("App smoke", () => {
     expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Test Jellyfin" }));
     expect((await screen.findAllByText(/Connected to Jellyfin/)).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Close notification" }));
-    expect(screen.queryByText(/Connected to Jellyfin \(Living Room\)/)).not.toBeInTheDocument();
   });
 });

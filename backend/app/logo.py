@@ -95,10 +95,14 @@ def ensure_high_contrast(image: Image.Image, threshold: float = LUMINANCE_THRESH
     sample = img.resize((48, 48), Image.Resampling.BOX) if max(img.size) > 48 else img
     lum_sum = 0.0
     count = 0
-    for r, g, b, a in sample.getdata():
-        if a > 0:
-            lum_sum += 0.299 * r + 0.587 * g + 0.114 * b
-            count += 1
+    px = sample.load()
+    width, height = sample.size
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = px[x, y]
+            if a > 0:
+                lum_sum += 0.299 * r + 0.587 * g + 0.114 * b
+                count += 1
     if count == 0 or (lum_sum / count) >= threshold:
         return img
     out = Image.new("RGBA", img.size, (255, 255, 255, 0))
