@@ -11,7 +11,7 @@ import {
 } from "./lib/motion";
 import { LAYOUT_DNA, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { watchBadge } from "./lib/watch";
-import { WatchBadge } from "./WatchBadge";
+import { ChromePills } from "./ChromePills";
 import { WallpaperStage } from "./WallpaperStage";
 import { useJobs } from "./JobProgress";
 import { useToasts } from "./toasts";
@@ -27,6 +27,10 @@ export type TonightPayload = {
     layout?: string | null;
     path?: string | null;
     watchState?: string | null;
+    libraryState?: string | null;
+    availability?: string | null;
+    seerrStatus?: string | null;
+    source?: string | null;
   };
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
@@ -38,11 +42,6 @@ const PREVIEW_INTENSITY = ["subtle", "cinematic", "bold"] as const;
 
 function titleCase(value: string): string {
   return value ? value[0].toUpperCase() + value.slice(1) : value;
-}
-
-function isSeerrQueue(queue?: string | null): boolean {
-  const id = (queue || "").toLowerCase();
-  return id === "seerr_trending" || id === "requestable";
 }
 
 type TonightPageProps = {
@@ -98,6 +97,12 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
   const profile = payload?.profile || "tonight";
   const mix = TASTE_PRESETS[profile] || TASTE_PRESETS.tonight;
   const extraLayouts = layouts.filter((name) => !LAYOUT_DNA.some((preset) => preset.name === name));
+  const chrome = {
+    watchState: payload?.status?.watchState,
+    libraryState: payload?.status?.libraryState,
+    availability: payload?.status?.availability,
+    source: payload?.status?.source,
+  };
 
   async function bakeThisPick() {
     try {
@@ -150,8 +155,7 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
             </div>
             <div className="tv-hero-meta">
               {showQueueBadge && <span className="badge">{queueLabel}</span>}
-              <WatchBadge state={payload?.status?.watchState} />
-              {isSeerrQueue(queueId) && <span className="badge">Seerr</span>}
+              <ChromePills {...chrome} />
               {payload?.status?.pinned && <span className="badge">Pinned</span>}
               {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
               <h2>{title || "Waiting for a title"}</h2>
@@ -175,8 +179,7 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
           <div className="tonight-pick-title">
             <strong>{title || "No pick yet"}</strong>
             {showQueueBadge && <span className="badge">{queueLabel}</span>}
-            <WatchBadge state={payload?.status?.watchState} />
-            {isSeerrQueue(queueId) && <span className="badge">Seerr</span>}
+            <ChromePills {...chrome} />
             {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
           </div>
           <p className="muted">{motionNote}</p>

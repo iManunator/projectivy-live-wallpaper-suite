@@ -454,6 +454,7 @@ describe("Tonight page", () => {
     expect(art?.getAttribute("src") || "").toMatch(/artwork/);
     expect(stage.querySelector(".tv-hero-meta")?.closest(".stage-fg")).toBeTruthy();
     expect(art?.closest(".stage-bg")).toBeTruthy();
+    expect(stage.querySelector(".chrome-pills")).toBeTruthy();
     expect(document.querySelector(".tonight-hero")).toBeTruthy();
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
