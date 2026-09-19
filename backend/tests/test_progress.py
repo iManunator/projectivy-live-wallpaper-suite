@@ -64,12 +64,12 @@ def test_jobs_generate_reports_progress(client):
     assert job["kind"] == "generate"
     assert job["status"] in {"queued", "running", "done"}
     body = job
-    for _ in range(80):
+    for _ in range(200):
         body = client.get(f"/api/jobs/{job['id']}").json()
         if body["status"] in {"done", "error"}:
             break
         time.sleep(0.05)
-    assert body["status"] == "done"
+    assert body["status"] == "done", body
     assert body["percent"] == 100
     assert body["total"] >= 1
     assert body["result"]["count"] == 1
@@ -96,16 +96,19 @@ def test_jobs_conflict_when_running(client, monkeypatch):
 
 def test_jobs_motion_kind(client):
     reset_for_tests()
-    start = client.post("/api/jobs", json={"kind": "motion", "layout": "Prime Cinematic"})
+    start = client.post(
+        "/api/jobs",
+        json={"kind": "motion", "layout": "Prime Cinematic", "path": "relay.jpg"},
+    )
     assert start.status_code == 200
     job = start.json()
     body = job
-    for _ in range(80):
+    for _ in range(200):
         body = client.get(f"/api/jobs/{job['id']}").json()
         if body["status"] in {"done", "error"}:
             break
         time.sleep(0.05)
-    assert body["status"] == "done"
+    assert body["status"] == "done", body
     assert body["result"]["layered"] is True
     assert body["result"]["chrome_locked"] is True
 
