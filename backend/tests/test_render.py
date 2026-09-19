@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.layouts import PRESETS
 from app.models import GradientStop, Layout, LayoutBackground, MediaItem
 from app.providers.demo import DemoProvider
-from app.render import linear_gradient_rgba, render_chrome, render_plate, render_still, synthetic_backdrop
+from app.render import linear_gradient_rgba, render_chrome, render_plate, render_still, slot_text, synthetic_backdrop
 
 
 def test_render_still_is_full_hd():
@@ -165,3 +165,25 @@ def test_demo_still_is_not_the_synthetic_fallback():
     painted = render_still(item, layout)
     synth = synthetic_backdrop(item.title, painted.size)
     assert painted.getpixel((1500, 360)) != synth.getpixel((1500, 360))
+
+
+def test_slot_text_maps_jellyfin_style_metadata():
+    item = MediaItem(
+        title="From",
+        year=2022,
+        genres=["Science Fiction", "Horror", "Drama", "Thriller"],
+        rating=8.494,
+        official_rating="TV-MA",
+        runtime="51m",
+        overview="Nightmare town.",
+        source="jellyfin",
+    )
+    assert slot_text(item, "year") == "2022"
+    assert slot_text(item, "genres", max_items=3) == "Science Fiction  ·  Horror  ·  Drama"
+    assert slot_text(item, "rating") == "★ 8.5"
+    assert slot_text(item, "age") == "TV-MA"
+    assert slot_text(item, "runtime") == "51m"
+    assert slot_text(item, "overview") == "Nightmare town."
+    chrome = render_chrome(item, PRESETS["Netflix Hero"])
+    empty = render_chrome(MediaItem(title="From"), PRESETS["Netflix Hero"])
+    assert chrome.tobytes() != empty.tobytes()

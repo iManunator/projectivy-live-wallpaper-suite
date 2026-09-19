@@ -6,7 +6,7 @@ export const WATCH_WATCHED = new Set(["watched", "played"]);
 
 export const WATCH_TONES: Record<WatchKind, { label: string; color: string }> = {
   unwatched: { label: "Unwatched", color: "#7ad0c4" },
-  partial: { label: "Continue", color: "#e2b657" },
+  partial: { label: "Partly watched", color: "#e2b657" },
   watched: { label: "Watched", color: "#87c38f" },
 };
 
@@ -26,7 +26,7 @@ export function watchBadge(value?: string | null): { id: WatchKind; label: strin
 
 export function badgeClass(label: string): string {
   if (label === "Unwatched") return "chrome-pill badge badge-watch unwatched";
-  if (label === "Continue") return "chrome-pill badge badge-watch partial";
+  if (label === "Partly watched" || label === "Continue") return "chrome-pill badge badge-watch partial";
   if (label === "Watched") return "chrome-pill badge badge-watch watched";
   if (label === "Seerr only") return "chrome-pill badge badge-seerr seerr_only";
   if (label === "Requestable") return "chrome-pill badge badge-seerr requestable";

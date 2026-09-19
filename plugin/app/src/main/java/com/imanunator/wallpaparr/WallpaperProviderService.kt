@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import com.imanunator.wallpaparr.core.ClientIntents
-import com.imanunator.wallpaparr.core.ClientType
 import com.imanunator.wallpaparr.core.MediaChoice
 import com.imanunator.wallpaparr.core.PreparedWallpaper
 import com.imanunator.wallpaparr.core.UrlSupport
@@ -107,17 +106,10 @@ class WallpaperProviderService : Service() {
             preferMotion = PreferencesManager.preferMotion,
             fallbackStill = PreferencesManager.fallbackStill,
         ) ?: return null
-        var action = status.actionUrl
-        val itemId = UrlSupport.parseJellyfinItemId(action)
-        if (itemId != null) {
-            val preferred = PreferencesManager.preferredClient
-            val client = ClientIntents.SUPPORTED.find { it.packageName == preferred }
-            action = when (client?.type) {
-                ClientType.DEEP_LINK -> ClientIntents.deepLinkIntent(preferred, itemId) ?: action
-                ClientType.LAUNCH -> ClientIntents.launchIntent(preferred) ?: action
-                else -> action
-            }
-        }
+        val action = ClientIntents.resolveActionUri(
+            PreferencesManager.preferredClient,
+            status.actionUrl,
+        )
         val preloader = WallpaperSession.preloader(this)
         val playback = if (cacheTimeoutMs > 0) {
             preloader.ensureCached(chosen.uri, cacheTimeoutMs)
@@ -244,7 +236,9 @@ class WallpaperProviderService : Service() {
                     return WallpaperTransition.displayList(held, null).map { toWallpaper(it) }
                 }
             } else {
-                return emptyList()
+                // Hold the current frame — empty lists flash black in Projectivy.
+                val held = WallpaperSession.buffer.snapshotShowing() ?: lastPreparedFromPrefs()
+                return WallpaperTransition.displayList(held, null).map { toWallpaper(it) }
             }
         }
 

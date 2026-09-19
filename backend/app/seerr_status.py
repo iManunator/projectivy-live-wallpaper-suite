@@ -2,7 +2,7 @@
 
 Maps existing catalog fields (``library_state``, ``availability``, ``source``)
 onto one obvious wallpaper pill so titles that are only on Seerr — not in the
-library — read as clearly as Unwatched / Continue / Watched.
+library — read as clearly as Unwatched / Partly watched / Watched.
 
 Does not invent statuses: Jellyfin/Seerr providers already set
 ``seerr_only`` / ``in_library`` and ``requestable`` / ``available``.

@@ -260,7 +260,7 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
     if slot == "runtime":
         return item.runtime
     if slot in ("rating", "primary_score"):
-        return f"{item.rating:.1f}" if item.rating else ""
+        return f"★ {item.rating:.1f}" if item.rating else ""
     if slot == "overview":
         return item.overview
     if slot in WATCH_SLOTS:

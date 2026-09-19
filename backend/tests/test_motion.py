@@ -282,6 +282,7 @@ def test_parallax_light_leak_sits_under_locked_chrome():
 
 def test_intensity_presets():
     assert intensity_from_preset("subtle") == 0.16
+    assert intensity_from_preset("balanced") == 0.355
     assert intensity_from_preset("bold") == 0.96
     assert intensity_from_preset("nope") == 0.55
     profile = profile_from_settings(AppSettings(motion_preset="bold", motion_intensity=0.55))

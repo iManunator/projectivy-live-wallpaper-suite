@@ -27,7 +27,7 @@ def test_jellyfin_parses_watch_state_and_deep_link():
                 "Genres": ["Sci-Fi"],
                 "OfficialRating": "PG-13",
                 "Type": "Movie",
-                "RunTimeTicks": 9_000_000_000 * 60 * 155,
+                "RunTimeTicks": 155 * 60 * 10_000_000,
                 "ProviderIds": {"Tmdb": "438631", "Imdb": "tt1160419"},
                 "UserData": {"Played": False, "PlaybackPositionTicks": 0},
             }
@@ -37,6 +37,13 @@ def test_jellyfin_parses_watch_state_and_deep_link():
     items = provider.list_items()
     assert len(items) == 1
     assert items[0].title == "Dune"
+    assert items[0].year == 2021
+    assert items[0].genres == ["Sci-Fi"]
+    assert items[0].rating == 8.5
+    assert items[0].official_rating == "PG-13"
+    assert items[0].overview == "Sand"
+    assert items[0].runtime == "2h 35m"
+    assert items[0].media_type == "movie"
     assert items[0].watch_state == "unwatched"
     assert items[0].action_url == "jellyfin://items/abc"
     assert items[0].tmdb_id == "438631"
@@ -44,6 +51,92 @@ def test_jellyfin_parses_watch_state_and_deep_link():
     assert items[0].backdrop_url == "http://jf:8096/Items/abc/Images/Backdrop?maxWidth=1920"
     assert items[0].poster_url == "http://jf:8096/Items/abc/Images/Primary?maxHeight=600"
     assert items[0].logo_url == "http://jf:8096/Items/abc/Images/Logo"
+
+
+def test_jellyfin_series_and_episode_metadata():
+    payload = {
+        "Items": [
+            {
+                "Id": "series-1",
+                "Name": "From",
+                "Type": "Series",
+                "ProductionYear": 2022,
+                "PremiereDate": "2022-02-20T00:00:00.0000000Z",
+                "Genres": ["Science Fiction", "Horror", "Drama"],
+                "CommunityRating": 8.494,
+                "OfficialRating": "TV-MA",
+                "Overview": "Nightmare town.",
+                "RunTimeTicks": 51 * 60 * 10_000_000,
+                "ProviderIds": {"Tmdb": "123"},
+                "UserData": {},
+                "ImageTags": {"Primary": "p", "Logo": "l"},
+                "BackdropImageTags": ["b"],
+            },
+            {
+                "Id": "ep-1",
+                "Name": "Long Day's Journey Into Night",
+                "SeriesName": "From",
+                "Type": "Episode",
+                "ProductionYear": 2023,
+                "PremiereDate": "2023-04-23T00:00:00.0000000Z",
+                "GenreItems": [{"Name": "Horror"}, {"Name": "Mystery"}],
+                "CommunityRating": None,
+                "CriticRating": 82,
+                "OfficialRating": "TV-MA",
+                "Overview": "Episode plot.",
+                "RunTimeTicks": 50 * 60 * 10_000_000,
+                "Series": {"ProductionYear": 2022, "PremiereDate": "2022-02-20T00:00:00.0000000Z"},
+                "UserData": {"Played": False, "PlaybackPositionTicks": 10},
+                "ImageTags": {"Primary": "p"},
+                "BackdropImageTags": [],
+            },
+        ]
+    }
+    items = JellyfinProvider(url="http://jf:8096", api_key="k", user_id="u", client=FakeClient(payload)).list_items()
+    by_id = {item.jellyfin_id: item for item in items}
+    series = by_id["series-1"]
+    assert series.media_type == "tv"
+    assert series.year == 2022
+    assert series.genres[:3] == ["Science Fiction", "Horror", "Drama"]
+    assert series.rating == 8.494
+    assert series.runtime == "51m"
+    episode = by_id["ep-1"]
+    assert episode.title == "From"
+    assert episode.media_type == "tv"
+    assert episode.year == 2022  # series year from nested Series
+    assert episode.genres == ["Horror", "Mystery"]
+    assert episode.rating == 8.2  # CriticRating 82 → 8.2
+    assert episode.watch_state == "partial"
+    assert episode.backdrop_url.endswith("/Primary?maxWidth=1920")
+
+
+def test_jellyfin_premiere_date_and_skips_boxset():
+    payload = {
+        "Items": [
+            {
+                "Id": "no-year",
+                "Name": "Arrival",
+                "Type": "Movie",
+                "PremiereDate": "2016-11-10T00:00:00.0000000Z",
+                "Genres": ["Drama", "Science Fiction"],
+                "CommunityRating": 7.6,
+                "UserData": {},
+            },
+            {
+                "Id": "box",
+                "Name": "Avatar Filmreihe",
+                "Type": "BoxSet",
+                "ProductionYear": 2009,
+                "Genres": ["Science Fiction"],
+                "UserData": {},
+            },
+        ]
+    }
+    items = JellyfinProvider(url="http://jf:8096", api_key="k", user_id="u", client=FakeClient(payload)).list_items()
+    assert len(items) == 1
+    assert items[0].title == "Arrival"
+    assert items[0].year == 2016
+    assert items[0].genres == ["Drama", "Science Fiction"]
 
 
 def test_seerr_marks_requestable_when_not_in_library():
@@ -56,6 +149,7 @@ def test_seerr_marks_requestable_when_not_in_library():
                 "releaseDate": "2022-11-18",
                 "overview": "Dinner",
                 "voteAverage": 7.2,
+                "genreIds": [27, 53, 35],
                 "backdropPath": "/x.jpg",
                 "mediaInfo": {"status": "UNKNOWN"},
             }
@@ -67,6 +161,27 @@ def test_seerr_marks_requestable_when_not_in_library():
     assert items[0].availability == "requestable"
     assert items[0].tmdb_id == "55"
     assert items[0].source == "jellyseerr"
+    assert items[0].year == 2022
+    assert items[0].genres == ["Horror", "Thriller", "Comedy"]
+    assert items[0].action_url == "http://seerr:5055/movie/55"
+
+
+def test_seerr_in_library_uses_jellyfin_action_for_moonfin():
+    payload = {
+        "results": [
+            {
+                "id": 90,
+                "title": "In Library",
+                "mediaType": "movie",
+                "releaseDate": "2020-01-01",
+                "voteAverage": 7,
+                "mediaInfo": {"status": "available", "jellyfinMediaId": "jf-90"},
+            }
+        ]
+    }
+    item = SeerrProvider(url="http://seerr:5055", api_key="k", client=FakeClient(payload)).list_items()[0]
+    assert item.jellyfin_id == "jf-90"
+    assert item.action_url == "jellyfin://items/jf-90"
 
 
 def test_seerr_reads_tmdb_shaped_logos():

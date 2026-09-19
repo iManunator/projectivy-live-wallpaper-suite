@@ -129,7 +129,7 @@ def suite_options() -> dict[str, Any]:
         ],
         "motion_styles": ["parallax", "kenburns", "drift"],
         "motion_qualities": ["light", "standard", "cinematic"],
-        "motion_presets": ["subtle", "cinematic", "bold"],
+        "motion_presets": ["subtle", "balanced", "cinematic", "bold"],
         "gradient_types": ["linear", "radial"],
         "title_displays": ["auto", "logo", "text"],
         "taste_profiles": list(TASTE_PRESETS.keys()),
@@ -171,6 +171,7 @@ def suite_options() -> dict[str, Any]:
         "clients": [
             {"name": "Moonfin", "package": "org.moonfin.androidtv", "type": "deep_link"},
             {"name": "Jellyfin", "package": "org.jellyfin.androidtv", "type": "deep_link"},
+            {"name": "SeerrTV", "package": "ca.devmesh.seerrtv", "type": "launch"},
             {"name": "Fladder", "package": "nl.jknaapen.fladder", "type": "launch"},
             {"name": "Kodi", "package": "org.xbmc.kodi", "type": "launch"},
             {"name": "Wholphin", "package": "com.github.damontecres.wholphin", "type": "launch"},
@@ -664,6 +665,16 @@ def jobs_get(job_id: str) -> dict[str, Any]:
     return job.as_dict()
 
 
+@router.post("/api/jobs/{job_id}/cancel")
+def jobs_cancel(job_id: str) -> dict[str, Any]:
+    from app.progress import request_cancel
+
+    job = request_cancel(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found or not running")
+    return job.as_dict()
+
+
 @router.post("/api/jobs")
 def jobs_start(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
     from app.ops import record_event
@@ -678,6 +689,7 @@ def jobs_start(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, A
                 "limit",
                 "skip_existing",
                 "replace_existing",
+                "refresh_status",
                 "cleanup",
                 "motion",
                 "ids",

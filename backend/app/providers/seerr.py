@@ -8,6 +8,70 @@ from app.models import MediaItem
 from app.providers import HttpClient
 from app.providers.tmdb import TMDB_IMAGE, logo_image_url, select_logo_path
 
+# Discover payloads expose TMDB genreIds, not names. Map both movie + TV ids.
+TMDB_GENRE_NAMES: dict[int, str] = {
+    28: "Action",
+    12: "Adventure",
+    16: "Animation",
+    35: "Comedy",
+    80: "Crime",
+    99: "Documentary",
+    18: "Drama",
+    10751: "Family",
+    14: "Fantasy",
+    36: "History",
+    27: "Horror",
+    10402: "Music",
+    9648: "Mystery",
+    10749: "Romance",
+    878: "Science Fiction",
+    10770: "TV Movie",
+    53: "Thriller",
+    10752: "War",
+    37: "Western",
+    10759: "Action & Adventure",
+    10762: "Kids",
+    10763: "News",
+    10764: "Reality",
+    10765: "Sci-Fi & Fantasy",
+    10766: "Soap",
+    10767: "Talk",
+    10768: "War & Politics",
+}
+
+
+def genres_from_seerr(raw: dict) -> list[str]:
+    """Resolve genre names from ``genres`` objects/strings or ``genreIds``."""
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(name: str) -> None:
+        cleaned = name.strip()
+        if cleaned and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            out.append(cleaned)
+
+    genres = raw.get("genres")
+    if isinstance(genres, list):
+        for entry in genres:
+            if isinstance(entry, str):
+                add(entry)
+            elif isinstance(entry, dict):
+                name = entry.get("name") or entry.get("Name")
+                if name:
+                    add(str(name))
+    if out:
+        return out
+    for gid in raw.get("genreIds") or []:
+        try:
+            key = int(gid)
+        except (TypeError, ValueError):
+            continue
+        name = TMDB_GENRE_NAMES.get(key)
+        if name:
+            add(name)
+    return out
+
 
 class SeerrProvider:
     name = "jellyseerr"
@@ -129,8 +193,8 @@ class SeerrProvider:
             year=year,
             overview=str(raw.get("overview") or ""),
             rating=float(raw.get("voteAverage") or 0),
-            genres=[],
-            official_rating="",
+            genres=genres_from_seerr(raw),
+            official_rating=str(raw.get("contentRating") or raw.get("certification") or ""),
             media_type=media_type,
             watch_state="unwatched",
             library_state=library_state,
@@ -138,7 +202,11 @@ class SeerrProvider:
             source="jellyseerr",
             jellyfin_id=jellyfin_id,
             tmdb_id=tmdb,
-            action_url=f"{self.url}/{media_type}/{tmdb}" if self.url else None,
+            action_url=(
+                f"jellyfin://items/{jellyfin_id}"
+                if jellyfin_id
+                else (f"{self.url}/{media_type}/{tmdb}" if self.url else None)
+            ),
             backdrop_url=f"{TMDB_IMAGE}/w1280{backdrop}" if backdrop else None,
             poster_url=f"{TMDB_IMAGE}/w500{poster}" if poster else None,
             logo_url=logo_url,

@@ -26,6 +26,7 @@ data class PreparedWallpaper(
  *
  * Hold-frame: if the incoming pick is missing, keep [showing] so we never
  * hand back an empty list (empty → Projectivy often flashes black).
+ * Idle-mode transitions must also hold the current frame for the same reason.
  */
 class WallpaperDoubleBuffer<T> {
     private val lock = Any()

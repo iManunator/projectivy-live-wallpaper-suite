@@ -5,6 +5,7 @@ import {
   clampIntensity,
   describeMotion,
   intensityFromPreset,
+  MOTION_PRESET_ORDER,
   motionPreviewVars,
   PRESET_DURATION,
   type MotionStyle,
@@ -38,7 +39,7 @@ export type TonightPayload = {
   preview?: { artworkUrl?: string | null; itemId?: string | null; layered?: boolean };
 };
 
-const PREVIEW_INTENSITY = ["subtle", "cinematic", "bold"] as const;
+const PREVIEW_INTENSITY = MOTION_PRESET_ORDER;
 
 function titleCase(value: string): string {
   return value ? value[0].toUpperCase() + value.slice(1) : value;
@@ -97,6 +98,8 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
   const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
   const layeredArt = Boolean(!video && artwork);
   const hasPick = Boolean(image || artwork || tonightPath);
+  // Baked stills/VIDEO already paint title + status pills; only layer them for CSS artwork preview.
+  const showTitleChrome = layeredArt || !hasPick;
   const title = payload?.status?.title || "";
   const profile = payload?.profile || "tonight";
   const mix = TASTE_PRESETS[profile] || TASTE_PRESETS.tonight;
@@ -159,10 +162,10 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
             </div>
             <div className="tv-hero-meta">
               {showQueueBadge && <span className="badge">{queueLabel}</span>}
-              <ChromePills {...chrome} />
+              {showTitleChrome && <ChromePills {...chrome} />}
               {payload?.status?.pinned && <span className="badge">Pinned</span>}
               {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
-              <h2>{title || "Waiting for a title"}</h2>
+              {showTitleChrome && <h2>{title || "Waiting for a title"}</h2>}
               <p>Behind the guide · {layout}</p>
             </div>
             <div className="tv-rows">

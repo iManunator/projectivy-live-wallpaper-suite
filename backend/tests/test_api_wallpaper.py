@@ -535,6 +535,42 @@ def test_media_logo_rejects_non_image(client, monkeypatch):
     assert client.get("/api/media/logo/abc123").status_code == 404
 
 
+def test_media_logo_seerr_tmdb_id_uses_tmdb_not_fake_jellyfin(client, monkeypatch):
+    """Editor passes Seerr TMDB ids — must not invent /Items/{tmdb}/Images/Logo."""
+    from app.config import save_settings
+    from app.models import AppSettings
+
+    save_settings(
+        AppSettings(
+            jellyfin={"url": "http://jf:8096", "api_key": "secret", "user_id": "u"},
+            tmdb={"api_key": "tmdb-secret", "language": "en-US"},
+        )
+    )
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+    seen: list[str] = []
+
+    class FakeHttp:
+        def __init__(self, timeout: float = 15.0):
+            self.timeout = timeout
+
+        def get_json(self, url, headers=None, params=None):
+            assert "/3/movie/550/images" in url
+            return {"logos": [{"file_path": "/clear.png", "iso_639_1": "en", "vote_average": 9}]}
+
+        def get_bytes(self, url, headers=None):
+            seen.append(url)
+            assert "image.tmdb.org" in url
+            assert "/Items/" not in url
+            return png
+
+    monkeypatch.setattr("app.generate.HttpClient", FakeHttp)
+    monkeypatch.setattr("app.providers.tmdb.HttpClient", FakeHttp)
+    response = client.get("/api/media/logo/550?tmdb_id=550&media_type=movie")
+    assert response.status_code == 200
+    assert response.content.startswith(b"\x89PNG")
+    assert seen and all("/Items/" not in u for u in seen)
+
+
 def test_media_logo_proxies_jellyfin_logo(client, monkeypatch):
     from app.config import save_settings
     from app.models import AppSettings

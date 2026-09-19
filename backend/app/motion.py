@@ -38,12 +38,13 @@ from app.fsutil import promote_temp
 
 STYLES = ("parallax", "kenburns", "drift")
 QUALITIES = ("light", "standard", "cinematic")
-# Distinct enough that Subtle / Cinematic / Bold change the baked loop at a glance.
-INTENSITY_PRESETS = {"subtle": 0.16, "cinematic": 0.55, "bold": 0.96}
-# Keep jitter inside the named family (Subtle / Cinematic / Bold), not across it.
+# Distinct enough that Subtle / Balanced / Cinematic / Bold change the baked loop at a glance.
+INTENSITY_PRESETS = {"subtle": 0.16, "balanced": 0.355, "cinematic": 0.55, "bold": 0.96}
+# Keep jitter inside the named family, not across it.
 _PRESET_BAND = {
     "subtle": (0.10, 0.28),
-    "cinematic": (0.40, 0.72),
+    "balanced": (0.29, 0.42),
+    "cinematic": (0.43, 0.72),
     "bold": (0.82, 1.00),
 }
 _INTENSITY_JITTER = 0.08  # ±8% relative
@@ -55,7 +56,7 @@ _DEFAULT_PAN_Y_RATIO = 0.14  # CSS --motion-y / --motion-x
 
 _BITRATE = {"light": "2800k", "standard": "4000k", "cinematic": "5500k"}
 _DEFAULT_DURATION = {"light": 8.0, "standard": 12.0, "cinematic": 16.0}
-_PRESET_DURATION = {"subtle": 16.0, "cinematic": 12.0, "bold": 10.0}
+_PRESET_DURATION = {"subtle": 16.0, "balanced": 14.0, "cinematic": 12.0, "bold": 10.0}
 _X264_PRESET = {"light": "fast", "standard": "medium", "cinematic": "slow"}
 # 30fps 1080p Main@L4.0 is Android TV safe and closer to the CSS preview.
 _DEFAULT_FPS = 30

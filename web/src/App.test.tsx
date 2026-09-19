@@ -61,6 +61,7 @@ const relayItem: GalleryFixture = {
 };
 
 const galleryItems: GalleryFixture[] = [];
+let tonightServesVideo = false;
 
 function seedGallery(items: GalleryFixture[]) {
   galleryItems.splice(0, galleryItems.length, ...items.map((item) => ({ ...item })));
@@ -359,7 +360,10 @@ vi.stubGlobal(
           imageUrl: shuffled
             ? "/api/wallpaper/image/Netflix%20Hero/harbor.jpg"
             : "/api/wallpaper/image/Netflix%20Hero/northlight.jpg",
-          mediaType: "image",
+          videoUrl: tonightServesVideo
+            ? "/api/wallpaper/video/Netflix%20Hero/northlight.mp4"
+            : null,
+          mediaType: tonightServesVideo ? "video" : "image",
           queue: shuffled ? "continue_watching" : "unwatched",
           pinned: false,
           path: shuffled ? "harbor.jpg" : "northlight.jpg",
@@ -440,6 +444,10 @@ class ProbeImage {
 vi.stubGlobal("Image", ProbeImage);
 
 describe("Tonight page", () => {
+  beforeEach(() => {
+    tonightServesVideo = false;
+  });
+
   it("tells a one-pick story with outcome-labeled primary actions", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
@@ -479,6 +487,19 @@ describe("Tonight page", () => {
     expect(screen.getByText(/Seerr trending/)).toBeInTheDocument();
   });
 
+  it("does not overlay the movie name again when the pick is a baked VIDEO", async () => {
+    tonightServesVideo = true;
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
+    const stage = screen.getByLabelText("Projectivy home screen preview");
+    expect(stage.querySelector("video")).toBeTruthy();
+    expect(stage.querySelector(".tv-hero-meta h2")).toBeNull();
+    expect(stage.querySelector(".chrome-pills")).toBeNull();
+    expect(within(stage).getByText("VIDEO")).toBeInTheDocument();
+    expect(screen.getByText("Northlight")).toBeInTheDocument();
+    expect(screen.getByText(/Baked VIDEO is what Projectivy will play/i)).toBeInTheDocument();
+  });
+
   it("refreshes the pick, bakes this title, and opens the editor", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
@@ -490,7 +511,7 @@ describe("Tonight page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh pick" }));
     expect(await screen.findAllByText("Harbor Season")).toBeTruthy();
-    expect(screen.getAllByText("Continue").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Partly watched").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Bake motion for this pick" }));
     expect((await screen.findAllByText(/Baked parallax VIDEO/)).length).toBeGreaterThan(0);

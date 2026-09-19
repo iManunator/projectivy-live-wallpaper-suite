@@ -20,7 +20,7 @@ from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
 from app.providers.tmdb import TmdbProvider
 from app.render import render_chrome, render_plate, render_still, save_jpeg, save_png
-from app.skip import matching_records, media_ids_of, records_to_cleanup, should_skip
+from app.skip import matching_records, media_ids_of, records_to_cleanup, should_skip, status_changed
 
 
 def _providers_from_settings():
@@ -60,31 +60,39 @@ def collect_items(source: str, limit: int, warnings: list[str] | None = None) ->
         if not items:
             warn("No configured libraries returned titles; using the demo catalog.")
             items = providers["demo"].list_items(limit=limit)
-        return _dedupe(items)[:limit]
-    provider = providers.get(key) or providers["demo"]
-    items = []
-    used_fallback = False
-    if key != "demo" and not provider.is_configured():
-        label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
-        warn(f"{label} is not configured. Using the demo catalog.")
-        used_fallback = True
-        items = providers["demo"].list_items(limit=limit)
+        items = _dedupe(items)[:limit]
     else:
-        try:
-            items = provider.list_items(limit=limit)
-        except Exception as exc:
+        provider = providers.get(key) or providers["demo"]
+        items = []
+        used_fallback = False
+        if key != "demo" and not provider.is_configured():
             label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
-            warn(f"{label} request failed: {exc}. Using the demo catalog.")
+            warn(f"{label} is not configured. Using the demo catalog.")
             used_fallback = True
-            items = []
-        if not items and key != "demo":
-            if not used_fallback:
-                label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
-                warn(f"{label} returned no movies or series. Using the demo catalog.")
             items = providers["demo"].list_items(limit=limit)
+        else:
+            try:
+                items = provider.list_items(limit=limit)
+            except Exception as exc:
+                label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+                warn(f"{label} request failed: {exc}. Using the demo catalog.")
+                used_fallback = True
+                items = []
+            if not items and key != "demo":
+                if not used_fallback:
+                    label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+                    warn(f"{label} returned no movies or series. Using the demo catalog.")
+                items = providers["demo"].list_items(limit=limit)
     tmdb = providers["tmdb"]
     if tmdb.is_configured():
         items = [tmdb.enrich(item) for item in items]
+    elif key in ("jellyseerr", "all") and any(
+        getattr(i, "source", "") == "jellyseerr" and not i.logo_url for i in items
+    ):
+        warn(
+            "Seerr clearlogos need a TMDB API key in Settings → TMDB "
+            "(discover does not include logos). In-library Seerr titles can still use Jellyfin logos."
+        )
     return items
 
 
@@ -158,6 +166,7 @@ def _fetch_logo(item: MediaItem, http_get=None) -> bytes | None:
             continue
         if data and looks_like_image(data):
             return data
+    # Jellyfin Logo URLs often 404 for Seerr-only / TMDB ids — still try TMDB.
     tmdb_url = _tmdb_logo_url(item)
     if tmdb_url:
         try:
@@ -170,16 +179,23 @@ def _fetch_logo(item: MediaItem, http_get=None) -> bytes | None:
 
 
 def _tmdb_logo_url(item: MediaItem) -> str | None:
-    if item.logo_url and item.logo_url.startswith(("http://", "https://")):
+    """Resolve a TMDB clearlogo CDN URL when we have an API key + tmdb_id.
+
+    Skip only when ``logo_url`` is already a TMDB CDN link (``_logo_urls`` will
+    download it). Broken Jellyfin Logo guesses must not block this fallback —
+    Seerr editor previews pass a TMDB id as ``item_id`` and used to invent a
+    fake ``/Items/{tmdb}/Images/Logo`` URL that then short-circuited TMDB.
+    """
+    if item.logo_url and "image.tmdb.org" in item.logo_url:
         return None
     settings = load_settings()
     tm = settings.tmdb or {}
-    key = tm.get("api_key") or ""
+    key = (tm.get("api_key") or "").strip()
     if not key or not item.tmdb_id:
         return None
     try:
         return TmdbProvider(api_key=key, language=tm.get("language") or "en-US").fetch_logo_url(
-            item.tmdb_id, item.media_type
+            str(item.tmdb_id), item.media_type
         )
     except Exception:
         return None
@@ -202,13 +218,20 @@ def resolve_logo_bytes(
         settings = load_settings()
         jf = settings.jellyfin or {}
         base = (jf.get("url") or "").rstrip("/")
-        key = jf.get("api_key") or ""
-        logo_url = f"{base}/Items/{item_id}/Images/Logo" if base and key and item_id else None
+        key = (jf.get("api_key") or "").strip()
+        resolved_tmdb = (tmdb_id or "").strip() or None
+        if not resolved_tmdb and item_id and str(item_id).isdigit():
+            resolved_tmdb = str(item_id)
+        # Numeric TMDB ids must not invent a Jellyfin Logo URL (Seerr editor).
+        use_jellyfin = bool(base and key and item_id)
+        if use_jellyfin and resolved_tmdb and str(item_id) == str(resolved_tmdb) and str(item_id).isdigit():
+            use_jellyfin = False
+        logo_url = f"{base}/Items/{item_id}/Images/Logo" if use_jellyfin else None
         item = MediaItem(
             title="",
             media_type=kind,
-            jellyfin_id=item_id or None,
-            tmdb_id=tmdb_id or None,
+            jellyfin_id=item_id if use_jellyfin else None,
+            tmdb_id=resolved_tmdb,
             logo_url=logo_url,
             source="jellyfin" if logo_url else "tmdb",
         )
@@ -285,6 +308,7 @@ def generate_one(
     layout = load_layout(layout_name)
     if layout is None:
         raise ValueError(f"Unknown layout: {layout_name}")
+    item = _hydrate_item_art_urls(item)
     catalog = catalog_store.load_catalog()
     previous = matching_records(catalog, item, layout_name)
     keep_pinned = any(rec.pinned for rec in previous)
@@ -359,7 +383,7 @@ def generate_one(
 
 
 def run_generate(request: GenerateRequest, http_get=None, job_id: str | None = None) -> dict:
-    from app.progress import report
+    from app.progress import is_cancelled, report
 
     warnings: list[str] = []
     failed: list[str] = []
@@ -384,22 +408,40 @@ def run_generate(request: GenerateRequest, http_get=None, job_id: str | None = N
     created: list[str] = []
     skipped: list[str] = []
     replaced: list[str] = []
+    refreshed: list[str] = []
     total = max(len(items), 1)
+    cancelled = False
     report(job_id, total=total, done=0, current=items[0].title if items else None, message="Generating stills…")
     for index, item in enumerate(items, start=1):
+        if is_cancelled(job_id):
+            cancelled = True
+            break
         report(job_id, current=item.title, done=index - 1, total=total, message="Generating stills…")
-        if should_skip(catalog, item, request.layout, request.skip_existing and not request.replace_existing):
+        matches = matching_records(catalog, item, request.layout)
+        skip_mode = request.skip_existing and not request.replace_existing
+        if should_skip(
+            catalog,
+            item,
+            request.layout,
+            skip_mode,
+            refresh_status=bool(request.refresh_status),
+        ):
             skipped.append(item.title)
             report(job_id, done=index, skipped=skipped)
             continue
-        if request.replace_existing and matching_records(catalog, item, request.layout):
+        replace = bool(request.replace_existing)
+        if matches and request.replace_existing:
             replaced.append(item.title)
+            replace = True
+        elif matches and request.refresh_status and any(status_changed(rec, item) for rec in matches):
+            refreshed.append(item.title)
+            replace = True
         try:
             record = generate_one(
                 item,
                 request.layout,
                 motion=request.motion,
-                replace=request.replace_existing,
+                replace=replace,
                 http_get=http_get,
             )
         except ValueError:
@@ -414,30 +456,41 @@ def run_generate(request: GenerateRequest, http_get=None, job_id: str | None = N
             catalog = catalog_store.load_catalog()
         report(job_id, done=index, created=created, failed=failed, skipped=skipped)
     cleaned: list[str] = []
-    if request.cleanup:
+    if request.cleanup and not cancelled:
         doomed = records_to_cleanup(catalog_store.load_catalog(), items, request.layout)
         cleaned = [rec.title for rec in doomed]
         catalog_store.remove_records({rec.id for rec in doomed})
+    done = len(created) + len(skipped) + len(failed)
     result = {
         "created": created,
         "skipped": skipped,
         "replaced": replaced,
+        "refreshed": refreshed,
         "cleaned": cleaned,
         "failed": failed,
         "warnings": warnings,
         "count": len(created),
         "total": total,
-        "done": total if items else 0,
+        "done": done if cancelled else (total if items else 0),
+        "cancelled": cancelled,
     }
-    result["message"] = generate_message(request.layout, result)
-    report(job_id, done=total if items else 0, total=total, current=None, message=result["message"])
+    if cancelled:
+        result["message"] = (
+            f"Cancelled after {len(created)} still"
+            f"{'' if len(created) == 1 else 's'}."
+            if created
+            else "Cancelled."
+        )
+    else:
+        result["message"] = generate_message(request.layout, result)
+    report(job_id, done=result["done"], total=total, current=None, message=result["message"])
     return result
 
 
 def bake_motion(layout: str, filename: str | None = None, job_id: str | None = None) -> dict:
     """Bake ffmpeg VIDEO for one still (filename) or every still in a layout."""
     from app.overlays import apply_overlays
-    from app.progress import report
+    from app.progress import is_cancelled, report
 
     settings = load_settings()
     base_profile = profile_from_settings(settings)
@@ -461,8 +514,12 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
     failed: list[str] = []
     scanned = len(targets)
     total = max(scanned, 1)
+    cancelled = False
     report(job_id, total=total, done=0, message="Baking motion…", current=targets[0].title if targets else None)
     for index, rec in enumerate(targets, start=1):
+        if is_cancelled(job_id):
+            cancelled = True
+            break
         report(job_id, current=rec.title, done=index - 1, total=total, message="Baking motion…")
         jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
         if not jpg:
@@ -501,7 +558,7 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
             failed.append(rec.filename)
         report(job_id, done=index, created=done, failed=failed)
     result = {
-        "status": "ok",
+        "status": "cancelled" if cancelled else "ok",
         "generated": done,
         "failed": failed,
         "scanned": scanned,
@@ -511,12 +568,21 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
         "vary": bool(getattr(settings, "motion_vary", True)),
         "count": len(done),
         "total": scanned,
-        "done": scanned,
+        "done": len(done) + len(failed) if cancelled else scanned,
+        "cancelled": cancelled,
         "layered": True,
         "chrome_locked": True,
     }
     result["message"] = motion_bake_message(layout, result)
-    report(job_id, done=scanned, total=total, current=None, message=result["message"])
+    report(
+        job_id,
+        done=result["done"],
+        total=total,
+        current=None,
+        message=result["message"],
+        created=done,
+        failed=failed,
+    )
     return result
 
 

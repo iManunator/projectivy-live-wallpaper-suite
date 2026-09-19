@@ -106,7 +106,7 @@ object PluginSettingsCopy {
     )
     val CLIENT = SettingCopy(
         "Open titles in",
-        "Jellyfin and Moonfin deep-link this item. Other apps only launch (no title-level link).",
+        "Jellyfin and Moonfin deep-link library titles. Seerr-only wallpapers open SeerrTV. Other apps only launch (no title-level link).",
     )
     val IDLE = SettingCopy(
         "New wallpaper when leaving idle",

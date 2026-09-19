@@ -47,6 +47,7 @@ def generate_message(layout: str, result: dict[str, Any]) -> str:
     created = len(created_titles)
     skipped = len(result.get("skipped") or [])
     replaced = len(result.get("replaced") or [])
+    refreshed = len(result.get("refreshed") or [])
     cleaned = len(result.get("cleaned") or [])
     failed = len(result.get("failed") or [])
     if created:
@@ -58,6 +59,8 @@ def generate_message(layout: str, result: dict[str, Any]) -> str:
     bits: list[str] = []
     if replaced:
         bits.append(f"replaced {replaced}")
+    if refreshed:
+        bits.append(f"refreshed {refreshed} status change{'s' if refreshed != 1 else ''}")
     if skipped:
         bits.append(f"skipped {skipped} already generated")
     if cleaned:

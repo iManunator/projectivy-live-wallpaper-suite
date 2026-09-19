@@ -85,6 +85,7 @@ export type CronJob = {
   source?: string;
   skip_existing?: boolean;
   replace_existing?: boolean;
+  refresh_status?: boolean;
   cleanup?: boolean;
   motion?: boolean;
   limit?: number;
@@ -124,6 +125,7 @@ export type GenerateRequest = {
   limit: number;
   skip_existing: boolean;
   replace_existing: boolean;
+  refresh_status?: boolean;
   cleanup: boolean;
   motion: boolean;
   ids?: string[];

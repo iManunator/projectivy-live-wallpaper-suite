@@ -92,6 +92,17 @@ class TmdbProvider:
             genres = [g["name"] if isinstance(g, dict) else str(g) for g in detail.get("genres") or []]
             backdrop = detail.get("backdrop_path")
             poster = detail.get("poster_path")
+            date = str(detail.get("release_date") or detail.get("first_air_date") or "")
+            year = int(date[:4]) if date[:4].isdigit() else None
+            runtime = ""
+            if kind == "movie" and detail.get("runtime"):
+                minutes = int(detail["runtime"])
+                hours, mins = divmod(minutes, 60)
+                runtime = f"{hours}h {mins}m" if hours else f"{mins}m"
+            elif kind == "tv":
+                ep = detail.get("episode_run_time") or []
+                if isinstance(ep, list) and ep:
+                    runtime = f"{int(ep[0])}m"
             updates = {
                 "overview": item.overview or detail.get("overview") or "",
                 "rating": item.rating or float(detail.get("vote_average") or 0),
@@ -99,6 +110,10 @@ class TmdbProvider:
             }
             if genres and not item.genres:
                 updates["genres"] = genres
+            if year and not item.year:
+                updates["year"] = year
+            if runtime and not item.runtime:
+                updates["runtime"] = runtime
             if backdrop and not item.backdrop_url:
                 updates["backdrop_url"] = f"https://image.tmdb.org/t/p/w1280{backdrop}"
             if poster and not item.poster_url:

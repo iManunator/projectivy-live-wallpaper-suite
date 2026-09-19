@@ -11,13 +11,14 @@ describe("watch badges", () => {
 
   it("returns distinct labels for the three states", () => {
     expect(watchBadge("unwatched")?.label).toBe("Unwatched");
-    expect(watchBadge("partial")?.label).toBe("Continue");
+    expect(watchBadge("partial")?.label).toBe("Partly watched");
     expect(watchBadge("watched")?.label).toBe("Watched");
     expect(watchBadge("unwatched")?.color).not.toBe(watchBadge("watched")?.color);
   });
 
   it("styles watch and video pills", () => {
     expect(badgeClass("Unwatched")).toContain("unwatched");
+    expect(badgeClass("Partly watched")).toContain("partial");
     expect(badgeClass("Continue")).toContain("partial");
     expect(badgeClass("Watched")).toContain("watched");
     expect(badgeClass("VIDEO")).toContain("badge-video");

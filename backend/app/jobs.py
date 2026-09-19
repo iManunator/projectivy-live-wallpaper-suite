@@ -65,6 +65,7 @@ def _job_kwargs(job: dict | None) -> dict:
         "source": spec.get("source") or "demo",
         "skip_existing": bool(spec.get("skip_existing", True)),
         "replace_existing": bool(spec.get("replace_existing", False)),
+        "refresh_status": bool(spec.get("refresh_status", False)),
         "cleanup": bool(spec.get("cleanup", False)),
         "motion": bool(spec.get("motion", False)),
         "limit": int(spec.get("limit") or 20),
@@ -95,6 +96,7 @@ def _run_job(job_id: str | None = None, **kwargs) -> dict:
             "ok": True,
             "skipped": len(result.get("skipped") or []),
             "replaced": len(result.get("replaced") or []),
+            "refreshed": len(result.get("refreshed") or []),
             "cleaned": len(result.get("cleaned") or []),
         },
     )

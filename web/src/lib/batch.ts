@@ -1,6 +1,7 @@
 export type BatchFlags = {
   skip_existing: boolean;
   replace_existing: boolean;
+  refresh_status?: boolean;
   cleanup: boolean;
   ids?: string[];
   skip_ids?: string[];
@@ -12,6 +13,11 @@ export function describeBatchFlags(flags: BatchFlags): string {
     bits.push("Replace overwrites matching Jellyfin / TMDB / IMDb ids (skip is ignored).");
   } else if (flags.skip_existing) {
     bits.push("Skip leaves titles already generated for this layout in place.");
+    if (flags.refresh_status) {
+      bits.push(
+        "Refresh status re-bakes stills when watch state or availability changes (e.g. unwatched → watched, requestable → available).",
+      );
+    }
   } else {
     bits.push("Every matching title is rendered again as a new still.");
   }

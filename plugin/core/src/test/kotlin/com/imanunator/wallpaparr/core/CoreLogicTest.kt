@@ -173,6 +173,14 @@ class UrlSupportTest {
     }
 
     @Test
+    fun detectsSeerrActionUrls() {
+        assertTrue(UrlSupport.isSeerrActionUrl("http://seerr:5055/movie/1"))
+        assertTrue(UrlSupport.isSeerrActionUrl("https://host/tv/99"))
+        assertFalse(UrlSupport.isSeerrActionUrl("jellyfin://items/1"))
+        assertFalse(UrlSupport.isSeerrActionUrl("http://example.com/other"))
+    }
+
+    @Test
     fun preferMotionVideo() {
         assertTrue(UrlSupport.shouldUseVideo(true, "video", "http://x/a.mp4"))
         assertFalse(UrlSupport.shouldUseVideo(false, "video", "http://x/a.mp4"))
@@ -214,8 +222,35 @@ class ClientIntentsTest {
     }
 
     @Test
+    fun moonfinDeepLinkUsesCorrectPackage() {
+        val uri = ClientIntents.deepLinkIntent(ClientIntents.MOONFIN_PACKAGE, "abc")
+        assertTrue(uri!!.contains(ClientIntents.MOONFIN_PACKAGE))
+        assertTrue(uri.contains("S.ItemId=abc"))
+    }
+
+    @Test
     fun launchOnlyClientsHaveNoDeepLink() {
         assertNull(ClientIntents.deepLinkIntent("org.xbmc.kodi", "x"))
+    }
+
+    @Test
+    fun seerrHttpActionOpensSeerrTv() {
+        val uri = ClientIntents.resolveActionUri(
+            ClientIntents.MOONFIN_PACKAGE,
+            "http://192.168.1.10:5055/movie/550",
+        )
+        assertTrue(uri!!.contains(ClientIntents.SEERRTV_PACKAGE))
+        assertTrue(uri.contains("movie/550"))
+    }
+
+    @Test
+    fun jellyfinActionUsesMoonfinIr() {
+        val uri = ClientIntents.resolveActionUri(
+            ClientIntents.MOONFIN_PACKAGE,
+            "jellyfin://items/jf-42",
+        )
+        assertTrue(uri!!.contains(ClientIntents.MOONFIN_PACKAGE))
+        assertTrue(uri.contains("S.ItemId=jf-42"))
     }
 }
 

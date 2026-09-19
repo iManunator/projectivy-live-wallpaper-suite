@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from app.models import MediaItem, WallpaperRecord
+from app.seerr_status import seerr_kind
+from app.watch import normalize_watch_state
 
 
 def media_ids_of(item: MediaItem) -> set[str]:
@@ -32,10 +34,57 @@ def matching_records(catalog: list[WallpaperRecord], item: MediaItem, layout: st
     ]
 
 
-def should_skip(catalog: list[WallpaperRecord], item: MediaItem, layout: str, skip_existing: bool) -> bool:
+def _norm(value: str | None) -> str:
+    return (value or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def status_fingerprint(
+    *,
+    watch_state: str | None = None,
+    library_state: str | None = None,
+    availability: str | None = None,
+    source: str | None = None,
+) -> tuple[str, str, str, str]:
+    """Chrome-facing status tuple used to detect watch / availability changes."""
+    return (
+        normalize_watch_state(watch_state) or "",
+        seerr_kind(library_state, availability, source) or "",
+        _norm(availability),
+        _norm(library_state),
+    )
+
+
+def status_changed(rec: WallpaperRecord, item: MediaItem) -> bool:
+    """True when baked chrome would change (watch and/or availability)."""
+    return status_fingerprint(
+        watch_state=rec.watch_state,
+        library_state=rec.library_state,
+        availability=rec.availability,
+        source=rec.source,
+    ) != status_fingerprint(
+        watch_state=item.watch_state,
+        library_state=item.library_state,
+        availability=item.availability,
+        source=item.source,
+    )
+
+
+def should_skip(
+    catalog: list[WallpaperRecord],
+    item: MediaItem,
+    layout: str,
+    skip_existing: bool,
+    *,
+    refresh_status: bool = False,
+) -> bool:
     if not skip_existing:
         return False
-    return bool(matching_records(catalog, item, layout))
+    matches = matching_records(catalog, item, layout)
+    if not matches:
+        return False
+    if refresh_status and any(status_changed(rec, item) for rec in matches):
+        return False
+    return True
 
 
 def records_to_cleanup(

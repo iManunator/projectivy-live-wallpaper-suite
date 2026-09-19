@@ -361,6 +361,15 @@ input, select, textarea {
 .job-progress.error .job-progress-bar > span { background: var(--danger); }
 .job-progress p { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 .job-progress strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.job-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.job-progress-row p { margin: 0; flex: 1; min-width: 0; }
+.job-progress-cancel { flex-shrink: 0; padding: 4px 10px; font-size: 12px; }
 
 .thumb.selected { outline: 2px solid var(--accent); }
 .thumb-select {
