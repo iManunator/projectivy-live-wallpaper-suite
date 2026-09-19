@@ -351,7 +351,8 @@ function GeneratePage() {
   useEffect(() => {
     api.layouts().then((names) => {
       setLayouts(names);
-      if (names[0]) setForm((f) => ({ ...f, layout: names[0] }));
+      const preferred = names.includes("Netflix Hero") ? "Netflix Hero" : names[0];
+      if (preferred) setForm((f) => ({ ...f, layout: preferred }));
     });
     api.settings().then(setSettings).catch(() => undefined);
   }, []);
