@@ -33,8 +33,8 @@
   <rect x="268" y="96" width="420" height="546" fill="url(#fadeL)"/>
   <rect x="268" y="420" width="968" height="222" fill="url(#fadeB)"/>
 
-  <text x="292" y="58" fill="#f4efe6" font-family="Georgia, serif" font-size="26">Tonight's home screen</text>
-  <text x="292" y="82" fill="#9a9388" font-family="system-ui, sans-serif" font-size="13">Projectivy chrome overlay · layout DNA · taste mix</text>
+  <text x="292" y="58" fill="#f4efe6" font-family="Georgia, serif" font-size="26">Tonight</text>
+  <text x="292" y="82" fill="#9a9388" font-family="system-ui, sans-serif" font-size="13">What Projectivy shows next · one pick, not the gallery</text>
   <text x="1088" y="58" fill="#f4efe6" font-family="system-ui, sans-serif" font-size="18">21:41</text>
 
   <text x="300" y="250" fill="#f4efe6" font-family="Georgia, serif" font-size="44">Northlight</text>
