@@ -30,6 +30,8 @@ def provider_test_message(provider: str, result: dict[str, Any]) -> str:
     error = str(result.get("error") or "unknown error").strip()
     if "required" in error.lower():
         return error if error[0].isupper() else error[:1].upper() + error[1:]
+    if "api key" in error.lower() or "rejected" in error.lower():
+        return error
     return f"Could not reach {label}: {error}"
 
 
