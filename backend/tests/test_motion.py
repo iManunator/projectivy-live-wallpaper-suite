@@ -419,6 +419,28 @@ def test_profile_for_wallpaper_respects_toggle_and_seed_chain():
     assert wallpaper_motion_seed(jellyfin_id="demo-jf-1", title="Northlight") == motion_seed_key("demo-jf-1")
 
 
+def test_python_matches_web_variation_golden():
+    """Lock the LCG draws shared with web/src/lib/motion.ts (seed demo-jf-1)."""
+    p = vary_motion_profile(
+        MotionProfile(style="parallax", intensity=0.55, duration=12),
+        enabled=True,
+        seed="demo-jf-1",
+        preset="cinematic",
+    )
+    assert p.intensity == 0.5582
+    assert p.pan_x_sign == -1
+    assert p.pan_y_sign == 1
+    assert p.pan_y_ratio == 0.1025
+    assert p.phase == 0.5727
+    assert p.zoom_scale == 0.9996
+    assert p.pan_scale == 1.0543
+    css = motion_preview_vars(p)
+    assert css["--motion-x"] == "2.82%"
+    assert css["--motion-y"] == "0.29%"
+    assert css["--motion-zoom-to"] == "1.1005"
+    assert css["--motion-delay"] == "-6.872s"
+
+
 def test_profile_defaults_include_motion_vary_on():
     settings = AppSettings()
     assert settings.motion_vary is True

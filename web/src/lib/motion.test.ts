@@ -99,5 +99,18 @@ describe("motion options", () => {
     expect(css["--motion-x"]).toBe(`${(-panPct * a.panXSign).toFixed(2)}%`);
     expect(css["--motion-delay"]).toBe(`${(-(a.phase * 12)).toFixed(3)}s`);
     expect(motionSeedKey("demo-jf-1", "Northlight")).toBe("demo-jf-1");
+    expect(a).toMatchObject({
+      intensity: 0.5582,
+      panXSign: -1,
+      panYSign: 1,
+      panYRatio: 0.1025,
+      phase: 0.5727,
+      zoomScale: 0.9996,
+      panScale: 1.0543,
+    });
+    expect(css["--motion-x"]).toBe("2.82%");
+    expect(css["--motion-y"]).toBe("0.29%");
+    expect(css["--motion-zoom-to"]).toBe("1.1005");
+    expect(css["--motion-delay"]).toBe("-6.872s");
   });
 });
