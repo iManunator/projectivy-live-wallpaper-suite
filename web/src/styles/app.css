@@ -154,22 +154,27 @@ button, input, select, textarea {
 .inline input { width: auto; }
 
 /* 16:9 stage: object-fit:contain in the parent. Width never exceeds the panel;
-   height scales down to remaining viewport so the stage cannot blow out the page. */
+   height scales down to remaining viewport so the stage cannot blow out the page.
+   --stage-chrome / --stage-max-height are set on .stage-frame and inherited —
+   do not redefine --stage-chrome on the child or editor reserves are ignored. */
 .stage-frame {
+  --stage-chrome: 14rem;
+  --stage-max-height: min(68dvh, calc(100dvh - var(--stage-chrome)));
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
 }
+/* Editor has toolbars above + generated strip below; keep the stage compact. */
 .stage-frame.editor-stage {
-  --stage-chrome: 18rem;
+  --stage-chrome: 30rem;
+  --stage-max-height: min(42dvh, calc(100dvh - var(--stage-chrome)));
 }
 .stage-frame > .canvas-wrap,
 .stage-frame > .tv-preview {
-  --stage-chrome: 14rem;
-  --stage-max-height: min(68dvh, calc(100dvh - var(--stage-chrome)));
   width: min(100%, calc(var(--stage-max-height) * 16 / 9));
   max-width: 100%;
   aspect-ratio: 16 / 9;
@@ -287,8 +292,9 @@ h1 { font-family: "Fraunces", serif; font-weight: 650; font-size: 32px; margin: 
   box-shadow: var(--shadow);
 }
 .grid { display: grid; gap: 16px; }
-.grid.two { grid-template-columns: 1.4fr 0.8fr; }
+.grid.two { grid-template-columns: 1.4fr 0.8fr; align-items: start; }
 .grid.three { grid-template-columns: repeat(3, 1fr); }
+.grid.two > .card { min-width: 0; }
 
 label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 input, select, textarea {
@@ -567,15 +573,24 @@ input, select, textarea {
   pointer-events: none;
   filter: drop-shadow(0 2px 10px rgba(0,0,0,0.75));
 }
-.created-strip { margin-top: 16px; }
+.created-strip {
+  margin-top: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
 .created-row {
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
   padding: 8px 0 4px;
+  -webkit-overflow-scrolling: touch;
 }
 .created-thumb {
   flex: 0 0 160px;
+  width: 160px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -823,17 +838,17 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
   .nav button { width: auto; min-height: 44px; }
   .brand-sub { display: none; }
   .grid.two, .grid.three, .dash-grid, .generate-grid { grid-template-columns: 1fr; }
-  .tonight-hero .stage-frame > .tv-preview {
-    --stage-chrome: 14rem;
-    --stage-max-height: min(48dvh, calc(100dvh - var(--stage-chrome)));
-  }
-  .stage-frame > .canvas-wrap,
-  .stage-frame > .tv-preview {
+  .stage-frame {
     --stage-chrome: 16rem;
     --stage-max-height: min(52dvh, calc(100dvh - var(--stage-chrome)));
   }
   .stage-frame.editor-stage {
-    --stage-chrome: 20rem;
+    --stage-chrome: 26rem;
+    --stage-max-height: min(38dvh, calc(100dvh - var(--stage-chrome)));
+  }
+  .tonight-hero .stage-frame {
+    --stage-chrome: 14rem;
+    --stage-max-height: min(48dvh, calc(100dvh - var(--stage-chrome)));
   }
   .toasts {
     left: max(12px, env(safe-area-inset-left));
