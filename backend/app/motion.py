@@ -5,8 +5,8 @@ Projectivy wallpaper plugins return either:
   - VIDEO (H.264 MP4 URL) — looping live wallpaper.
 
 This module bakes the VIDEO. The ``parallax`` style keeps metadata chrome
-nearly still while the artwork layer breathes and drifts (true depth).
-``kenburns`` / ``drift`` animate a single composite still.
+(including a movie/series logo) nearly still while the artwork layer breathes
+and drifts (true depth). ``kenburns`` / ``drift`` animate a single composite still.
 """
 
 from __future__ import annotations

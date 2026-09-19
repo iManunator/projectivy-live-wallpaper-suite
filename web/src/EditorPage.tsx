@@ -11,7 +11,7 @@ import {
 } from "./lib/layout";
 import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, type MotionStyle } from "./lib/motion";
-import { useToasts } from "./toasts";
+import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 
 type MediaRow = {
   title?: string;
@@ -27,6 +27,8 @@ type MediaRow = {
   tmdb_id?: string | null;
   backdrop_url?: string | null;
   poster_url?: string | null;
+  logo_url?: string | null;
+  media_type?: string | null;
 };
 
 type ViewerItem = { src: string; title: string; subtitle?: string };
@@ -158,6 +160,8 @@ export function EditorPage() {
   const [motionPreset, setMotionPreset] = useState("cinematic");
   const [lightLeak, setLightLeak] = useState(true);
   const [duration, setDuration] = useState(6);
+  const [logoSrc, setLogoSrc] = useState("");
+  const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
@@ -200,6 +204,48 @@ export function EditorPage() {
   const createdSlides = created.map(wallpaperSlide);
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(0.55);
   const motionVars = motionPreviewVars(motionStyle, intensity, duration);
+  const showLogo = prefersLogo(layout.title_display) && Boolean(logoSrc);
+  const titleLayer = layout.layers.find((row) => row.slot === "title");
+  const logoBox = (() => {
+    if (!showLogo || !logoNatural || !titleLayer) return null;
+    const maxW = Math.min(layout.logo_max_width || 1200, titleLayer.width || 860, layout.canvas_width - 144);
+    const maxH = Math.min(layout.logo_max_height || 450, titleLayer.height || 450, layout.canvas_height - 316);
+    const sized = smartResizeLogo(logoNatural.w, logoNatural.h, maxW, maxH);
+    return clampLogoRect(titleLayer.x, titleLayer.y, sized.width, sized.height, layout.canvas_width, layout.canvas_height);
+  })();
+  const metaYs = layout.layers.filter((row) => row.slot !== "title").map((row) => row.y);
+  const logoShift =
+    logoBox && titleLayer && metaYs.length
+      ? tagShift(logoBox.y, logoBox.height, Math.min(...metaYs), layout.logo_padding || 25)
+      : 0;
+
+  useEffect(() => {
+    if (!prefersLogo(layout.title_display) || !artId) {
+      setLogoSrc("");
+      setLogoNatural(null);
+      return;
+    }
+    const url = api.mediaLogo(artId, preview?.tmdb_id, preview?.media_type || "movie");
+    let cancelled = false;
+    const probe = new window.Image();
+    probe.onload = () => {
+      if (cancelled) return;
+      setLogoSrc(url);
+      setLogoNatural({ w: probe.naturalWidth, h: probe.naturalHeight });
+    };
+    probe.onerror = () => {
+      if (cancelled) return;
+      setLogoSrc("");
+      setLogoNatural(null);
+      if (layout.title_display === "logo") {
+        notify("info", "No logo for this title — showing the name.");
+      }
+    };
+    probe.src = url;
+    return () => {
+      cancelled = true;
+    };
+  }, [artId, layout.title_display, notify, preview?.media_type, preview?.tmdb_id]);
 
   async function load(name: string) {
     setLayout(normalizeLayout(await api.layout(name)));
@@ -265,8 +311,8 @@ export function EditorPage() {
     <section>
       <h1>Layout editor</h1>
       <p className="lede">
-        Flagship 16:9 stage for Projectivy: multi-stop gradients, vignette, edge fades, and a motion preview so you can
-        see parallax / Ken Burns without a TV. Drag metadata chips. Save persists the layout JSON.
+        Flagship 16:9 stage for Projectivy: multi-stop gradients, vignette, edge fades, movie logos, and a motion
+        preview so you can see parallax / Ken Burns without a TV. Drag metadata chips. Save persists the layout JSON.
       </p>
       <div className="grid two">
         <div className="card">
@@ -293,6 +339,20 @@ export function EditorPage() {
               >
                 <option value="demo">Demo catalog</option>
                 <option value="jellyfin">Jellyfin</option>
+              </select>
+            </label>
+            <label className="inline">
+              Title display
+              <select
+                value={layout.title_display || "auto"}
+                aria-label="Title display"
+                onChange={(e) =>
+                  setLayout({ ...layout, title_display: e.target.value as "auto" | "logo" | "text" })
+                }
+              >
+                <option value="auto">Auto — logo if fetched</option>
+                <option value="logo">Logo</option>
+                <option value="text">Title text</option>
               </select>
             </label>
           </div>
@@ -358,24 +418,34 @@ export function EditorPage() {
               {layout.layers
                 .map((item, index) => ({ item, index }))
                 .filter(({ item }) => item.visible)
-                .map(({ item, index }) => (
-                  <div
-                    key={item.id}
-                    className={`layer-chip ${index === selected ? "selected" : ""}`}
-                    onMouseDown={(event) => startDrag(event, index)}
-                    style={{
-                      left: `${(item.x / layout.canvas_width) * 100}%`,
-                      top: `${(item.y / layout.canvas_height) * 100}%`,
-                      fontSize: Math.max(10, item.font_size * 0.35),
-                      fontWeight: item.font_weight === "bold" ? 700 : 500,
-                      color: item.color,
-                      maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
-                      whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
-                    }}
-                  >
-                    {sample[item.slot] || item.slot}
-                  </div>
-                ))}
+                .map(({ item, index }) => {
+                  const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
+                  const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
+                  const x = isLogoTitle && logoBox ? logoBox.x : item.x;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""}`}
+                      onMouseDown={(event) => startDrag(event, index)}
+                      style={{
+                        left: `${(x / layout.canvas_width) * 100}%`,
+                        top: `${(y / layout.canvas_height) * 100}%`,
+                        fontSize: Math.max(10, item.font_size * 0.35),
+                        fontWeight: item.font_weight === "bold" ? 700 : 500,
+                        color: item.color,
+                        width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
+                        maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
+                        whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
+                      }}
+                    >
+                      {isLogoTitle ? (
+                        <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
+                      ) : (
+                        sample[item.slot] || item.slot
+                      )}
+                    </div>
+                  );
+                })}
             </div>
             {showTv && (
               <div className="tv-chrome editor-tv" aria-hidden="true">

@@ -66,6 +66,18 @@ if [[ "${art_bytes}" -lt 20000 ]]; then
   echo "demo still too small — expected a real JPEG, not an error page" >&2
   exit 1
 fi
+echo "==> GET /api/media/logo/demo-jf-1 (Northlight clearlogo PNG)"
+logo_bytes=$(curl -sf http://127.0.0.1:8787/api/media/logo/demo-jf-1 | wc -c)
+echo "demo logo bytes: ${logo_bytes}"
+if [[ "${logo_bytes}" -lt 1000 ]]; then
+  echo "demo logo too small — expected a PNG clearlogo" >&2
+  exit 1
+fi
+harbor_logo=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8787/api/media/logo/demo-jf-2)
+if [[ "${harbor_logo}" != "404" ]]; then
+  echo "Harbor Season should 404 the logo endpoint (text fallback), got ${harbor_logo}" >&2
+  exit 1
+fi
 
 echo "==> GET /api/wallpaper/status (demo catalog, no Jellyfin required)"
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest"

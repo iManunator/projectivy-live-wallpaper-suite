@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app import catalog as catalog_store
 from app.config import load_settings
-from app.demo_art import still_path_for_item
+from app.demo_art import logo_bytes_for_item, still_path_for_item
 from app.images import looks_like_image
 from app.layouts import load_layout
 from app.messages import generate_message
@@ -138,6 +138,85 @@ def _default_http_get(url: str) -> bytes:
     return data
 
 
+def _logo_urls(item: MediaItem) -> list[str]:
+    urls: list[str] = []
+    for url in (item.logo_url,):
+        if url and url not in urls and url.startswith(("http://", "https://")):
+            urls.append(url)
+    return urls
+
+
+def _fetch_logo(item: MediaItem, http_get=None) -> bytes | None:
+    bundled = logo_bytes_for_item(item)
+    if bundled:
+        return bundled
+    getter = http_get or _default_http_get
+    for url in _logo_urls(item):
+        try:
+            data = getter(url)
+        except Exception:
+            continue
+        if data and looks_like_image(data):
+            return data
+    tmdb_url = _tmdb_logo_url(item)
+    if tmdb_url:
+        try:
+            data = getter(tmdb_url)
+        except Exception:
+            return None
+        if data and looks_like_image(data):
+            return data
+    return None
+
+
+def _tmdb_logo_url(item: MediaItem) -> str | None:
+    if item.logo_url and item.logo_url.startswith(("http://", "https://")):
+        return None
+    settings = load_settings()
+    tm = settings.tmdb or {}
+    key = tm.get("api_key") or ""
+    if not key or not item.tmdb_id:
+        return None
+    try:
+        return TmdbProvider(api_key=key, language=tm.get("language") or "en-US").fetch_logo_url(
+            item.tmdb_id, item.media_type
+        )
+    except Exception:
+        return None
+
+
+def resolve_logo_bytes(
+    item_id: str,
+    tmdb_id: str | None = None,
+    media_type: str = "movie",
+    http_get=None,
+) -> bytes | None:
+    """Demo fixture, then Jellyfin Logo, then TMDB logos. Never raises."""
+    from app.demo_art import logo_bytes
+
+    try:
+        bundled = logo_bytes(item_id) or (logo_bytes(tmdb_id) if tmdb_id else None)
+        if bundled:
+            return bundled
+        kind = "tv" if media_type == "tv" else "movie"
+        settings = load_settings()
+        jf = settings.jellyfin or {}
+        base = (jf.get("url") or "").rstrip("/")
+        key = jf.get("api_key") or ""
+        logo_url = f"{base}/Items/{item_id}/Images/Logo" if base and key and item_id else None
+        item = MediaItem(
+            title="",
+            media_type=kind,
+            jellyfin_id=item_id or None,
+            tmdb_id=tmdb_id or None,
+            logo_url=logo_url,
+            source="jellyfin" if logo_url else "tmdb",
+        )
+        return _fetch_logo(item, http_get=http_get)
+    except Exception:
+        return None
+
+
 def _fetch_artwork(item: MediaItem, http_get=None) -> bytes | None:
     getter = http_get or _default_http_get
     for url in _artwork_urls(item):
@@ -172,10 +251,11 @@ def generate_one(
         if doomed:
             catalog_store.remove_records({rec.id for rec in doomed})
     backdrop_bytes = _fetch_artwork(item, http_get=http_get)
+    logo_bytes = _fetch_logo(item, http_get=http_get)
     settings = load_settings()
     from app.overlays import apply_overlays
 
-    image = apply_overlays(render_still(item, layout, backdrop_bytes=backdrop_bytes), settings)
+    image = apply_overlays(render_still(item, layout, backdrop_bytes=backdrop_bytes, logo_bytes=logo_bytes), settings)
     filename = _filename_for(item)
     dest: Path = catalog_store.layout_dir(layout_name) / filename
     save_jpeg(image, dest)
@@ -187,7 +267,7 @@ def generate_one(
         plate_path = dest.with_name(dest.stem + "_plate.jpg")
         chrome_path = dest.with_name(dest.stem + "_chrome.png")
         save_jpeg(render_plate(item, layout, backdrop_bytes=backdrop_bytes), plate_path)
-        save_png(apply_overlays(render_chrome(item, layout), settings), chrome_path)
+        save_png(apply_overlays(render_chrome(item, layout, logo_bytes=logo_bytes), settings), chrome_path)
         ok, _ = generate_motion(
             dest,
             profile=profile,

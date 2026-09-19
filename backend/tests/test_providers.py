@@ -43,6 +43,7 @@ def test_jellyfin_parses_watch_state_and_deep_link():
     assert items[0].source == "jellyfin"
     assert items[0].backdrop_url == "http://jf:8096/Items/abc/Images/Backdrop?maxWidth=1920"
     assert items[0].poster_url == "http://jf:8096/Items/abc/Images/Primary?maxHeight=600"
+    assert items[0].logo_url == "http://jf:8096/Items/abc/Images/Logo"
 
 
 def test_seerr_marks_requestable_when_not_in_library():
@@ -66,6 +67,28 @@ def test_seerr_marks_requestable_when_not_in_library():
     assert items[0].availability == "requestable"
     assert items[0].tmdb_id == "55"
     assert items[0].source == "jellyseerr"
+
+
+def test_seerr_reads_tmdb_shaped_logos():
+    payload = {
+        "results": [
+            {
+                "id": 77,
+                "title": "Clearmark",
+                "mediaType": "movie",
+                "releaseDate": "2021-01-01",
+                "voteAverage": 8,
+                "images": {
+                    "logos": [
+                        {"file_path": "/fr.png", "iso_639_1": "fr", "vote_average": 9},
+                        {"file_path": "/en-logo.png", "iso_639_1": "en", "vote_average": 2},
+                    ]
+                },
+            }
+        ]
+    }
+    item = SeerrProvider(url="http://seerr:5055", api_key="k", client=FakeClient(payload)).list_items()[0]
+    assert item.logo_url == "https://image.tmdb.org/t/p/original/en-logo.png"
 
 
 def test_jellyfin_partial_and_watched():
@@ -104,6 +127,10 @@ def test_demo_items_have_bundled_stills():
         assert path is not None, item.title
         assert Path(item.backdrop_path).is_file()
         assert Path(item.backdrop_path).stat().st_size > 20_000
+    north = next(item for item in items if item.title == "Northlight")
+    assert north.logo_url
+    harbor = next(item for item in items if item.title == "Harbor Season")
+    assert not harbor.logo_url
 
 
 def test_looks_like_image_rejects_html_and_wav():
@@ -145,6 +172,43 @@ def test_tmdb_enrich_fills_missing_artwork():
     assert skipped.overview == ""
 
 
+def test_tmdb_selects_english_png_logo():
+    from app.providers.tmdb import logo_image_url, select_logo_path
+
+    path = select_logo_path(
+        {
+            "logos": [
+                {"file_path": "/ja.jpg", "iso_639_1": "ja", "vote_average": 9},
+                {"file_path": "/en.png", "iso_639_1": "en", "vote_average": 1},
+                {"file_path": "/plain.png", "iso_639_1": None, "vote_average": 8},
+            ]
+        },
+        language="en-US",
+    )
+    assert path == "/en.png"
+    assert logo_image_url(path) == "https://image.tmdb.org/t/p/original/en.png"
+
+
+def test_tmdb_enrich_fetches_logo_from_images_api():
+    class Client:
+        def get_json(self, url, headers=None, params=None):
+            if "/images" in url:
+                assert "include_image_language" in (params or {})
+                return {"logos": [{"file_path": "/mark.png", "iso_639_1": "en", "vote_average": 5}]}
+            return {"id": 42, "overview": "Enriched", "vote_average": 8.1, "genres": [], "backdrop_path": "/b.jpg"}
+
+    out = TmdbProvider(api_key="k", client=Client()).enrich(MediaItem(title="Probe", tmdb_id="42"))
+    assert out.logo_url == "https://image.tmdb.org/t/p/original/mark.png"
+
+
+def test_tmdb_logo_fetch_survives_missing_payload():
+    class Client:
+        def get_json(self, url, headers=None, params=None):
+            raise RuntimeError("nope")
+
+    assert TmdbProvider(api_key="k", client=Client()).fetch_logo_url("1", "movie") is None
+
+
 def test_jellyfin_uses_primary_when_no_backdrop_tag():
     payload = {
         "Items": [
@@ -160,3 +224,19 @@ def test_jellyfin_uses_primary_when_no_backdrop_tag():
     assert item.backdrop_url == "http://jf:8096/Items/poster-only/Images/Primary?maxWidth=1920"
     assert item.poster_url == "http://jf:8096/Items/poster-only/Images/Primary?maxHeight=600"
     assert item.logo_url is None
+
+
+def test_jellyfin_logo_tag_builds_logo_url():
+    payload = {
+        "Items": [
+            {
+                "Id": "with-logo",
+                "Name": "Marked",
+                "ImageTags": {"Primary": "p", "Logo": "lg"},
+                "BackdropImageTags": ["b"],
+            }
+        ]
+    }
+    item = JellyfinProvider(url="http://jf:8096", api_key="k", user_id="u", client=FakeClient(payload)).list_items()[0]
+    assert item.logo_url == "http://jf:8096/Items/with-logo/Images/Logo"
+    assert item.backdrop_url == "http://jf:8096/Items/with-logo/Images/Backdrop?maxWidth=1920"

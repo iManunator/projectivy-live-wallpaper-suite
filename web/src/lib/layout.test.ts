@@ -26,6 +26,7 @@ describe("layout validation", () => {
     expect(layout.background.gradient_type).toBe("linear");
     expect(layout.background.vignette).toBeGreaterThanOrEqual(0);
     expect(layout.canvas_width).toBe(1920);
+    expect(layout.title_display).toBe("auto");
   });
 });
 

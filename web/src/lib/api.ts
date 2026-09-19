@@ -31,6 +31,11 @@ export const api = {
     json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),
   mediaArtwork: (itemId: string, kind = "backdrop") =>
     `/api/media/artwork/${encodeURIComponent(itemId)}?kind=${encodeURIComponent(kind)}`,
+  mediaLogo: (itemId: string, tmdbId?: string | null, mediaType = "movie") => {
+    const params = new URLSearchParams({ media_type: mediaType });
+    if (tmdbId) params.set("tmdb_id", tmdbId);
+    return `/api/media/logo/${encodeURIComponent(itemId)}?${params.toString()}`;
+  },
   testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,

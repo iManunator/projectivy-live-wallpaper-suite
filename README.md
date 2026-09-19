@@ -57,7 +57,7 @@ The GitHub repository is still named `projectivy-live-wallpaper-suite`. The prod
 | --- | --- |
 | **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock), see the wallpaper *as the launcher will*. |
 | **Gallery** | Every generated still. Click a still for a full-screen view. Badges for smart queues and baked VIDEO. Pin a title. Hide it forever. |
-| **Editor** | Flagship 16:9 stage — linear/radial multi-stop gradients, vignette, overlays, edge fades, TV chrome, motion preview. Demo or Jellyfin artwork. Drag metadata; save persists the layout. |
+| **Editor** | Flagship 16:9 stage — linear/radial multi-stop gradients, vignette, overlays, edge fades, **title display** (logo / text / auto), TV chrome, motion preview. Demo or Jellyfin artwork. Drag metadata; save persists the layout. |
 | **Generate** | Demo catalog (real public-domain cinematic stills) or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Optional parallax VIDEO bake (ffmpeg). Connection/generate toasts. |
 | **Dashboard** | Ops: last cron, provider config, queue counts. |
 | **Settings** | Motion intensity, taste weights, overlays, cron. |
@@ -155,7 +155,8 @@ Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523af
 | **Demo mode** | Six fixture titles, no Jellyfin. `./scripts/verify.sh` builds the image, waits for health, curls status. |
 | **Pin / never-show** | Hidden titles never enter `/api/wallpaper/status`. Pinned pool does not silently fall back. |
 | **Overlays** | Off by default. Optional clock card + HA / news / JSON hooks. |
-| **Jellyfin artwork** | Generate fetches Backdrop, then Primary. The editor previews the same art in-page via `/api/media/artwork/{id}`. |
+| **Jellyfin artwork** | Generate fetches Backdrop, then Primary. Clearlogos use Jellyfin **Logo** (or TMDB `logos` for Seerr). The editor previews the same art in-page via `/api/media/artwork/{id}` and `/api/media/logo/{id}`. |
+| **Logo integration** | Layout `title_display`: `auto` (logo if fetched, else the name), `logo`, or `text`. Smart resize, contrast, and Projectivy safe-zone padding. Demo Northlight ships an original clearlogo PNG; other demo titles use text. |
 | **Cron** | skip / replace / cleanup / ids / motion — generate while you sleep. |
 
 ---

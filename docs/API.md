@@ -65,6 +65,7 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | POST | `/api/gallery/{id}/flag` | `{ "pinned": true }` / `{ "hidden": true }` never-show |
 | GET | `/api/media` | Live items from `source` (`demo`, `jellyfin`, `jellyseerr`). Query `limit`. |
 | GET | `/api/media/artwork/{item_id}` | Demo stills (NASA/NARA/LoC + CC BY-SA Kew) or Jellyfin Backdrop/Primary. Query `kind=backdrop` (default) or `kind=poster`. Sniffs magic bytes; 404 if Jellyfin is unset and the id is not a demo still. |
+| GET | `/api/media/logo/{item_id}` | Clearlogo proxy: demo PNG (Northlight), Jellyfin `Images/Logo` (MediaBrowser / X-Emby-Token), or TMDB `logos` (`tmdb_id`, `media_type`). Rejects non-images; 404 when missing so the UI can fall back to title text. |
 | GET | `/api/demo/catalog` | License, artist, Commons URL for each demo still. |
 | GET | `/api/demo/attribution` | Markdown attribution file. |
 | GET | `/api/queues` | Smart-queue counts for a layout |
@@ -72,11 +73,11 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
 | POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
 | POST | `/api/wallpaper/generate-motion` | Re-bake parallax/Ken Burns MP4s for a layout |
-| GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme |
+| GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme, default `title_display` |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |
 
 `POST /api/settings/test/{jellyfin|jellyseerr|tmdb|demo}` returns `{ ok, server?, error?, provider, message }` where `message` is toast copy (“Connected to Jellyfin (Living Room)” / “Could not reach Jellyfin: …”).
 
-`POST /api/generate` downloads artwork before compositing. For Jellyfin that is **Backdrop**, then **Primary** poster, using the same MediaBrowser token as the library call. Non-image bodies are skipped. If neither image is reachable, demo titles use bundled stills; other titles fall back to the synthetic gradient. Unconfigured Jellyfin/Seerr uses the demo catalog and sets `warnings`. The JSON also includes `message`, `failed`, and `warnings` for the web UI toasts. `ids` search pulls at least 40 titles so a requested id is not missed because it sat past `limit`.
+`POST /api/generate` downloads artwork before compositing. For Jellyfin that is **Backdrop**, then **Primary** poster, using the same MediaBrowser token as the library call. Clearlogos come from Jellyfin **Logo**, then TMDB `images.logos` (English / null iso, PNG with alpha) for Seerr-shaped titles. Non-image bodies are skipped. Layout DNA field `title_display` is `auto` | `logo` | `text` (auto = logo if fetched, else the name). If neither image is reachable, demo titles use bundled stills; other titles fall back to the synthetic gradient. Unconfigured Jellyfin/Seerr uses the demo catalog and sets `warnings`. The JSON also includes `message`, `failed`, and `warnings` for the web UI toasts. `ids` search pulls at least 40 titles so a requested id is not missed because it sat past `limit`.
 
-The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin). Layout JSON now persists `gradient_type`, `gradient_angle`, `gradient_opacity`, `gradient_stops`, `vignette`, `overlay_color`, and `overlay_opacity` in addition to the original edge fades. Gallery stills open in a lightbox.
+The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin) and `/api/media/logo/{item_id}` when `title_display` is `auto` or `logo`. Layout JSON now persists `title_display`, `logo_padding`, gradient fields, vignette, and overlays. Gallery stills open in a lightbox.

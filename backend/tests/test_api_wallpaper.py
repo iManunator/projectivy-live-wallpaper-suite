@@ -99,6 +99,8 @@ def test_options_lists_pick_modes_and_motion(client):
     assert "tonight" in body["pick_modes"]
     assert "subtle" in body["motion_presets"]
     assert "linear" in body["gradient_types"]
+    assert "auto" in body["title_displays"]
+    assert "logo" in body["title_displays"]
     assert "cinephile" in body["taste_profiles"]
 
 
@@ -224,6 +226,9 @@ def test_settings_roundtrip_motion_options(client):
     assert saved["light_leak"] is False
     assert saved["taste_profile"] == "cinephile"
     assert saved["overlays_enabled"] is False
+    settings["title_display"] = "logo"
+    assert client.post("/api/settings", json=settings).status_code == 200
+    assert client.get("/api/settings").json()["title_display"] == "logo"
 
 
 def test_dashboard_and_tonight(client):
@@ -379,6 +384,12 @@ def test_demo_catalog_lists_licenses(client):
     licenses = {row["license"] for row in body["items"]}
     assert "Public domain" in licenses
     assert any(row["title"] == "Northlight" for row in body["items"])
+    north = next(row for row in body["items"] if row["title"] == "Northlight")
+    assert north["logo_url"]
+    assert north["title_fallback"] == "logo"
+    harbor = next(row for row in body["items"] if row["title"] == "Harbor Season")
+    assert harbor["logo_url"] in (None, "")
+    assert harbor["title_fallback"] == "text"
     attr = client.get("/api/demo/attribution")
     assert attr.status_code == 200
     assert b"CC BY-SA 3.0" in attr.content
@@ -437,3 +448,65 @@ def test_media_artwork_proxies_jellyfin_bytes(client, monkeypatch):
     response = client.get("/api/media/artwork/abc")
     assert response.status_code == 200
     assert response.content.startswith(b"\xff\xd8\xff")
+
+
+def test_media_logo_serves_demo_png(client):
+    response = client.get("/api/media/logo/demo-jf-1")
+    assert response.status_code == 200
+    assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert response.headers["content-type"].startswith("image/png")
+
+
+def test_media_logo_missing_demo_falls_back_to_404(client):
+    assert client.get("/api/media/logo/demo-jf-2").status_code == 404
+
+
+def test_media_logo_rejects_non_image(client, monkeypatch):
+    from app.config import save_settings
+    from app.models import AppSettings
+
+    save_settings(AppSettings(jellyfin={"url": "http://jf:8096", "api_key": "secret", "user_id": "u"}))
+
+    class FakeHttp:
+        def __init__(self, timeout: float = 15.0):
+            self.timeout = timeout
+
+        def get_bytes(self, url, headers=None):
+            assert "/Images/Logo" in url
+            return b"<!DOCTYPE html>nope"
+
+    monkeypatch.setattr("app.generate.HttpClient", FakeHttp)
+    assert client.get("/api/media/logo/abc123").status_code == 404
+
+
+def test_media_logo_proxies_jellyfin_logo(client, monkeypatch):
+    from app.config import save_settings
+    from app.models import AppSettings
+
+    save_settings(AppSettings(jellyfin={"url": "http://jf:8096", "api_key": "secret", "user_id": "u"}))
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+    class FakeHttp:
+        def __init__(self, timeout: float = 15.0):
+            self.timeout = timeout
+
+        def get_bytes(self, url, headers=None):
+            assert url.endswith("/Items/abc/Images/Logo")
+            assert headers and "secret" in headers["Authorization"]
+            assert headers.get("X-Emby-Token") == "secret"
+            return png
+
+    monkeypatch.setattr("app.generate.HttpClient", FakeHttp)
+    response = client.get("/api/media/logo/abc")
+    assert response.status_code == 200
+    assert response.content.startswith(b"\x89PNG")
+
+
+def test_layout_json_includes_title_display(client):
+    body = client.get("/api/layouts/load/Netflix Hero").json()
+    assert body["title_display"] in {"auto", "logo", "text"}
+    body["title_display"] = "logo"
+    saved = client.post("/api/layouts/save", json=body)
+    assert saved.status_code == 200
+    again = client.get("/api/layouts/load/Netflix Hero").json()
+    assert again["title_display"] == "logo"

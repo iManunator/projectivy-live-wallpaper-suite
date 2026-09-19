@@ -97,6 +97,41 @@ def test_run_generate_downloads_without_injected_client(suite_dirs, monkeypatch)
     assert pixel[2] > 80
 
 
+def _png_logo(color=(220, 30, 30, 255)) -> bytes:
+    buf = io.BytesIO()
+    image = Image.new("RGBA", (640, 160), (0, 0, 0, 0))
+    image.paste(color, (8, 8, 632, 152))
+    image.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_generate_one_composites_logo_instead_of_title(suite_dirs):
+    from app.generate import generate_one
+
+    jpeg = _jpeg((12, 14, 18))
+    png = _png_logo()
+
+    def http_get(url: str) -> bytes:
+        if "Logo" in url:
+            return png
+        return jpeg
+
+    item = MediaItem(
+        title="UNIQUE_TITLE_GLYPH",
+        year=2024,
+        genres=["Drama"],
+        backdrop_url="http://jf:8096/Items/9/Images/Backdrop?maxWidth=1920",
+        logo_url="http://jf:8096/Items/9/Images/Logo",
+        jellyfin_id="9",
+        source="jellyfin",
+    )
+    record = generate_one(item, "Netflix Hero", http_get=http_get)
+    assert record is not None
+    pixel = Image.open(suite_dirs["gallery"] / "Netflix Hero" / record.filename).getpixel((120, 100))
+    assert pixel[0] > 140
+    assert pixel[0] > pixel[2]
+
+
 def test_default_http_get_sends_jellyfin_auth(suite_dirs, monkeypatch):
     from app.config import save_settings
     from app.generate import _default_http_get

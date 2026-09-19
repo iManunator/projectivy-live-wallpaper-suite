@@ -18,4 +18,9 @@ Crops are 16:9 cover-crops of Wikimedia Commons originals. Re-vendor with
 **Share-alike:** `glass-orchard.jpg` is a crop of Diliff’s photograph and remains **CC BY-SA 3.0**.
 Keep this file, the Commons link, and the author name whenever you redistribute that still.
 
-Machine-readable copy: `catalog.json`. HTTP: `GET /api/demo/catalog`.
+**Clearlogo:** `northlight-logo.png` is an original Wallpaparr demo wordmark (not a studio mark) so the
+logo-vs-title path can be tested offline. Harbor Season, Glass Orchard, Signal Country, Paper Atlas,
+and Night Relay have **no** logo file and fall back to title text.
+
+Machine-readable copy: `catalog.json`. HTTP: `GET /api/demo/catalog`. `GET /api/media/logo/demo-jf-1`
+serves the Northlight PNG; other demo ids 404 (text fallback).

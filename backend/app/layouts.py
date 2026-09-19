@@ -20,6 +20,7 @@ PRESETS: dict[str, Layout] = {
         preset_id="netflix_hero",
         description="Left-stacked hero chrome over a heavy left fade.",
         background=LayoutBackground(fade_left=0.48, fade_bottom=0.42, fade_top=0.1, fade_right=0.04),
+        title_display="auto",
         layers=_layers(
             {"id": "title", "slot": "title", "x": 80, "y": 70, "width": 860, "height": 130, "font_size": 72, "font_weight": "bold"},
             {"id": "year", "slot": "year", "x": 80, "y": 220, "font_size": 26},

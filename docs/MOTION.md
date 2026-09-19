@@ -28,7 +28,7 @@ status ──imageUrl──► JPEG  ──► WallpaperType.IMAGE
 
 | Style | Look |
 | --- | --- |
-| **parallax** (default) | Artwork Ken-Burns on a plate; chrome (vignette + title/meta) overlays with a much smaller pan → depth |
+| **parallax** (default) | Artwork Ken-Burns on a plate; chrome (vignette + **logo or title** + meta) overlays with a much smaller pan → depth. Logos stay readable. |
 | **kenburns** | Single composite still, classic slow zoom/pan |
 | **drift** | Same as Ken Burns with a larger pan and tiny zoom |
 

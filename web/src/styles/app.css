@@ -255,36 +255,65 @@ input, select, textarea {
 }
 .toasts {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 120;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 400;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-width: min(420px, calc(100vw - 32px));
+  gap: 10px;
+  max-width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast-backdrop {
+  display: none;
 }
 .toast {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  gap: 12px;
+  align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: var(--shadow);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text);
+  pointer-events: auto;
+  min-height: 52px;
 }
-.toast-ok { border-color: rgba(135, 195, 143, 0.5); }
-.toast-error { border-color: rgba(224, 112, 112, 0.55); }
-.toast-info { border-color: rgba(122, 208, 196, 0.45); }
+.toast-ok { border-color: rgba(135, 195, 143, 0.7); background: #162018; }
+.toast-error { border-color: rgba(224, 112, 112, 0.8); background: #241416; }
+.toast-info { border-color: rgba(122, 208, 196, 0.65); background: #141c1c; }
 .toast-dismiss {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   background: transparent;
-  border: 0;
-  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 22px;
   line-height: 1;
+}
+.layer-chip.is-logo {
+  padding: 0;
+  background: transparent;
+  max-width: none;
+}
+.stage-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22%;
+  object-fit: contain;
+  object-position: left center;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 10px rgba(0,0,0,0.75));
 }
 .created-strip { margin-top: 16px; }
 .created-row {
@@ -415,15 +444,12 @@ input, select, textarea {
   --accent: #ff8a4c;
   --accent-2: #e2b657;
 }
-.app[data-theme="high-contrast"] {
-  --bg: #000000;
-  --panel: #111111;
-  --panel-2: #1a1a1a;
-  --line: rgba(255, 255, 255, 0.4);
-  --text: #ffffff;
-  --muted: #d0d0d0;
-  --accent: #ffe14d;
-  --accent-2: #7affc5;
+.app[data-theme="high-contrast"] .toast-ok,
+.app[data-theme="high-contrast"] .toast-error,
+.app[data-theme="high-contrast"] .toast-info {
+  background: #000;
+  color: #fff;
+  border-width: 2px;
 }
 
 .card h3 { margin: 0 0 12px; font-size: 16px; }
@@ -432,6 +458,14 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
   .nav { display: flex; gap: 8px; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }
-  .nav button { width: auto; }
+  .nav button { width: auto; min-height: 44px; }
   .grid.two, .grid.three, .tonight-grid, .dash-grid, .generate-grid { grid-template-columns: 1fr; }
+  .toasts {
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    top: max(12px, env(safe-area-inset-top));
+    bottom: auto;
+    max-width: none;
+  }
+  .toast { font-size: 16px; }
 }

@@ -8,6 +8,15 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
+from app.logo import (
+    layout_padding,
+    load_logo,
+    place_logo,
+    prefers_logo,
+    prepare_logo,
+    tag_shift,
+    title_layer,
+)
 from app.models import GradientStop, Layout, LayoutBackground, MediaItem
 
 CANVAS = (1920, 1080)
@@ -247,12 +256,23 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
     return ""
 
 
-def _draw_text_layers(canvas: Image.Image, item: MediaItem, layout: Layout) -> None:
+def _draw_text_layers(
+    canvas: Image.Image,
+    item: MediaItem,
+    layout: Layout,
+    *,
+    skip_slots: set[str] | None = None,
+    shift_after_y: float | None = None,
+    y_delta: int = 0,
+) -> None:
+    skip = skip_slots or set()
     draw = ImageDraw.Draw(canvas, "RGBA")
     for layer in layout.layers:
         if not layer.visible:
             continue
         if layer.slot in ("backdrop", "poster"):
+            continue
+        if layer.slot in skip:
             continue
         text = slot_text(item, layer.slot, layer.max_items)
         if not text:
@@ -261,12 +281,33 @@ def _draw_text_layers(canvas: Image.Image, item: MediaItem, layout: Layout) -> N
         font = _font(layer.font_size, bold=bold)
         color = _hex_color(layer.color)
         x, y = int(layer.x), int(layer.y)
+        if y_delta and shift_after_y is not None and layer.y > shift_after_y:
+            y += y_delta
         max_width = int(layer.width or 0)
         if max_width and layer.slot == "overview":
             wrapped = _wrap(draw, text, font, max_width)
             text = "\n".join(wrapped[:4])
         draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 180))
         draw.text((x, y), text, font=font, fill=color)
+
+
+def _draw_logo_layer(canvas: Image.Image, layout: Layout, logo_bytes: bytes | None) -> tuple[bool, int]:
+    """Paste a prepared logo. Returns (drew_logo, metadata_y_shift)."""
+    if not prefers_logo(layout.title_display):
+        return False, 0
+    image = load_logo(logo_bytes)
+    if image is None:
+        return False, 0
+    layer = title_layer(layout)
+    if layer is None:
+        return False, 0
+    try:
+        prepared = prepare_logo(image, layout, layer)
+        x, y = place_logo(layout, layer, prepared.size)
+        canvas.paste(prepared, (x, y), prepared)
+        return True, tag_shift(layout, layer, y, prepared.height, layout_padding(layout))
+    except Exception:
+        return False, 0
 
 
 def render_plate(
@@ -286,7 +327,7 @@ def render_plate(
     return backdrop.convert("RGB")
 
 
-def render_chrome(item: MediaItem, layout: Layout) -> Image.Image:
+def render_chrome(item: MediaItem, layout: Layout, logo_bytes: bytes | None = None) -> Image.Image:
     """Transparent vignette + metadata (moves less / stays put in parallax VIDEO)."""
     size = (layout.canvas_width, layout.canvas_height)
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -303,7 +344,16 @@ def render_chrome(item: MediaItem, layout: Layout) -> Image.Image:
     mask = fade_alpha_mask(layout, size)
     wash = Image.new("RGBA", size, (*_hex_color(bg.color)[:3], 255))
     overlay = Image.composite(wash, overlay, mask)
-    _draw_text_layers(overlay, item, layout)
+    title = title_layer(layout)
+    used_logo, y_delta = _draw_logo_layer(overlay, layout, logo_bytes)
+    _draw_text_layers(
+        overlay,
+        item,
+        layout,
+        skip_slots={"title"} if used_logo else set(),
+        shift_after_y=title.y if used_logo and title else None,
+        y_delta=y_delta,
+    )
     return overlay
 
 
@@ -311,9 +361,10 @@ def render_still(
     item: MediaItem,
     layout: Layout,
     backdrop_bytes: bytes | None = None,
+    logo_bytes: bytes | None = None,
 ) -> Image.Image:
     plate = render_plate(item, layout, backdrop_bytes=backdrop_bytes)
-    chrome = render_chrome(item, layout)
+    chrome = render_chrome(item, layout, logo_bytes=logo_bytes)
     return Image.alpha_composite(plate.convert("RGBA"), chrome).convert("RGB")
 
 

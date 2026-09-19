@@ -101,6 +101,7 @@ vi.stubGlobal(
             align: "left",
           },
         ],
+        title_display: "auto",
       };
     }
     if (url.includes("/api/tonight")) {
@@ -150,6 +151,7 @@ vi.stubGlobal(
         jellyseerr: {},
         tmdb: {},
         cron_jobs: [],
+        title_display: "auto",
       };
     }
     return {
@@ -159,6 +161,21 @@ vi.stubGlobal(
     };
   }),
 );
+
+class ProbeImage {
+  onload: ((ev?: Event) => void) | null = null;
+  onerror: ((ev?: Event) => void) | null = null;
+  naturalWidth = 900;
+  naturalHeight = 140;
+  set src(value: string) {
+    const ok = String(value).includes("demo-jf-1");
+    queueMicrotask(() => {
+      if (ok) this.onload?.(new Event("load"));
+      else this.onerror?.(new Event("error"));
+    });
+  }
+}
+vi.stubGlobal("Image", ProbeImage);
 
 describe("App smoke", () => {
   it("renders tonight preview and can open the gallery", async () => {
@@ -176,6 +193,10 @@ describe("App smoke", () => {
     expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
     expect(await screen.findByRole("img", { name: /Northlight artwork/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Demo preview")).toBeInTheDocument();
+    expect(screen.getByLabelText("Title display")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Northlight logo/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Title display"), { target: { value: "text" } });
+    expect(screen.queryByRole("img", { name: /Northlight logo/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Motion on" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
@@ -188,9 +209,12 @@ describe("App smoke", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText(/Taste profile/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Default title display")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Overlay widgets/i })).toBeInTheDocument();
     expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Test Jellyfin" }));
     expect((await screen.findAllByText(/Connected to Jellyfin/)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Close notification" }));
+    expect(screen.queryByText(/Connected to Jellyfin \(Living Room\)/)).not.toBeInTheDocument();
   });
 });

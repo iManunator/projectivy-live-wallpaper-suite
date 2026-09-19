@@ -46,6 +46,10 @@ export type Layout = {
   preset?: boolean;
   preset_id?: string | null;
   description?: string;
+  title_display?: "auto" | "logo" | "text";
+  logo_max_width?: number;
+  logo_max_height?: number;
+  logo_padding?: number;
 };
 
 export type WallpaperRecord = {
@@ -100,6 +104,7 @@ export type AppSettings = {
   overlays_enabled?: boolean;
   overlay_clock?: boolean;
   overlays?: Array<Record<string, unknown>>;
+  title_display?: "auto" | "logo" | "text";
   jellyfin: Record<string, string>;
   jellyseerr: Record<string, string>;
   tmdb: Record<string, string>;
@@ -170,6 +175,10 @@ export function emptyLayout(name = "Untitled"): Layout {
         align: "left",
       },
     ],
+    title_display: "auto",
+    logo_max_width: 1200,
+    logo_max_height: 450,
+    logo_padding: 25,
   };
 }
 
@@ -216,5 +225,9 @@ export function normalizeLayout(raw: Partial<Layout> | Layout | null | undefined
     canvas_height: raw.canvas_height || base.canvas_height,
     background: { ...base.background, ...(raw.background || {}) },
     layers: raw.layers?.length ? raw.layers : base.layers,
+    title_display: raw.title_display === "logo" || raw.title_display === "text" ? raw.title_display : "auto",
+    logo_max_width: raw.logo_max_width || base.logo_max_width,
+    logo_max_height: raw.logo_max_height || base.logo_max_height,
+    logo_padding: raw.logo_padding || base.logo_padding,
   };
 }

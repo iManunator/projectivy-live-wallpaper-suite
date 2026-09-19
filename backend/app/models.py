@@ -80,6 +80,10 @@ class Layout(BaseModel):
     preset: bool = False
     preset_id: str | None = None
     description: str = ""
+    title_display: Literal["logo", "text", "auto"] = "auto"
+    logo_max_width: int = 1200
+    logo_max_height: int = 450
+    logo_padding: int = 25
 
 
 class WallpaperRecord(BaseModel):
@@ -162,6 +166,7 @@ class AppSettings(BaseModel):
     overlays_enabled: bool = False
     overlay_clock: bool = True
     overlays: list[dict[str, Any]] = Field(default_factory=list)
+    title_display: Literal["logo", "text", "auto"] = "auto"
     jellyfin: dict[str, Any] = Field(default_factory=dict)
     jellyseerr: dict[str, Any] = Field(default_factory=dict)
     tmdb: dict[str, Any] = Field(default_factory=dict)

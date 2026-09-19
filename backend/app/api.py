@@ -130,6 +130,7 @@ def suite_options() -> dict[str, Any]:
         "motion_qualities": ["light", "standard", "cinematic"],
         "motion_presets": ["subtle", "cinematic", "bold"],
         "gradient_types": ["linear", "radial"],
+        "title_displays": ["auto", "logo", "text"],
         "taste_profiles": list(TASTE_PRESETS.keys()),
         "queues": [{"id": qid, "label": spec["label"]} for qid, spec in QUEUE_DEFS.items()],
         "pick_modes": [
@@ -444,6 +445,21 @@ def demo_attribution():
     return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
 
 
+@router.get("/api/media/logo/{item_id}")
+def media_logo(item_id: str, tmdb_id: str | None = None, media_type: str = "movie"):
+    """Clearlogo proxy: demo PNG, Jellyfin Logo, or TMDB logos. Rejects non-images."""
+    from app.generate import resolve_logo_bytes
+
+    data = resolve_logo_bytes(item_id, tmdb_id=tmdb_id, media_type=media_type)
+    if data and looks_like_image(data):
+        return Response(
+            content=data,
+            media_type=image_media_type(data),
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+    raise HTTPException(404, "No logo for this title")
+
+
 @router.get("/api/media/artwork/{item_id}")
 def media_artwork(item_id: str, kind: str = Query("backdrop")):
     """Same-origin artwork for the editor: demo stills, then Jellyfin Backdrop/Primary."""
@@ -502,6 +518,7 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
 
 @router.post("/api/wallpaper/generate-motion")
 def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
+    from app.generate import _fetch_logo
     from app.motion import generate_motion, profile_from_settings
     from app.render import render_chrome, render_plate, save_jpeg, save_png
     from app.layouts import load_layout
@@ -525,6 +542,9 @@ def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
             official_rating=rec.official_rating,
             watch_state=rec.watch_state,
             source=rec.source,
+            jellyfin_id=rec.jellyfin_id,
+            tmdb_id=rec.tmdb_id,
+            imdb_id=rec.imdb_id,
         )
         layout_obj = load_layout(rec.layout)
         plate = chrome = None
@@ -532,7 +552,7 @@ def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
             plate = jpg.with_name(jpg.stem + "_plate.jpg")
             chrome = jpg.with_name(jpg.stem + "_chrome.png")
             save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
-            save_png(render_chrome(item, layout_obj), chrome)
+            save_png(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), chrome)
         ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
         if plate:
             plate.unlink(missing_ok=True)

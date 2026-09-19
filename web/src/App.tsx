@@ -39,6 +39,7 @@ const EMPTY_SETTINGS: AppSettings = {
   overlays_enabled: false,
   overlay_clock: true,
   overlays: [],
+  title_display: "auto",
   jellyfin: {},
   jellyseerr: {},
   tmdb: {},
@@ -364,7 +365,7 @@ function GeneratePage() {
     <section>
       <h1>Generate</h1>
       <p className="lede">
-        Batch cinematic stills from Jellyfin, Jellyseerr, or the built-in demo catalog (NASA / NARA / Library of Congress stills). Skip already-rendered titles by Jellyfin / TMDB / IMDb id, replace them in place, or bake optional parallax VIDEO loops for Projectivy.
+        Batch cinematic stills from Jellyfin, Jellyseerr, or the built-in demo catalog (NASA / NARA / Library of Congress stills). Skip already-rendered titles by Jellyfin / TMDB / IMDb id, replace them in place, or bake optional parallax VIDEO loops for Projectivy. Layout <code>title_display</code> paints a movie/series logo when one exists.
       </p>
       <div className="generate-grid">
         <div className="card">
@@ -726,6 +727,20 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             />{" "}
             Clock card
           </label>
+        </div>
+        <div className="card">
+          <h3>Title / logo</h3>
+          <p className="muted">Default for new layouts. Each layout DNA JSON also stores <code>title_display</code> so Generate and the editor can prefer a clearlogo, always use the name, or auto-pick.</p>
+          <label>Title display</label>
+          <select
+            value={settings.title_display || "auto"}
+            aria-label="Default title display"
+            onChange={(e) => setSettings({ ...settings, title_display: e.target.value as "auto" | "logo" | "text" })}
+          >
+            <option value="auto">Auto — logo if fetched, otherwise the name</option>
+            <option value="logo">Prefer logo</option>
+            <option value="text">Always title text</option>
+          </select>
         </div>
         <div className="card">
           <h3>Editor appearance</h3>
