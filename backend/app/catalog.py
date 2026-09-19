@@ -46,19 +46,40 @@ def upsert(record: WallpaperRecord) -> list[WallpaperRecord]:
 
 
 def remove_records(ids: set[str]) -> list[WallpaperRecord]:
+    return delete_records(ids)["kept"]
+
+
+def _companion_paths(jpg: Path) -> list[Path]:
+    return [
+        jpg,
+        jpg.with_suffix(".mp4"),
+        jpg.with_name(jpg.stem + "_plate.jpg"),
+        jpg.with_name(jpg.stem + "_chrome.png"),
+    ]
+
+
+def delete_records(ids: set[str]) -> dict:
+    """Remove catalog rows and their JPEG / MP4 companions. Returns kept + deleted."""
+    wanted = {str(item) for item in ids if item}
     catalog = load_catalog()
     keep: list[WallpaperRecord] = []
+    deleted: list[str] = []
+    files: list[str] = []
+    titles: list[str] = []
     for rec in catalog:
-        if rec.id in ids:
-            jpg = layout_dir(rec.layout) / rec.filename
-            mp4 = jpg.with_suffix(".mp4")
-            for path in (jpg, mp4):
-                if path.is_file():
-                    path.unlink()
+        if rec.id not in wanted:
+            keep.append(rec)
             continue
-        keep.append(rec)
+        jpg = layout_dir(rec.layout) / rec.filename
+        for path in _companion_paths(jpg):
+            if path.is_file():
+                path.unlink()
+                files.append(path.name)
+        deleted.append(rec.id)
+        titles.append(rec.title)
     save_catalog(keep)
-    return keep
+    missing = sorted(wanted - set(deleted))
+    return {"kept": keep, "deleted": deleted, "files": files, "titles": titles, "missing": missing}
 
 
 def layouts_with_images(catalog: list[WallpaperRecord] | None = None) -> list[str]:

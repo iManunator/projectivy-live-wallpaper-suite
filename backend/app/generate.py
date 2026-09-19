@@ -351,12 +351,15 @@ def generate_one(
     return record
 
 
-def run_generate(request: GenerateRequest, http_get=None) -> dict:
+def run_generate(request: GenerateRequest, http_get=None, job_id: str | None = None) -> dict:
+    from app.progress import report
+
     warnings: list[str] = []
     failed: list[str] = []
     pull = request.limit
     if request.ids:
         pull = max(request.limit, 200)
+    report(job_id, status="running", message="Collecting titles…", current="Collecting titles")
     items = collect_items(request.source, pull, warnings=warnings)
     if request.ids:
         wanted = {i.lower() for i in request.ids}
@@ -374,9 +377,13 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
     created: list[str] = []
     skipped: list[str] = []
     replaced: list[str] = []
-    for item in items:
+    total = max(len(items), 1)
+    report(job_id, total=total, done=0, current=items[0].title if items else None, message="Generating stills…")
+    for index, item in enumerate(items, start=1):
+        report(job_id, current=item.title, done=index - 1, total=total, message=f"{index - 1}/{total}")
         if should_skip(catalog, item, request.layout, request.skip_existing and not request.replace_existing):
             skipped.append(item.title)
+            report(job_id, done=index, skipped=skipped)
             continue
         if request.replace_existing and matching_records(catalog, item, request.layout):
             replaced.append(item.title)
@@ -393,10 +400,12 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         except Exception as exc:
             failed.append(item.title)
             warnings.append(f"{item.title}: could not render ({exc})")
+            report(job_id, done=index, failed=failed)
             continue
         if record:
             created.append(record.title)
             catalog = catalog_store.load_catalog()
+        report(job_id, done=index, created=created, failed=failed, skipped=skipped)
     cleaned: list[str] = []
     if request.cleanup:
         doomed = records_to_cleanup(catalog_store.load_catalog(), items, request.layout)
@@ -410,14 +419,18 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         "failed": failed,
         "warnings": warnings,
         "count": len(created),
+        "total": total,
+        "done": total if items else 0,
     }
     result["message"] = generate_message(request.layout, result)
+    report(job_id, done=total if items else 0, total=total, current=None, message=result["message"])
     return result
 
 
-def bake_motion(layout: str, filename: str | None = None) -> dict:
+def bake_motion(layout: str, filename: str | None = None, job_id: str | None = None) -> dict:
     """Bake ffmpeg VIDEO for one still (filename) or every still in a layout."""
     from app.overlays import apply_overlays
+    from app.progress import report
 
     settings = load_settings()
     profile = profile_from_settings(settings)
@@ -426,9 +439,7 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
         wanted = Path(wanted).with_suffix(".jpg").name.lower()
     elif wanted:
         wanted = Path(wanted).name.lower()
-    done: list[str] = []
-    failed: list[str] = []
-    scanned = 0
+    targets = []
     for rec in catalog_store.load_catalog():
         if rec.layout.lower() != layout.lower():
             continue
@@ -438,10 +449,18 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
             want_stem = Path(wanted).stem.lower()
             if rec_name != wanted and rec_stem != want_stem and wanted not in rec_name and want_stem not in rec_stem:
                 continue
-        scanned += 1
+        targets.append(rec)
+    done: list[str] = []
+    failed: list[str] = []
+    scanned = len(targets)
+    total = max(scanned, 1)
+    report(job_id, total=total, done=0, message="Baking motion…", current=targets[0].title if targets else None)
+    for index, rec in enumerate(targets, start=1):
+        report(job_id, current=rec.title, done=index - 1, total=total, message=f"{index - 1}/{total}")
         jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
         if not jpg:
             failed.append(rec.filename)
+            report(job_id, done=index, failed=failed)
             continue
         item = _hydrate_item_art_urls(_item_from_record(rec))
         layout_obj = load_layout(rec.layout)
@@ -465,6 +484,7 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
             done.append(rec.filename)
         else:
             failed.append(rec.filename)
+        report(job_id, done=index, created=done, failed=failed)
     result = {
         "status": "ok",
         "generated": done,
@@ -474,10 +494,13 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
         "preset": settings.motion_preset,
         "duration": profile.duration,
         "count": len(done),
+        "total": scanned,
+        "done": scanned,
         "layered": True,
         "chrome_locked": True,
     }
     result["message"] = motion_bake_message(layout, result)
+    report(job_id, done=scanned, total=total, current=None, message=result["message"])
     return result
 
 

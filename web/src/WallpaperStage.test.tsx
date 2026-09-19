@@ -24,6 +24,7 @@ describe("WallpaperStage layers", () => {
     expect(title.closest(".stage-fg")).toBeTruthy();
     expect(title.closest(".stage-bg")).toBeNull();
     expect(title.className).not.toMatch(/motion-art/);
+    expect(screen.getByText("Unwatched").closest(".stage-fg")).toBeTruthy();
     expect(document.querySelector(".stage-frame")).toBeTruthy();
     expect(document.querySelector(".motion-leak")?.closest(".stage-bg")).toBeTruthy();
   });

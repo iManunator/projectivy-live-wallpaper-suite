@@ -38,6 +38,7 @@ def suite_dirs(tmp_path, monkeypatch):
     import app.layouts as layouts_mod
     import app.main as main_mod
     import app.ops as ops_mod
+    import app.progress as progress_mod
 
     importlib.reload(config_mod)
     importlib.reload(catalog_mod)
@@ -47,6 +48,7 @@ def suite_dirs(tmp_path, monkeypatch):
     importlib.reload(ops_mod)
     importlib.reload(api_mod)
     importlib.reload(main_mod)
+    progress_mod.reset_for_tests()
     config_mod.ensure_dirs()
     layouts_mod.seed_presets()
     return {
@@ -190,6 +192,9 @@ def client(suite_dirs, seeded_catalog, monkeypatch):
     # Avoid demo auto-seed and scheduler side effects during tests.
     monkeypatch.setattr(main_mod, "start_scheduler", lambda: None)
     monkeypatch.setattr(main_mod, "shutdown_scheduler", lambda: None)
+    from app.progress import reset_for_tests
+
+    reset_for_tests()
 
     with TestClient(main_mod.app) as test_client:
         yield test_client

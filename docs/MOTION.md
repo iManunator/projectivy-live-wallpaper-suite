@@ -20,6 +20,8 @@ Treat every wallpaper as two layers. Intensity presets only change the **backgro
 
 IMAGE stills can bake chrome into the JPEG (nothing moves). VIDEO **must** keep chrome locked: animate the plate, then overlay the chrome PNG each frame.
 
+Watch status (**Unwatched** / **Continue** / **Watched**) is part of that locked chrome when `watch_state` is known. Layout DNA `show_watch_badge` defaults on; turn it off in the editor to omit the pill from stills and VIDEO. Demo fixtures already carry mixed states.
+
 ## IMAGE vs VIDEO in this suite
 
 1. **Generate always writes a JPEG.** Stills remain first-class. The gallery, in-page editor preview, and `imageUrl` never go away. Jellyfin stills composite over downloaded Backdrop (then Primary) art.

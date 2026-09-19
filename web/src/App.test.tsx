@@ -2,28 +2,115 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
+const galleryItems = [
+  {
+    id: "1",
+    layout: "Netflix Hero",
+    filename: "from.jpg",
+    title: "From",
+    year: 2022,
+    rating: 8.5,
+    genres: ["Horror"],
+    official_rating: "TV-MA",
+    watch_state: "unwatched",
+    library_state: "in_library",
+    source: "jellyfin",
+    has_video: false,
+    pinned: false,
+    hidden: false,
+  },
+];
+
 vi.stubGlobal(
   "fetch",
-  vi.fn(async (input: RequestInfo) => {
+  vi.fn(async (input: RequestInfo, init?: RequestInit) => {
     const url = String(input);
+    const method = (init?.method || "GET").toUpperCase();
     let body: unknown = [];
-    if (url.includes("/api/gallery")) {
-      body = [
-        {
-          id: "1",
-          layout: "Netflix Hero",
-          filename: "from.jpg",
-          title: "From",
-          year: 2022,
-          rating: 8.5,
-          genres: ["Horror"],
-          official_rating: "TV-MA",
-          watch_state: "unwatched",
-          library_state: "in_library",
-          source: "jellyfin",
-          has_video: false,
-        },
-      ];
+    if (url.includes("/api/jobs/latest")) {
+      body = {
+        id: null,
+        kind: null,
+        status: "idle",
+        total: 0,
+        done: 0,
+        current: null,
+        message: "",
+        created: [],
+        failed: [],
+        skipped: [],
+        error: null,
+        result: null,
+        percent: 0,
+      };
+    } else if (url.includes("/api/jobs") && method === "POST") {
+      const payload = JSON.parse(String(init?.body || "{}")) as { kind?: string };
+      if (payload.kind === "motion" || payload.kind === "generate-motion") {
+        body = {
+          id: "m1",
+          kind: "motion",
+          status: "done",
+          total: 1,
+          done: 1,
+          current: null,
+          message: "Baked parallax VIDEO for northlight.jpg on Netflix Hero (cinematic).",
+          created: ["northlight.jpg"],
+          failed: [],
+          skipped: [],
+          error: null,
+          percent: 100,
+          result: {
+            status: "ok",
+            generated: ["northlight.jpg"],
+            count: 1,
+            style: "parallax",
+            message: "Baked parallax VIDEO for northlight.jpg on Netflix Hero (cinematic).",
+          },
+        };
+      } else if (payload.kind === "cron") {
+        body = {
+          id: "c1",
+          kind: "cron",
+          status: "done",
+          total: 1,
+          done: 1,
+          current: null,
+          message: "Created 1 still for Netflix Hero (Northlight).",
+          created: ["Northlight"],
+          failed: [],
+          skipped: [],
+          error: null,
+          percent: 100,
+          result: { count: 1, created: ["Northlight"], message: "Created 1 still for Netflix Hero (Northlight)." },
+        };
+      } else {
+        body = {
+          id: "g1",
+          kind: "generate",
+          status: "done",
+          total: 2,
+          done: 2,
+          current: null,
+          message: "Created 2 stills for Netflix Hero (Northlight, Harbor Season).",
+          created: ["Northlight", "Harbor Season"],
+          failed: [],
+          skipped: [],
+          error: null,
+          percent: 100,
+          result: {
+            count: 2,
+            created: ["Northlight", "Harbor Season"],
+            message: "Created 2 stills for Netflix Hero (Northlight, Harbor Season).",
+          },
+        };
+      }
+    } else if (url.includes("/api/gallery/") && url.includes("/flag") && method === "POST") {
+      body = { status: "ok", record: galleryItems[0] };
+    } else if ((url.includes("/api/gallery/") && method === "DELETE") || (url.includes("/api/gallery/delete") && method === "POST")) {
+      galleryItems.splice(0, galleryItems.length);
+      body = { status: "ok", message: "Deleted “From”.", deleted: ["1"], titles: ["From"], count: 1, missing: [] };
+    } else if (url.includes("/api/gallery")) {
+      body = galleryItems;
     }
     if (url.includes("/api/media?")) {
       if (url.includes("jellyfin")) {
@@ -210,9 +297,19 @@ describe("App smoke", () => {
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
     expect(screen.getByText(/1 wallpapers/)).toBeInTheDocument();
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Pin" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Never show" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Select From")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
     expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Delete" }).length).toBeGreaterThan(1);
     fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirm).toHaveBeenCalled();
+    expect((await screen.findAllByText(/Deleted/)).length).toBeGreaterThan(0);
+    confirm.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: "Editor" }));
     expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
     expect(await screen.findByRole("img", { name: /Northlight artwork/i })).toBeInTheDocument();
@@ -228,6 +325,7 @@ describe("App smoke", () => {
     expect(screen.queryByRole("img", { name: /Northlight logo/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Motion on" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Watch badge" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bake motion for this layout" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Status Focus" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();

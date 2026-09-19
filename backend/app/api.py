@@ -292,8 +292,56 @@ def gallery(layout: str | None = None) -> list[dict[str, Any]]:
 
 @router.post("/api/gallery/delete/{record_id}")
 def gallery_delete(record_id: str) -> dict[str, Any]:
-    catalog_store.remove_records({record_id})
-    return {"status": "ok"}
+    return _gallery_delete_one(record_id)
+
+
+@router.delete("/api/gallery/{record_id}")
+def gallery_delete_rest(record_id: str) -> dict[str, Any]:
+    return _gallery_delete_one(record_id)
+
+
+@router.post("/api/gallery/delete")
+def gallery_delete_bulk(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    ids = body.get("ids") or body.get("id") or []
+    if isinstance(ids, str):
+        ids = [ids]
+    wanted = {str(item) for item in ids if item}
+    if not wanted:
+        raise HTTPException(400, "Pass ids to delete")
+    out = catalog_store.delete_records(wanted)
+    if not out["deleted"]:
+        raise HTTPException(404, "Not found")
+    return {
+        "status": "ok",
+        "deleted": out["deleted"],
+        "files": out["files"],
+        "titles": out["titles"],
+        "missing": out["missing"],
+        "count": len(out["deleted"]),
+        "message": _delete_message(out["titles"]),
+    }
+
+
+def _gallery_delete_one(record_id: str) -> dict[str, Any]:
+    out = catalog_store.delete_records({record_id})
+    if not out["deleted"]:
+        raise HTTPException(404, "Not found")
+    return {
+        "status": "ok",
+        "deleted": out["deleted"],
+        "files": out["files"],
+        "titles": out["titles"],
+        "count": 1,
+        "message": _delete_message(out["titles"]),
+    }
+
+
+def _delete_message(titles: list[str]) -> str:
+    if not titles:
+        return "Deleted 0 wallpapers."
+    if len(titles) == 1:
+        return f"Deleted “{titles[0]}”."
+    return f"Deleted {len(titles)} wallpapers."
 
 
 @router.post("/api/gallery/{record_id}/flag")
@@ -531,6 +579,84 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
         {"layout": request.layout, "count": result.get("count"), "ok": True, "warnings": result.get("warnings")},
     )
     return result
+
+
+@router.get("/api/jobs/latest")
+def jobs_latest() -> dict[str, Any]:
+    from app.progress import idle_snapshot, latest_job
+
+    job = latest_job()
+    return job.as_dict() if job else idle_snapshot()
+
+
+@router.get("/api/jobs/{job_id}")
+def jobs_get(job_id: str) -> dict[str, Any]:
+    from app.progress import get_job
+
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job.as_dict()
+
+
+@router.post("/api/jobs")
+def jobs_start(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    from app.ops import record_event
+    from app.progress import spawn
+
+    kind = str(body.get("kind") or "generate").strip().lower()
+    try:
+        if kind == "generate":
+            fields = (
+                "layout",
+                "source",
+                "limit",
+                "skip_existing",
+                "replace_existing",
+                "cleanup",
+                "motion",
+                "ids",
+                "skip_ids",
+            )
+            payload = {key: body[key] for key in fields if key in body}
+            request = GenerateRequest(**payload)
+
+            def worker(job_id: str) -> dict[str, Any]:
+                result = run_generate(request, job_id=job_id)
+                record_event(
+                    "generate",
+                    {"layout": request.layout, "count": result.get("count"), "ok": True, "warnings": result.get("warnings")},
+                )
+                return result
+
+            job = spawn("generate", worker, message="Generating stills…")
+        elif kind in ("motion", "generate-motion"):
+            layout = str(body.get("layout") or "Netflix Hero")
+            path = body.get("path")
+
+            def worker(job_id: str) -> dict[str, Any]:
+                result = bake_motion(layout, filename=path, job_id=job_id)
+                record_event(
+                    "generate",
+                    {"layout": layout, "count": result.get("count"), "ok": True, "motion": True, "path": path},
+                )
+                return result
+
+            job = spawn("motion", worker, message="Baking motion…")
+        elif kind == "cron":
+            spec = {key: value for key, value in body.items() if key != "kind"}
+
+            def worker(job_id: str) -> dict[str, Any]:
+                return run_now(spec, job_id=job_id)
+
+            job = spawn("cron", worker, message="Running scheduled generate…")
+        else:
+            raise HTTPException(400, f"Unknown job kind: {kind}")
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return job.as_dict()
 
 
 @router.post("/api/wallpaper/generate-motion")

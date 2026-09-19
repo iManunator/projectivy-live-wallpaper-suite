@@ -64,6 +64,8 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET/POST | `/api/layouts/save`, `/api/layouts/load/{name}` | Layout JSON |
 | GET | `/api/gallery` | Catalog |
 | POST | `/api/gallery/{id}/flag` | `{ "pinned": true }` / `{ "hidden": true }` never-show |
+| DELETE | `/api/gallery/{id}` | Remove one still + companion MP4 / plate / chrome; updates catalog. Also `POST /api/gallery/delete/{id}`. |
+| POST | `/api/gallery/delete` | Bulk `{ "ids": ["…"] }`. Returns `{ deleted, missing, files, titles, message }`. |
 | GET | `/api/media` | Live items from `source` (`demo`, `jellyfin`, `jellyseerr`). Query `limit`. |
 | GET | `/api/media/artwork/{item_id}` | Demo stills (NASA/NARA/LoC + CC BY-SA Kew) or Jellyfin Backdrop/Primary. Query `kind=backdrop` (default) or `kind=poster`. Sniffs magic bytes; 404 if Jellyfin is unset and the id is not a demo still. |
 | GET | `/api/media/logo/{item_id}` | Clearlogo proxy: demo PNG (Northlight), Jellyfin `Images/Logo` (MediaBrowser / X-Emby-Token), or TMDB `logos` (`tmdb_id`, `media_type`). Rejects non-images; 404 when missing so the UI can fall back to title text. |
@@ -73,6 +75,9 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI. Additive `preview.artworkUrl` / `preview.itemId` / `preview.layered` for the in-browser layered motion preview (not consumed by the plugin). |
 | GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
 | POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
+| POST | `/api/jobs` | Start generate / motion / cron in a worker. Body is `{ "kind": "generate"|"motion"|"cron", …flags }`. Returns a job snapshot; poll until `done` / `error`. `409` if another job is running. |
+| GET | `/api/jobs/latest` | Latest job, or `{ "status": "idle" }` |
+| GET | `/api/jobs/{id}` | Job snapshot: `status`, `done`, `total`, `current`, `percent`, `message`, `result` |
 | POST | `/api/wallpaper/generate-motion` | Bake parallax/Ken Burns MP4s for a layout (layered plate + locked chrome). Query `path=` (filename) to bake one title (tonight’s pick). Additive `layered` / `chrome_locked` on the JSON result. |
 | POST | `/api/cron/run` | Run a cron-shaped generate immediately. Body is the job flags (layout, source, skip/replace/cleanup/ids/motion). Returns the same `{ message, created, skipped, … }` as `/api/generate`. |
 | GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme, default `title_display` |
@@ -82,4 +87,4 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 
 `POST /api/generate` downloads artwork before compositing. For Jellyfin that is **Backdrop**, then **Primary** poster, using the same MediaBrowser token as the library call. Clearlogos come from Jellyfin **Logo**, then TMDB `images.logos` (English / null iso, PNG with alpha) for Seerr-shaped titles. Non-image bodies are skipped. Layout DNA field `title_display` is `auto` | `logo` | `text` (auto = logo if fetched, else the name). If neither image is reachable, demo titles use bundled stills; other titles fall back to the synthetic gradient. Unconfigured Jellyfin/Seerr uses the demo catalog and sets `warnings`. The JSON also includes `message`, `failed`, and `warnings` for the web UI toasts. `ids` search pulls at least 40 titles so a requested id is not missed because it sat past `limit`.
 
-The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin) and `/api/media/logo/{item_id}` when `title_display` is `auto` or `logo`. Layout JSON now persists `title_display`, `logo_padding`, gradient fields, vignette, and overlays. Gallery stills open in a lightbox.
+The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin) and `/api/media/logo/{item_id}` when `title_display` is `auto` or `logo`. Layout JSON now persists `title_display`, `logo_padding`, `show_watch_badge`, gradient fields, vignette, and overlays. Gallery stills open in a lightbox with pin / never-show / delete. Generate, cron, and motion bake expose progress on `/api/jobs`.

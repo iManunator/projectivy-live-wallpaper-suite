@@ -9,13 +9,14 @@ import {
   type Layout,
   type WallpaperRecord,
 } from "./lib/layout";
-import { errorToast, motionToast } from "./lib/messages";
+import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 import { LAYOUT_DNA } from "./lib/queues";
 import { watchBadge } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
 import { WallpaperStage } from "./WallpaperStage";
+import { useJobs } from "./JobProgress";
 import { useToasts } from "./toasts";
 
 type MediaRow = {
@@ -36,7 +37,15 @@ type MediaRow = {
   media_type?: string | null;
 };
 
-type ViewerItem = { src: string; title: string; subtitle?: string; watchState?: string };
+type ViewerItem = {
+  src: string;
+  title: string;
+  subtitle?: string;
+  watchState?: string;
+  id?: string;
+  pinned?: boolean;
+  hidden?: boolean;
+};
 
 const SAMPLE: Record<string, string> = {
   title: "Northlight",
@@ -78,6 +87,9 @@ function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
     watchState: item.watch_state,
+    id: item.id,
+    pinned: item.pinned,
+    hidden: item.hidden,
   };
 }
 
@@ -86,11 +98,17 @@ export function FullscreenViewer({
   index,
   onClose,
   onIndex,
+  onPin,
+  onHide,
+  onDelete,
 }: {
   items: ViewerItem[];
   index: number;
   onClose: () => void;
   onIndex: (next: number) => void;
+  onPin?: (item: ViewerItem) => void;
+  onHide?: (item: ViewerItem) => void;
+  onDelete?: (item: ViewerItem) => void;
 }) {
   const item = items[index];
   useEffect(() => {
@@ -142,6 +160,25 @@ export function FullscreenViewer({
           {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
           <WatchBadge state={item.watchState} />
         </figcaption>
+        {(onPin || onHide || onDelete) && (
+          <div className="lightbox-actions" onClick={(event) => event.stopPropagation()}>
+            {onPin && (
+              <button type="button" className="btn ghost tiny" onClick={() => onPin(item)}>
+                {item.pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            {onHide && (
+              <button type="button" className="btn ghost tiny" onClick={() => onHide(item)}>
+                {item.hidden ? "Allow again" : "Never show"}
+              </button>
+            )}
+            {onDelete && (
+              <button type="button" className="btn danger tiny" onClick={() => onDelete(item)}>
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </figure>
     </div>
   );
@@ -149,6 +186,7 @@ export function FullscreenViewer({
 
 export function EditorPage() {
   const notify = useToasts();
+  const { run, busy } = useJobs();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [names, setNames] = useState<string[]>([]);
   const [layout, setLayout] = useState<Layout>(normalizeLayout(null));
@@ -169,7 +207,6 @@ export function EditorPage() {
   const [duration, setDuration] = useState(6);
   const [logoSrc, setLogoSrc] = useState("");
   const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
-  const [bakeBusy, setBakeBusy] = useState(false);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
@@ -204,6 +241,24 @@ export function EditorPage() {
   }, [layout.name]);
 
   const errors = useMemo(() => validateLayout(layout), [layout]);
+  const showWatch = layout.show_watch_badge !== false;
+  const hasWatchLayer = layout.layers.some(
+    (row) => row.visible && (row.slot === "watch_status" || row.slot === "watch_state"),
+  );
+
+  async function deleteCreated(item: WallpaperRecord) {
+    if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return;
+    try {
+      const out = await api.deleteGallery(item.id);
+      notify("ok", out.message || `Deleted “${item.title}”.`);
+      const next = await api.gallery(layout.name);
+      setCreated(next);
+      if (viewer !== null) setViewer(next.length ? Math.min(viewer, next.length - 1) : null);
+    } catch (err) {
+      const toast = errorToast(err, "Could not delete");
+      notify(toast.kind, toast.text);
+    }
+  }
   const layer = layout.layers[selected];
   const preview = catalog.find((row) => mediaKey(row) === previewId) || catalog[0];
   const sample = preview ? sampleFromMedia(preview) : SAMPLE;
@@ -339,20 +394,14 @@ export function EditorPage() {
             </button>
             <button
               className="btn ghost tiny"
-              disabled={bakeBusy || created.length === 0}
+              disabled={busy || created.length === 0}
               onClick={async () => {
-                setBakeBusy(true);
                 try {
-                  const out = (await api.generateMotion(layout.name)) as { message?: string; count?: number; generated?: string[] };
-                  const toast = motionToast(out);
-                  notify(toast.kind, toast.text);
-                  setStatus(toast.text);
+                  const out = await run({ kind: "motion", layout: layout.name });
+                  setStatus(out.message || "Baked motion.");
                   setCreated(await api.gallery(layout.name));
                 } catch (err) {
-                  const toast = errorToast(err, "Motion bake failed");
-                  notify(toast.kind, toast.text);
-                } finally {
-                  setBakeBusy(false);
+                  setStatus(errorToast(err, "Motion bake failed").text);
                 }
               }}
             >
@@ -428,6 +477,13 @@ export function EditorPage() {
             <button type="button" className={`chip ${showTv ? "active" : ""}`} onClick={() => setShowTv((v) => !v)}>
               TV chrome
             </button>
+            <button
+              type="button"
+              className={`chip ${layout.show_watch_badge !== false ? "active" : ""}`}
+              onClick={() => setLayout({ ...layout, show_watch_badge: layout.show_watch_badge === false })}
+            >
+              Watch badge
+            </button>
             <button type="button" className={`chip ${showGuides ? "active" : ""}`} onClick={() => setShowGuides((v) => !v)}>
               Safe zone
             </button>
@@ -461,7 +517,7 @@ export function EditorPage() {
                 )}
                 {layout.layers
                   .map((item, index) => ({ item, index }))
-                  .filter(({ item }) => item.visible)
+                  .filter(({ item }) => item.visible && (showWatch || (item.slot !== "watch_status" && item.slot !== "watch_state")))
                   .map(({ item, index }) => {
                     const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
                     const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
@@ -502,7 +558,9 @@ export function EditorPage() {
                   <div className="tv-dock" />
                 </div>
               )}
-              <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+              {showWatch && !hasWatchLayer && (
+                <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+              )}
             </WallpaperStage>
           </div>
           <p className="muted">
@@ -817,7 +875,28 @@ export function EditorPage() {
         </div>
       </div>
       {viewer !== null && (
-        <FullscreenViewer items={createdSlides} index={viewer} onClose={() => setViewer(null)} onIndex={setViewer} />
+        <FullscreenViewer
+          items={createdSlides}
+          index={viewer}
+          onClose={() => setViewer(null)}
+          onIndex={setViewer}
+          onPin={async (slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (!item) return;
+            await api.flag(item.id, { pinned: !item.pinned });
+            setCreated(await api.gallery(layout.name));
+          }}
+          onHide={async (slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (!item) return;
+            await api.flag(item.id, { hidden: !item.hidden });
+            setCreated(await api.gallery(layout.name));
+          }}
+          onDelete={(slide) => {
+            const item = created.find((row) => row.id === slide.id);
+            if (item) void deleteCreated(item);
+          }}
+        />
       )}
     </section>
   );
