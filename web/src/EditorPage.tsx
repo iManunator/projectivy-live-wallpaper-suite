@@ -13,6 +13,7 @@ import {
 import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
+import { keepWatchSlot } from "./lib/chrome";
 import { LAYOUT_DNA } from "./lib/queues";
 import { seerrBadge } from "./lib/seerr";
 import { watchBadge } from "./lib/watch";
@@ -426,7 +427,7 @@ export function EditorPage() {
                     if (!item.visible) return false;
                     const watchSlot = item.slot === "watch_status" || item.slot === "watch_state";
                     const seerrSlot = item.slot === "seerr_status" || item.slot === "seerr_state";
-                    if (watchSlot && !showWatch) return false;
+                    if (watchSlot && !keepWatchSlot(showWatch, showSeerr, hasSeerrLayer)) return false;
                     if (seerrSlot && !showSeerr) return false;
                     return true;
                   })
@@ -456,7 +457,7 @@ export function EditorPage() {
                           <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
                         ) : isWatch ? (
                           <>
-                            <WatchBadge state={preview?.watch_state || sample.watch_status} />
+                            {showWatch ? <WatchBadge state={preview?.watch_state || sample.watch_status} /> : null}
                             {showSeerr && !hasSeerrLayer ? (
                               <SeerrBadge
                                 libraryState={preview?.library_state}

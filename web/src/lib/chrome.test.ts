@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CHROME_PILL, CHROME_PILL_FALLBACK } from "./chrome";
+import { CHROME_PILL, CHROME_PILL_FALLBACK, CHROME_PILL_SAMPLE, keepWatchSlot } from "./chrome";
 
 const cssPath = join(dirname(fileURLToPath(import.meta.url)), "../styles/app.css");
 
@@ -25,5 +25,16 @@ describe("chrome pill geometry contract", () => {
     const fallback = css.match(/\.chrome-pills-fallback\s*\{[^}]+\}/)?.[0] || "";
     expect(fallback).toMatch(new RegExp(`left:\\s*${CHROME_PILL_FALLBACK.leftPercent}%`));
     expect(fallback).toMatch(new RegExp(`top:\\s*${CHROME_PILL_FALLBACK.topPercent}%`));
+    const sample = css.match(/\.chrome-pills-sample\s*\{[^}]+\}/)?.[0] || "";
+    expect(sample).toMatch(new RegExp(`left:\\s*${CHROME_PILL_SAMPLE.leftPercent}%`));
+    expect(sample).toMatch(new RegExp(`top:\\s*${CHROME_PILL_SAMPLE.topPercent}%`));
+  });
+
+  it("keeps the watch-slot chip when only Seerr chrome is on", () => {
+    expect(keepWatchSlot(true, true, false)).toBe(true);
+    expect(keepWatchSlot(false, true, false)).toBe(true);
+    expect(keepWatchSlot(false, true, true)).toBe(false);
+    expect(keepWatchSlot(false, false, false)).toBe(false);
+    expect(keepWatchSlot(true, false, false)).toBe(true);
   });
 });

@@ -652,6 +652,13 @@ input, select, textarea {
   z-index: 3;
   max-width: 70%;
 }
+.chrome-pills-sample {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+  z-index: 3;
+  max-width: 70%;
+}
 .tv-hero-meta .chrome-pills,
 .tv-hero-meta .chrome-pill,
 .tv-hero-meta .badge {

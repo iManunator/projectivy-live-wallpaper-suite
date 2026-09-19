@@ -109,7 +109,7 @@ export function SampleLockedChrome({
   return (
     <div className="sample-chrome" aria-hidden="true">
       <ChromePills
-        className="chrome-pills-fallback"
+        className="chrome-pills-sample"
         watchState={watchState}
         libraryState={libraryState}
         availability={availability}

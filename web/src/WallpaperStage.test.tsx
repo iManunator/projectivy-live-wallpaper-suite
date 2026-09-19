@@ -27,6 +27,7 @@ describe("WallpaperStage layers", () => {
     expect(screen.getByText("Unwatched").closest(".stage-fg")).toBeTruthy();
     expect(screen.getByText("Unwatched").className).toMatch(/chrome-pill/);
     expect(screen.getByText("Unwatched").closest(".chrome-pills")).toBeTruthy();
+    expect(screen.getByText("Unwatched").closest(".chrome-pills-sample")).toBeTruthy();
     expect(document.querySelector(".stage-frame")).toBeTruthy();
     expect(document.querySelector(".motion-leak")?.closest(".stage-bg")).toBeTruthy();
   });

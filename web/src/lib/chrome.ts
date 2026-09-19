@@ -12,3 +12,17 @@ export const CHROME_PILL_FALLBACK = {
   leftPercent: 4.2,
   topPercent: 29.4,
 } as const;
+
+export const CHROME_PILL_SAMPLE = {
+  leftPercent: 6,
+  topPercent: 8,
+} as const;
+
+/** Keep the watch-slot chip when Seerr still needs that DNA position. */
+export function keepWatchSlot(
+  showWatch: boolean,
+  showSeerr: boolean,
+  hasSeerrLayer: boolean,
+): boolean {
+  return showWatch || (showSeerr && !hasSeerrLayer);
+}
