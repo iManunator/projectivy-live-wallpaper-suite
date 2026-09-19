@@ -34,6 +34,7 @@ class WallpaperProvider : ContentProvider() {
 
     companion object {
         fun forceRefresh(context: android.content.Context) {
+            WallpaperSession.invalidate()
             val uuid = context.getString(R.string.plugin_uuid)
             context.sendBroadcast(
                 Intent(WallpaperProviderContract.ACTION_WALLPAPER_PROVIDER_UPDATED).apply {

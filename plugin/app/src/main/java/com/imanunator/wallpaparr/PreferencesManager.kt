@@ -117,9 +117,29 @@ object PreferencesManager {
         get() = preferences.getString("last_wallpaper_uri", "") ?: ""
         set(value) = preferences.put("last_wallpaper_uri", value)
 
+    var lastWallpaperRemoteUri: String
+        get() = preferences.getString("last_wallpaper_remote_uri", "") ?: ""
+        set(value) = preferences.put("last_wallpaper_remote_uri", value)
+
     var lastWallpaperAuthor: String
         get() = preferences.getString("last_wallpaper_author", "") ?: ""
         set(value) = preferences.put("last_wallpaper_author", value)
+
+    var lastWallpaperTitle: String
+        get() = preferences.getString("last_wallpaper_title", "") ?: ""
+        set(value) = preferences.put("last_wallpaper_title", value)
+
+    var lastWallpaperAction: String
+        get() = preferences.getString("last_wallpaper_action", "") ?: ""
+        set(value) = preferences.put("last_wallpaper_action", value)
+
+    var lastWallpaperPath: String
+        get() = preferences.getString("last_wallpaper_path", "") ?: ""
+        set(value) = preferences.put("last_wallpaper_path", value)
+
+    var lastWallpaperIsVideo: Boolean
+        get() = preferences.getBoolean("last_wallpaper_is_video", false)
+        set(value) = preferences.put("last_wallpaper_is_video", value)
 
     var preferredClient: String
         get() = preferences.getString("preferred_client_key", "org.jellyfin.androidtv") ?: ""

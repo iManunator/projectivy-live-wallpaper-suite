@@ -21,6 +21,7 @@ class SettingsActivity : FragmentActivity() {
     }
 
     fun requestWallpaperUpdate() {
+        WallpaperSession.invalidate()
         sendBroadcast(
             Intent(WallpaperProviderContract.ACTION_WALLPAPER_PROVIDER_UPDATED).apply {
                 `package` = PROJECTIVY

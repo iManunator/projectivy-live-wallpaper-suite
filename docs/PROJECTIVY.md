@@ -17,19 +17,32 @@ cd plugin
 
 CI also uploads ephemeral artifact **`wallpaparr-plugin-apk`** (same filenames) on every green Android job. See [INSTALL.md](INSTALL.md) and [RELEASE.md](RELEASE.md).
 
-The `:core` JVM module holds pick-mode mapping, URL rewrite, IMAGE vs VIDEO choice, and deep-link builders so logic is tested without an emulator.
+The `:core` JVM module holds pick-mode mapping, Leanback settings copy, URL rewrite, IMAGE vs VIDEO choice, preload/double-buffer helpers, and deep-link builders so logic is tested without an emulator.
 
 ## IMAGE vs VIDEO
 
-Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VIDEO` (4) loops `videoUrl` (H.264 MP4). Wallpaparr always keeps the still; motion is an optional sibling file. The plugin setting **Prefer parallax / motion VIDEO** picks VIDEO when `videoUrl` is present; **Fallback to still JPEG** uses IMAGE otherwise. Depth layers are baked into the MP4 (Projectivy is not a compositor): ffmpeg pans the artwork plate and overlays static logo/title chrome. Details: [MOTION.md](MOTION.md).
+Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VIDEO` (4) loops `videoUrl` (H.264 MP4). Wallpaparr always keeps the still; motion is an optional sibling file. Plugin setting **Play baked motion (MP4)** picks VIDEO when `videoUrl` is present; **If no MP4, show the JPEG still** uses IMAGE otherwise (off = skip still-only titles and hold the previous wallpaper). Depth layers are baked into the MP4 (Projectivy is not a compositor): ffmpeg pans the artwork plate and overlays static logo/title chrome. Details: [MOTION.md](MOTION.md).
+
+## Smooth MP4 / wallpaper transitions
+
+Projectivy calls `getWallpapers()` and then **replaces** the current player with whatever we return. The AIDL `Wallpaper` object is a single `uri` + `type` — there is no poster, crossfade, or “hold previous frame” field. Returning two items is also a trap: Projectivy caches the list and picks **at random**, which would skip pick-mode ticks.
+
+What the plugin can do:
+
+1. **One item per response.** Always 0 or 1 wallpaper, so pick-mode mapping stays sequential (`exclude`, round-robin counters, mix %).
+2. **Hold the last URI** if the next status call fails or the next clip is not ready, instead of `emptyList()` (empty often flashes black).
+3. **Double-buffer + disk preload.** After a pick is shown, the plugin fetches the *next* status-API pick and downloads the JPEG/MP4 into app cache, then serves `content://com.imanunator.wallpaparr.media/…` (FileProvider, granted to Projectivy). The next `TimeElapsed` can start from a local file instead of a cold HTTP MP4.
+4. **Short Projectivy cache** (`itemsCacheDurationMillis=1000`) so each wallpaper interval asks the plugin again. A long cache would random-cycle a stale batch and break Tonight / round-robin.
+
+**Limit (Projectivy):** swapping IMAGE↔VIDEO or VIDEO→VIDEO still tears down the previous player. A brief hitch can remain even with a local URI. We cannot keep the previous decoded frame on screen once we return a new `Wallpaper`; we only avoid returning empty and avoid making Projectivy open a remote MP4 that has not been fetched yet. Bake `+faststart` on the suite side still matters for the first frame of HTTP playback.
 
 ## Settings the plugin sends to the suite
+
+Leanback settings are grouped (Connection, Layouts, What to show, Filters, Mix controls, Motion, Home screen). Each row’s title is the control; the description is either the current value (editable) or a when-to-use hint (checkboxes, pick-mode / client lists). Pick-mode ids are unchanged.
 
 | Setting | Status API |
 | --- | --- |
 | Primary / secondary / third layout | `layout` (mix and round-robin modes) |
-| Pick mode | Status API |
-| --- | --- |
 | Tonight’s mix | `pool=taste:tonight` (server taste profile) |
 | Continue watching | `pool=continue_watching` |
 | Newly added | `sort=latest` + `pool=newly_added` |
@@ -37,8 +50,10 @@ Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VID
 | Pinned titles | `pool=pinned` (no fallback) |
 | Genre / age / year | `genre`, `age_rating`, `min_year`, `max_year` |
 | Min / max rating | `min_rating`, `max_rating` |
-| No-repeat bag | `exclude` |
-| Prefer motion | uses `videoUrl` when `mediaType=video` |
+| No-repeat bag depth | `exclude` (every mode) |
+| Play baked motion | uses `videoUrl` when `mediaType=video` |
+
+**No-repeat bag (same as Random)** is kept for older saved prefs: the status mapping is `sort=random` plus the global `exclude` bag, which Random already sends.
 
 Deep links: `jellyfin://items/{id}` is rewritten to a Jellyfin or Moonfin VIEW intent when that client is selected. Other clients (Kodi, Fladder, Wholphin, Void) launch the app.
 

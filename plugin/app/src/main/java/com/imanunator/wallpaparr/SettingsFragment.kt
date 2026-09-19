@@ -5,6 +5,8 @@ import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidanceStylist
 import androidx.leanback.widget.GuidedAction
 import com.imanunator.wallpaparr.core.ClientIntents
+import com.imanunator.wallpaparr.core.PluginSettingsCopy
+import com.imanunator.wallpaparr.core.SettingCopy
 import com.imanunator.wallpaparr.core.WallpaperPickModes
 
 class SettingsFragment : GuidedStepSupportFragment() {
@@ -19,51 +21,63 @@ class SettingsFragment : GuidedStepSupportFragment() {
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
         PreferencesManager.init(requireContext())
-        actions += editable(ID_SERVER, "Server URL", PreferencesManager.serverUrl)
-        actions += editable(ID_LAYOUT, "Primary layout / collection", PreferencesManager.selectedLayout)
-        actions += editable(ID_SECONDARY, "Secondary layout (mix modes)", PreferencesManager.secondaryLayout)
-        actions += editable(ID_THIRD, "Third layout (round-robin)", PreferencesManager.thirdLayout)
+
+        actions += header(ID_HDR_CONNECTION, PluginSettingsCopy.CONNECTION)
+        actions += editable(ID_SERVER, PluginSettingsCopy.SERVER, PreferencesManager.serverUrl)
+
+        actions += header(ID_HDR_LAYOUTS, PluginSettingsCopy.LAYOUTS)
+        actions += editable(ID_LAYOUT, PluginSettingsCopy.PRIMARY_LAYOUT, PreferencesManager.selectedLayout)
+        actions += editable(ID_SECONDARY, PluginSettingsCopy.SECONDARY_LAYOUT, PreferencesManager.secondaryLayout)
+        actions += editable(ID_THIRD, PluginSettingsCopy.THIRD_LAYOUT, PreferencesManager.thirdLayout)
+
+        actions += header(ID_HDR_PICK, PluginSettingsCopy.WHAT_TO_SHOW)
+        val selectedMode = WallpaperPickModes.byId(PreferencesManager.wallpaperPickMode)
         actions += listAction(
             ID_PICK,
-            "Wallpaper pick mode",
-            WallpaperPickModes.labelFor(PreferencesManager.wallpaperPickMode),
-            WallpaperPickModes.ALL.map { "${it.group}: ${it.label}" },
+            PluginSettingsCopy.PICK_MODE.title,
+            selectedMode?.label ?: WallpaperPickModes.labelFor(PreferencesManager.wallpaperPickMode),
+            WallpaperPickModes.ALL.map { it.label to "${it.group} · ${it.help}" },
         )
-        actions += editable(ID_GENRE, "Genre filter (comma)", PreferencesManager.genreFilter)
-        actions += editable(ID_AGE, "Age rating filter", PreferencesManager.ageFilter)
-        actions += editable(ID_YEAR, "Year or range (2005-2010)", PreferencesManager.yearFilter)
-        actions += editable(ID_MIN_RATING, "Minimum rating (0-10)", PreferencesManager.minRating.toString())
-        actions += editable(ID_MAX_RATING, "Maximum rating (0-10)", PreferencesManager.maxRating.toString())
-        actions += editable(ID_MIX, "Weighted mix % newest (0-100)", PreferencesManager.mixRatio.toString())
-        actions += editable(ID_RECENT, "Recent-years window", PreferencesManager.recentYears.toString())
-        actions += editable(ID_EXCLUDE, "No-repeat bag depth", PreferencesManager.excludeDepth.toString())
-        actions += GuidedAction.Builder(context)
-            .id(ID_MOTION)
-            .title("Prefer parallax / motion VIDEO")
-            .description("Use baked MP4 when the suite provides videoUrl")
-            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
-            .checked(PreferencesManager.preferMotion)
-            .build()
-        actions += GuidedAction.Builder(context)
-            .id(ID_FALLBACK)
-            .title("Fallback to still JPEG")
-            .description("If no MP4, use imageUrl")
-            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
-            .checked(PreferencesManager.fallbackStill)
-            .build()
+
+        actions += header(ID_HDR_FILTERS, PluginSettingsCopy.FILTERS)
+        actions += editable(ID_GENRE, PluginSettingsCopy.GENRE, PreferencesManager.genreFilter)
+        actions += editable(ID_AGE, PluginSettingsCopy.AGE, PreferencesManager.ageFilter)
+        actions += editable(ID_YEAR, PluginSettingsCopy.YEAR, PreferencesManager.yearFilter)
+        actions += editable(ID_MIN_RATING, PluginSettingsCopy.MIN_RATING, PreferencesManager.minRating.toString())
+        actions += editable(ID_MAX_RATING, PluginSettingsCopy.MAX_RATING, PreferencesManager.maxRating.toString())
+
+        actions += header(ID_HDR_MIX, PluginSettingsCopy.MIX)
+        actions += editable(ID_MIX, PluginSettingsCopy.MIX_RATIO, PreferencesManager.mixRatio.toString())
+        actions += editable(ID_RECENT, PluginSettingsCopy.RECENT_YEARS, PreferencesManager.recentYears.toString())
+        actions += editable(ID_EXCLUDE, PluginSettingsCopy.EXCLUDE, PreferencesManager.excludeDepth.toString())
+
+        actions += header(ID_HDR_MOTION, PluginSettingsCopy.MOTION)
+        actions += checkbox(
+            ID_MOTION,
+            PluginSettingsCopy.PREFER_MOTION,
+            PreferencesManager.preferMotion,
+        )
+        actions += checkbox(
+            ID_FALLBACK,
+            PluginSettingsCopy.FALLBACK_STILL,
+            PreferencesManager.fallbackStill,
+        )
+
+        actions += header(ID_HDR_HOME, PluginSettingsCopy.HOME)
+        val selectedClient = ClientIntents.SUPPORTED.firstOrNull {
+            it.packageName == PreferencesManager.preferredClient
+        }
         actions += listAction(
             ID_CLIENT,
-            "Preferred client / deep link",
-            ClientIntents.SUPPORTED.firstOrNull { it.packageName == PreferencesManager.preferredClient }?.name
-                ?: PreferencesManager.preferredClient,
-            ClientIntents.SUPPORTED.map { it.name },
+            PluginSettingsCopy.CLIENT.title,
+            selectedClient?.name ?: PreferencesManager.preferredClient,
+            ClientIntents.SUPPORTED.map { it.name to it.help },
         )
-        actions += GuidedAction.Builder(context)
-            .id(ID_IDLE)
-            .title("Refresh on idle exit")
-            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
-            .checked(PreferencesManager.refreshOnIdleExit)
-            .build()
+        actions += checkbox(
+            ID_IDLE,
+            PluginSettingsCopy.IDLE,
+            PreferencesManager.refreshOnIdleExit,
+        )
     }
 
     override fun onGuidedActionClicked(action: GuidedAction) {
@@ -71,12 +85,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
             ID_MOTION -> PreferencesManager.preferMotion = action.isChecked
             ID_FALLBACK -> PreferencesManager.fallbackStill = action.isChecked
             ID_IDLE -> PreferencesManager.refreshOnIdleExit = action.isChecked
+            else -> return
         }
         (activity as? SettingsActivity)?.requestWallpaperUpdate()
     }
 
     override fun onGuidedActionEditedAndProceed(action: GuidedAction): Long {
-        val text = action.description?.toString().orEmpty()
+        val text = action.editDescription?.toString()
+            ?: action.description?.toString().orEmpty()
         when (action.id) {
             ID_SERVER -> PreferencesManager.serverUrl = text
             ID_LAYOUT -> PreferencesManager.selectedLayout = text
@@ -96,24 +112,34 @@ class SettingsFragment : GuidedStepSupportFragment() {
     }
 
     override fun onSubGuidedActionClicked(action: GuidedAction): Boolean {
-        val parentId = action.id / 100
-        val label = action.title?.toString().orEmpty()
-        when (parentId) {
+        val parentId = action.id / SUB_STRIDE
+        val index = (action.id % SUB_STRIDE).toInt()
+        val selectedLabel = when (parentId) {
             ID_PICK -> {
-                val name = label.substringAfter(": ").ifBlank { label }
-                val mode = WallpaperPickModes.ALL.firstOrNull { it.label == name }
-                if (mode != null) PreferencesManager.wallpaperPickMode = mode.id
+                val mode = WallpaperPickModes.at(index)
+                if (mode != null) {
+                    PreferencesManager.wallpaperPickMode = mode.id
+                    mode.label
+                } else {
+                    action.title?.toString().orEmpty()
+                }
             }
             ID_CLIENT -> {
-                val client = ClientIntents.SUPPORTED.firstOrNull { it.name == label }
-                if (client != null) PreferencesManager.preferredClient = client.packageName
+                val client = ClientIntents.at(index)
+                if (client != null) {
+                    PreferencesManager.preferredClient = client.packageName
+                    client.name
+                } else {
+                    action.title?.toString().orEmpty()
+                }
             }
+            else -> action.title?.toString().orEmpty()
         }
         val parentPos = selectedActionPosition
         if (parentPos >= 0) {
             val parent = actions.get(parentPos) as? GuidedAction
             if (parent != null) {
-                parent.description = label
+                parent.description = selectedLabel
                 notifyActionChanged(parentPos)
             }
         }
@@ -121,27 +147,62 @@ class SettingsFragment : GuidedStepSupportFragment() {
         return true
     }
 
-    private fun editable(id: Long, title: String, value: String) =
+    private fun header(id: Long, copy: SettingCopy) =
         GuidedAction.Builder(context)
             .id(id)
-            .title(title)
-            .description(value)
-            .descriptionEditable(true)
+            .title(copy.title)
+            .description(copy.hint)
+            .infoOnly(true)
+            .focusable(false)
+            .multilineDescription(true)
             .build()
 
-    private fun listAction(id: Long, title: String, value: String, options: List<String>): GuidedAction {
-        val subs = options.mapIndexed { index, label ->
-            GuidedAction.Builder(context).id(id * 100 + index).title(label).build()
+    private fun editable(id: Long, copy: SettingCopy, value: String) =
+        GuidedAction.Builder(context)
+            .id(id)
+            .title(copy.title)
+            .description(value)
+            .editTitle("${copy.title} — ${copy.hint}")
+            .editDescription(value)
+            .descriptionEditable(true)
+            .multilineDescription(true)
+            .build()
+
+    private fun checkbox(id: Long, copy: SettingCopy, checked: Boolean) =
+        GuidedAction.Builder(context)
+            .id(id)
+            .title(copy.title)
+            .description(copy.hint)
+            .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
+            .checked(checked)
+            .multilineDescription(true)
+            .build()
+
+    private fun listAction(
+        id: Long,
+        title: String,
+        value: String,
+        options: List<Pair<String, String>>,
+    ): GuidedAction {
+        val subs = options.mapIndexed { index, (label, help) ->
+            GuidedAction.Builder(context)
+                .id(id * SUB_STRIDE + index)
+                .title(label)
+                .description(help)
+                .multilineDescription(true)
+                .build()
         }
         return GuidedAction.Builder(context)
             .id(id)
             .title(title)
             .description(value)
             .subActions(subs)
+            .multilineDescription(true)
             .build()
     }
 
     companion object {
+        private const val SUB_STRIDE = 100L
         private const val ID_SERVER = 1L
         private const val ID_LAYOUT = 2L
         private const val ID_PICK = 3L
@@ -159,5 +220,12 @@ class SettingsFragment : GuidedStepSupportFragment() {
         private const val ID_MIN_RATING = 15L
         private const val ID_MAX_RATING = 16L
         private const val ID_FALLBACK = 17L
+        private const val ID_HDR_CONNECTION = 1001L
+        private const val ID_HDR_LAYOUTS = 1002L
+        private const val ID_HDR_PICK = 1003L
+        private const val ID_HDR_FILTERS = 1004L
+        private const val ID_HDR_MIX = 1005L
+        private const val ID_HDR_MOTION = 1006L
+        private const val ID_HDR_HOME = 1007L
     }
 }
