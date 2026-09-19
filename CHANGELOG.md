@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.2.3 - 2026-09-19
+
+Security and bug-fix patch on top of 1.2.2.
+
+- **Layout path traversal fixed.** The load/save/delete layout endpoints took the layout name straight into a file path with no sanitization, and the `:path` route type let `/` and `..` through unescaped, allowing arbitrary file read/write/delete on the server. Names are now sanitized with the same whitelist used for gallery files, plus a resolved-path backstop.
+- **Removed wide-open CORS.** Backend no longer sets `allow_origins=["*"]`; the web UI is same-origin, so it served no purpose beyond widening the attack surface.
+- **Editor Save now persists motion settings.** Motion style/intensity-preset/duration/light-leak/vary-per-wallpaper are global settings, not part of a layout. The Editor's Save button previously only wrote the layout, so those changes silently reverted whenever settings re-fetched from the server. Save now also persists the merged settings object, matching the Settings page's own Save button.
+- Plugin versionName **1.2.3** (`versionCode` 5). Image `ghcr.io/imanunator/wallpaparr:v1.2.3` / `:1.2.3` / `:latest` from the `v1.2.3` tag.
+
 ## 1.2.2 - 2026-09-19
 
 Ships the post-1.2.1 TV / Seerr polish that was already on `main`: status-aware cron refresh, cancelable generate jobs, SeerrTV/Moonfin intents, Balanced motion, and related provider/UI fixes.
