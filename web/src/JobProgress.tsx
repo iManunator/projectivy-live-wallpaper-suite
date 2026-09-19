@@ -76,7 +76,9 @@ export function JobProgress({ job }: { job?: JobSnapshot | null }) {
       <p>
         <strong>{active ? `${snapshot.done}/${snapshot.total || "?"}` : snapshot.status}</strong>
         {snapshot.current ? ` · ${snapshot.current}` : ""}
-        {snapshot.message ? ` — ${snapshot.message}` : jobLabel(snapshot) ? ` — ${jobLabel(snapshot)}` : ""}
+        {snapshot.message && snapshot.message !== `${snapshot.done}/${snapshot.total}`
+          ? ` — ${snapshot.message}`
+          : ""}
       </p>
     </div>
   );

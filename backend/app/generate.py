@@ -380,7 +380,7 @@ def run_generate(request: GenerateRequest, http_get=None, job_id: str | None = N
     total = max(len(items), 1)
     report(job_id, total=total, done=0, current=items[0].title if items else None, message="Generating stills…")
     for index, item in enumerate(items, start=1):
-        report(job_id, current=item.title, done=index - 1, total=total, message=f"{index - 1}/{total}")
+        report(job_id, current=item.title, done=index - 1, total=total, message="Generating stills…")
         if should_skip(catalog, item, request.layout, request.skip_existing and not request.replace_existing):
             skipped.append(item.title)
             report(job_id, done=index, skipped=skipped)
@@ -456,7 +456,7 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
     total = max(scanned, 1)
     report(job_id, total=total, done=0, message="Baking motion…", current=targets[0].title if targets else None)
     for index, rec in enumerate(targets, start=1):
-        report(job_id, current=rec.title, done=index - 1, total=total, message=f"{index - 1}/{total}")
+        report(job_id, current=rec.title, done=index - 1, total=total, message="Baking motion…")
         jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
         if not jpg:
             failed.append(rec.filename)
