@@ -31,9 +31,11 @@ describe("16:9 stage contain", () => {
     const css = readFileSync(cssPath, "utf8");
     expect(css).toMatch(/--stage-max-height/);
     expect(css).toMatch(/width:\s*min\(100%,\s*calc\(var\(--stage-max-height\) \* 16 \/ 9\)\)/);
-    expect(css).toMatch(/\.stage-fg\s*\{[^}]*transform:\s*none/s);
-    expect(css).toMatch(/\.stage-bg\s*\{[^}]*overflow:\s*hidden/s);
+    expect(css).toMatch(/\.stage-fg\s*\{[^}]*transform:\s*none/);
+    expect(css).toMatch(/\.stage-bg\s*\{[^}]*overflow:\s*hidden/);
     expect(css).toMatch(/\.motion-art\s*\{/);
-    expect(css).not.toMatch(/\.stage-fg[^{]*\{[^}]*animation:\s*wallpaparr-kenburns/s);
+    const fgBlock = css.match(/\.stage-fg\s*\{[^}]+\}/)?.[0] || "";
+    expect(fgBlock).toMatch(/transform:\s*none/);
+    expect(fgBlock).not.toMatch(/animation:\s*wallpaparr-kenburns/);
   });
 });
