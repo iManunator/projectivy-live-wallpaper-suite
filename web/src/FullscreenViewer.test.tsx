@@ -88,6 +88,18 @@ describe("gallery lightbox motion", () => {
     expect(container.querySelector("video")).toBeNull();
   });
 
+  it("shows Seerr-only chrome next to the watch pill on layered lightbox chrome", async () => {
+    renderViewer({
+      ...stillItem,
+      libraryState: "seerr_only",
+      availability: "requestable",
+      source: "jellyseerr",
+    });
+    await ready("From");
+    expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Seerr only").length).toBeGreaterThan(0);
+  });
+
   it("falls back to the CSS preview and toasts when VIDEO fails to load", async () => {
     const { container } = renderViewer(videoItem);
     await ready("Night Relay");

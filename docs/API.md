@@ -48,11 +48,17 @@ Response:
   "motionDuration": 12.0,
   "queue": "unwatched",
   "pinned": false,
-  "watchState": "unwatched"
+  "watchState": "unwatched",
+  "libraryState": "in_library",
+  "availability": "available",
+  "seerrStatus": null,
+  "source": "jellyfin"
 }
 ```
 
-Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle`, `motionDuration`, `queue`, `pinned`, and `watchState` are **additive**. `videoUrl` is set only when a sibling MP4 exists on disk. Hidden (`never-show`) titles are omitted from selection. The `pinned` pool does **not** fall back to the whole layout if empty. The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
+Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle`, `motionDuration`, `queue`, `pinned`, `watchState`, `libraryState`, `availability`, `seerrStatus`, and `source` are **additive**. `videoUrl` is set only when a sibling MP4 exists on disk. Hidden (`never-show`) titles are omitted from selection. The `pinned` pool does **not** fall back to the whole layout if empty. The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
+
+`seerrStatus` is `seerr_only`, `requestable`, or `on_seerr` when the title is not in the library (else `null`). The baked still/VIDEO chrome paints the matching chip next to the watch pill when layout DNA `show_seerr_badge` is on (default).
 
 `GET /api/options` lists pick modes, pools, motion styles/presets, taste profiles, queues, and preferred clients.
 
@@ -88,4 +94,4 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 
 `POST /api/generate` downloads artwork before compositing. For Jellyfin that is **Backdrop**, then **Primary** poster, using the same MediaBrowser token as the library call. Clearlogos come from Jellyfin **Logo**, then TMDB `images.logos` (English / null iso, PNG with alpha) for Seerr-shaped titles. Non-image bodies are skipped. Layout DNA field `title_display` is `auto` | `logo` | `text` (auto = logo if fetched, else the name). If neither image is reachable, demo titles use bundled stills; other titles fall back to the synthetic gradient. Unconfigured Jellyfin/Seerr uses the demo catalog and sets `warnings`. The JSON also includes `message`, `failed`, and `warnings` for the web UI toasts. `ids` search pulls at least 40 titles so a requested id is not missed because it sat past `limit`.
 
-The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin) and `/api/media/logo/{item_id}` when `title_display` is `auto` or `logo`. Layout JSON now persists `title_display`, `logo_padding`, `show_watch_badge`, gradient fields, vignette, and overlays. Gallery stills open in a lightbox with pin / never-show / delete. The gallery toolbar can select all, delete selected, or delete all (pins skipped unless `include_pins`). Generate, cron, and motion bake expose progress on `/api/jobs`.
+The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage (demo catalog or Jellyfin) and `/api/media/logo/{item_id}` when `title_display` is `auto` or `logo`. Layout JSON now persists `title_display`, `logo_padding`, `show_watch_badge`, `show_seerr_badge`, gradient fields, vignette, and overlays. Gallery stills open in a lightbox with pin / never-show / delete. The gallery toolbar can select all, delete selected, or delete all (pins skipped unless `include_pins`). Generate, cron, and motion bake expose progress on `/api/jobs`.

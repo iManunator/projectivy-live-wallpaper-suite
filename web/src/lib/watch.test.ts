@@ -21,6 +21,8 @@ describe("watch badges", () => {
     expect(badgeClass("Continue")).toContain("partial");
     expect(badgeClass("Watched")).toContain("watched");
     expect(badgeClass("VIDEO")).toContain("badge-video");
-    expect(badgeClass("Pinned")).toBe("badge");
+    expect(badgeClass("Seerr only")).toContain("seerr_only");
+    expect(badgeClass("Requestable")).toContain("requestable");
+    expect(badgeClass("Pinned")).toContain("badge");
   });
 });

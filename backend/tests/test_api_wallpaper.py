@@ -45,6 +45,10 @@ def test_wallpaper_status_random_has_contract_fields(client):
     assert body["sort"] == "latest"
     assert body["layout"] == "Netflix Hero"
     assert body["watchState"] == "unwatched"
+    assert body["libraryState"] == "in_library"
+    assert body["availability"] == "available"
+    assert body["seerrStatus"] is None
+    assert body["source"] == "jellyfin"
 
 
 def test_wallpaper_status_genre_filter(client):
@@ -69,6 +73,11 @@ def test_wallpaper_status_pool_seerr_only(client):
         params={"layout": "Prime Cinematic", "pool": "seerr_only"},
     ).json()
     assert body["title"] == "Signal Country"
+    assert body["libraryState"] == "seerr_only"
+    assert body["availability"] == "requestable"
+    assert body["seerrStatus"] == "seerr_only"
+    assert body["watchState"] == "unwatched"
+    assert body["source"] == "jellyseerr"
 
 
 def test_wallpaper_status_exclude(client):

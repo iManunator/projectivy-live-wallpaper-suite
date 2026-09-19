@@ -16,11 +16,21 @@ Treat every wallpaper as two layers. Intensity presets only change the **backgro
 | Layer | Content | Motion |
 | --- | --- | --- |
 | **Background** | Backdrop / still art (the plate) | Subtle pan / zoom / parallax drift. Subtle / Cinematic / Bold change amplitude and loop length. |
-| **Foreground / target** | Logo or title text, watch badges, metadata, overlay widgets | **Static.** Pinned in layout DNA / safe-zone coordinates. Never Ken-Burns with the plate. |
+| **Foreground / target** | Logo or title text, watch badges, Seerr/requestable chips, metadata, overlay widgets | **Static.** Pinned in layout DNA / safe-zone coordinates. Never Ken-Burns with the plate. |
 
 IMAGE stills can bake chrome into the JPEG (nothing moves). VIDEO **must** keep chrome locked: animate the plate, then overlay the chrome PNG each frame.
 
-Watch status (**Unwatched** / **Continue** / **Watched**) is part of that locked chrome when `watch_state` is known. Layout DNA `show_watch_badge` defaults on; turn it off in the editor to omit the pill from stills and VIDEO. Demo fixtures already carry mixed states.
+Watch status (**Unwatched** / **Continue** / **Watched**) is part of that locked chrome when `watch_state` is known. Layout DNA `show_watch_badge` defaults on; turn it off in the editor to omit the pill from stills and VIDEO. Pills are capsules with equal padding so the label is centered on 16:9 chrome.
+
+Seerr / requestable status uses the same locked layer. When a title is **not in the library**, a chip paints next to the watch pill from existing catalog fields (`library_state`, `availability`, `source`):
+
+| Metadata | Chrome label |
+| --- | --- |
+| `library_state` `seerr_only` / `not_in_library` | **Seerr only** |
+| `availability` `requestable` / `not_available` | **Requestable** |
+| Seerr source and not in library | **On Seerr** |
+
+In-library titles skip the chip. Layout DNA `show_seerr_badge` defaults on; turn it off in the editor to hide it from stills and VIDEO. Demo **Signal Country** is the mixed Seerr-only / requestable fixture.
 
 ## IMAGE vs VIDEO in this suite
 

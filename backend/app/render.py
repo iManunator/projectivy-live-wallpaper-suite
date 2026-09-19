@@ -8,6 +8,13 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
+from app.chrome import (
+    SEERR_SLOTS,
+    WATCH_SLOTS,
+    chrome_pill_metrics,
+    draw_chrome_pill,
+    pill_gap,
+)
 from app.logo import (
     layout_padding,
     load_logo,
@@ -18,6 +25,7 @@ from app.logo import (
     title_layer,
 )
 from app.models import GradientStop, Layout, LayoutBackground, MediaItem
+from app.seerr_status import seerr_badge, seerr_label
 from app.watch import watch_badge, watch_label
 
 CANVAS = (1920, 1080)
@@ -248,8 +256,10 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
         return f"{item.rating:.1f}" if item.rating else ""
     if slot == "overview":
         return item.overview
-    if slot in ("watch_status", "watch_state"):
+    if slot in WATCH_SLOTS:
         return watch_label(item.watch_state) or (item.watch_state or "").replace("_", " ").title()
+    if slot in SEERR_SLOTS:
+        return seerr_label(item.library_state, item.availability, item.source)
     if slot in ("source", "provider_source"):
         return (item.source or "").title()
     if slot == "age":
@@ -275,7 +285,9 @@ def _draw_text_layers(
             continue
         if layer.slot in skip:
             continue
-        if layer.slot in ("watch_status", "watch_state") and not getattr(layout, "show_watch_badge", True):
+        if layer.slot in WATCH_SLOTS and not getattr(layout, "show_watch_badge", True):
+            continue
+        if layer.slot in SEERR_SLOTS and not getattr(layout, "show_seerr_badge", True):
             continue
         text = slot_text(item, layer.slot, layer.max_items)
         if not text:
@@ -286,8 +298,11 @@ def _draw_text_layers(
         x, y = int(layer.x), int(layer.y)
         if y_delta and shift_after_y is not None and layer.y > shift_after_y:
             y += y_delta
-        if layer.slot in ("watch_status", "watch_state"):
+        if layer.slot in WATCH_SLOTS:
             _draw_watch_pill(draw, item, x, y, font, color)
+            continue
+        if layer.slot in SEERR_SLOTS:
+            _draw_seerr_pill(draw, item, x, y, font, color)
             continue
         max_width = int(layer.width or 0)
         if max_width and layer.slot == "overview":
@@ -304,18 +319,27 @@ def _draw_watch_pill(
     y: int,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     fallback_color: tuple[int, int, int, int],
-) -> None:
+) -> tuple[int, int, int, int] | None:
     badge = watch_badge(item.watch_state)
     if not badge:
-        return
-    text = badge["label"]
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    pad_x, pad_y = 14, 6
+        return None
     fill = _hex_color(badge["color"]) if badge.get("color") else fallback_color
-    box = [x, y, x + tw + pad_x * 2, y + th + pad_y * 2]
-    draw.rounded_rectangle(box, radius=14, fill=(8, 10, 14, 190), outline=fill, width=2)
-    draw.text((x + pad_x, y + pad_y - 1), text, font=font, fill=fill)
+    return draw_chrome_pill(draw, badge["label"], x, y, font, fill)
+
+
+def _draw_seerr_pill(
+    draw: ImageDraw.ImageDraw,
+    item: MediaItem,
+    x: int,
+    y: int,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    fallback_color: tuple[int, int, int, int],
+) -> tuple[int, int, int, int] | None:
+    badge = seerr_badge(item.library_state, item.availability, item.source)
+    if not badge:
+        return None
+    fill = _hex_color(badge["color"]) if badge.get("color") else fallback_color
+    return draw_chrome_pill(draw, badge["label"], x, y, font, fill)
 
 
 def _draw_logo_layer(canvas: Image.Image, layout: Layout, logo_bytes: bytes | None) -> tuple[bool, int]:
@@ -382,7 +406,7 @@ def render_chrome(item: MediaItem, layout: Layout, logo_bytes: bytes | None = No
         shift_after_y=title.y if used_logo and title else None,
         y_delta=y_delta,
     )
-    _ensure_watch_badge(
+    _ensure_status_pills(
         overlay,
         item,
         layout,
@@ -392,7 +416,34 @@ def render_chrome(item: MediaItem, layout: Layout, logo_bytes: bytes | None = No
     return overlay
 
 
-def _ensure_watch_badge(
+def _default_badge_origin(
+    layout: Layout,
+    *,
+    shift_after_y: float | None = None,
+    y_delta: int = 0,
+) -> tuple[int, int]:
+    title = title_layer(layout)
+    x, y = 80, 318
+    if title:
+        x, y = int(title.x), int(title.y) + max(int(title.font_size or 64) + 36, 96)
+    if y_delta and shift_after_y is not None and y > shift_after_y:
+        y += y_delta
+    return x, y
+
+
+def _shifted_layer_origin(
+    layer,
+    *,
+    shift_after_y: float | None = None,
+    y_delta: int = 0,
+) -> tuple[int, int]:
+    x, y = int(layer.x), int(layer.y)
+    if y_delta and shift_after_y is not None and layer.y > shift_after_y:
+        y += y_delta
+    return x, y
+
+
+def _ensure_status_pills(
     canvas: Image.Image,
     item: MediaItem,
     layout: Layout,
@@ -400,29 +451,44 @@ def _ensure_watch_badge(
     shift_after_y: float | None = None,
     y_delta: int = 0,
 ) -> None:
-    """Paint Unwatched / Continue / Watched on the chrome layer when status is known.
+    """Paint watch + Seerr pills on locked chrome when status is known.
 
-    Layout DNA may already have a watch_status layer. If it does not (or it is
-    hidden) but ``show_watch_badge`` is on, drop a pill in a safe default spot
-    so baked IMAGE/VIDEO still carry the badge.
+    Layout DNA may already have a watch_status / seerr_status layer. Missing
+    pills still drop in next to each other at a TV-safe default so IMAGE/VIDEO
+    chrome stays obvious without moving with the plate.
     """
-    if not getattr(layout, "show_watch_badge", True):
-        return
-    if not watch_badge(item.watch_state):
-        return
-    has_visible = any(
-        layer.visible and layer.slot in ("watch_status", "watch_state") for layer in layout.layers
-    )
-    if has_visible:
-        return
-    title = title_layer(layout)
-    x, y = 80, 318
-    if title:
-        x, y = int(title.x), int(title.y) + max(int(title.font_size or 64) + 36, 96)
-    if y_delta and shift_after_y is not None and y > shift_after_y:
-        y += y_delta
     draw = ImageDraw.Draw(canvas, "RGBA")
-    _draw_watch_pill(draw, item, x, y, _font(22), (255, 255, 255, 255))
+    show_watch = getattr(layout, "show_watch_badge", True)
+    show_seerr = getattr(layout, "show_seerr_badge", True)
+    watch_meta = watch_badge(item.watch_state) if show_watch else None
+    seerr_meta = seerr_badge(item.library_state, item.availability, item.source) if show_seerr else None
+    watch_layer = next((layer for layer in layout.layers if layer.visible and layer.slot in WATCH_SLOTS), None)
+    seerr_layer = next((layer for layer in layout.layers if layer.visible and layer.slot in SEERR_SLOTS), None)
+
+    watch_box: tuple[int, int, int, int] | None = None
+    if watch_meta and watch_layer:
+        wx, wy = _shifted_layer_origin(watch_layer, shift_after_y=shift_after_y, y_delta=y_delta)
+        font = _font(watch_layer.font_size, watch_layer.font_weight in ("bold", "black", "semibold"))
+        metrics = chrome_pill_metrics(draw, watch_meta["label"], font)
+        watch_box = (wx, wy, wx + int(metrics["width"]), wy + int(metrics["height"]))
+    elif watch_meta:
+        x, y = _default_badge_origin(layout, shift_after_y=shift_after_y, y_delta=y_delta)
+        watch_box = _draw_watch_pill(draw, item, x, y, _font(22), (255, 255, 255, 255))
+
+    if not seerr_meta or seerr_layer:
+        return
+    if watch_box:
+        font = _font(watch_layer.font_size if watch_layer else 22)
+        gap = pill_gap(int(getattr(font, "size", 22) or 22))
+        sx, sy = watch_box[2] + gap, watch_box[1]
+        _draw_seerr_pill(draw, item, sx, sy, font, (255, 255, 255, 255))
+        return
+    if watch_layer:
+        x, y = _shifted_layer_origin(watch_layer, shift_after_y=shift_after_y, y_delta=y_delta)
+        _draw_seerr_pill(draw, item, x, y, _font(watch_layer.font_size), (255, 255, 255, 255))
+        return
+    x, y = _default_badge_origin(layout, shift_after_y=shift_after_y, y_delta=y_delta)
+    _draw_seerr_pill(draw, item, x, y, _font(22), (255, 255, 255, 255))
 
 
 def render_still(

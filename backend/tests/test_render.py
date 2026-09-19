@@ -33,6 +33,26 @@ def test_watch_status_renders_as_pill():
     assert image.size == (1920, 1080)
 
 
+def test_seerr_only_chrome_renders_on_flagship_layout():
+    item = MediaItem(
+        title="Signal Country",
+        year=2023,
+        watch_state="unwatched",
+        library_state="seerr_only",
+        availability="requestable",
+        source="jellyseerr",
+        overview="A radio host in the desert starts receiving tomorrow's news.",
+        rating=7.6,
+    )
+    in_library = item.model_copy(update={"library_state": "in_library", "availability": "available", "source": "jellyfin"})
+    layout = PRESETS["Netflix Hero"]
+    seerr_chrome = render_chrome(item, layout)
+    library_chrome = render_chrome(in_library, layout)
+    assert seerr_chrome.tobytes() != library_chrome.tobytes()
+    hidden = layout.model_copy(update={"show_seerr_badge": False})
+    assert render_chrome(item, hidden).tobytes() == library_chrome.tobytes()
+
+
 def test_projectivy_dock_keeps_safe_zone():
     layout = PRESETS["Projectivy Dock"]
     assert layout.background.fade_bottom >= 0.4

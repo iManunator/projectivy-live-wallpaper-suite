@@ -51,6 +51,7 @@ export type Layout = {
   logo_max_height?: number;
   logo_padding?: number;
   show_watch_badge?: boolean;
+  show_seerr_badge?: boolean;
 };
 
 export type WallpaperRecord = {
@@ -134,6 +135,7 @@ export const SLOTS = [
   "rating",
   "overview",
   "watch_status",
+  "seerr_status",
   "source",
   "age",
 ] as const;
@@ -194,6 +196,7 @@ export function emptyLayout(name = "Untitled"): Layout {
     logo_max_height: 450,
     logo_padding: 25,
     show_watch_badge: true,
+    show_seerr_badge: true,
   };
 }
 
@@ -245,5 +248,6 @@ export function normalizeLayout(raw: Partial<Layout> | Layout | null | undefined
     logo_max_height: raw.logo_max_height || base.logo_max_height,
     logo_padding: raw.logo_padding || base.logo_padding,
     show_watch_badge: raw.show_watch_badge !== false,
+    show_seerr_badge: raw.show_seerr_badge !== false,
   };
 }

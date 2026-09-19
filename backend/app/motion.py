@@ -7,7 +7,7 @@ Projectivy wallpaper plugins return either:
 This module bakes the VIDEO as **layers**:
 
 * **Background** — artwork plate. Subtle pan / zoom / drift (intensity presets).
-* **Foreground / target** — logo or title, watch badges, metadata chrome.
+* **Foreground / target** — logo or title, watch badges, Seerr/requestable chips, metadata chrome.
   Overlay is pinned at layout DNA coordinates (``overlay=x=0:y=0``). Chrome
   never Ken-Burns with the plate.
 

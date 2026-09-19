@@ -66,6 +66,7 @@ DEMO_ITEMS = [
         runtime="52m",
         media_type="tv",
         watch_state="unwatched",
+        # Mixed Seerr fixture: not in the library, requestable on Jellyseerr.
         library_state="seerr_only",
         availability="requestable",
         source="jellyseerr",
