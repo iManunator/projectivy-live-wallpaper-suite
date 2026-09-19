@@ -5,6 +5,13 @@ describe("batch flags", () => {
   it("explains skip, replace, cleanup, and ids", () => {
     const skip = describeBatchFlags({ skip_existing: true, replace_existing: false, cleanup: false });
     expect(skip).toMatch(/Skip leaves titles/);
+    const refresh = describeBatchFlags({
+      skip_existing: true,
+      replace_existing: false,
+      refresh_status: true,
+      cleanup: false,
+    });
+    expect(refresh).toMatch(/Refresh status re-bakes/);
     const replace = describeBatchFlags({
       skip_existing: true,
       replace_existing: true,

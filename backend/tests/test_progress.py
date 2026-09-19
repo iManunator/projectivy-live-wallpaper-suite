@@ -11,10 +11,62 @@ def _wait_job(client, job_id: str, *, ticks: int = 80) -> dict:
     body = {}
     for _ in range(ticks):
         body = client.get(f"/api/jobs/{job_id}").json()
-        if body["status"] in {"done", "error"}:
+        if body["status"] in {"done", "error", "cancelled"}:
             return body
         time.sleep(0.05)
     return body
+
+
+def test_job_cancel_stops_generate(client, monkeypatch):
+    reset_for_tests()
+    from app.models import MediaItem
+
+    items = [
+        MediaItem(title=f"Title {i}", jellyfin_id=f"jf-{i}", media_type="movie")
+        for i in range(8)
+    ]
+
+    def slow_one(item, layout, motion=False, replace=False, http_get=None):
+        # Give the cancel request time to land between titles.
+        time.sleep(0.08)
+        from app import catalog as catalog_store
+        from app.models import WallpaperRecord
+
+        rec = WallpaperRecord(
+            id=f"id-{item.jellyfin_id}",
+            title=item.title,
+            layout=layout,
+            filename=f"{item.jellyfin_id}.jpg",
+            jellyfin_id=item.jellyfin_id,
+        )
+        catalog_store.upsert(rec)
+        return rec
+
+    monkeypatch.setattr("app.generate.collect_items", lambda *a, **k: items)
+    monkeypatch.setattr("app.generate.generate_one", slow_one)
+
+    started = client.post(
+        "/api/jobs",
+        json={"kind": "generate", "layout": "Netflix Hero", "source": "demo", "limit": 8, "skip_existing": False},
+    ).json()
+    assert started["status"] in {"queued", "running"}
+    job_id = started["id"]
+
+    for _ in range(40):
+        snap = client.get(f"/api/jobs/{job_id}").json()
+        if snap["status"] == "running" and snap["done"] >= 1:
+            break
+        time.sleep(0.05)
+
+    cancelled = client.post(f"/api/jobs/{job_id}/cancel").json()
+    assert cancelled["cancel_requested"] is True
+    assert cancelled["message"] == "Cancelling…"
+
+    final = _wait_job(client, job_id, ticks=120)
+    assert final["status"] == "cancelled"
+    assert final["result"]["cancelled"] is True
+    assert len(final["created"]) < 8
+    assert client.post(f"/api/jobs/{job_id}/cancel").status_code == 404
 
 
 def test_gallery_delete_removes_still_video_and_catalog(client, suite_dirs):

@@ -23,7 +23,7 @@ describe("queue badges", () => {
         source: "jellyfin",
         has_video: false,
       }),
-    ).toEqual(["Continue"]);
+    ).toEqual(["Partly watched"]);
   });
 
   it("labels watched titles", () => {

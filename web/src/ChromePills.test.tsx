@@ -20,7 +20,7 @@ describe("ChromePills", () => {
     render(
       <ChromePills watchState="partial" libraryState="in_library" availability="available" source="jellyfin" />,
     );
-    expect(screen.getByText("Continue")).toBeTruthy();
+    expect(screen.getByText("Partly watched")).toBeTruthy();
     expect(screen.queryByText("Seerr only")).toBeNull();
     expect(screen.queryByText("Requestable")).toBeNull();
   });

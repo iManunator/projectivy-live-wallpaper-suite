@@ -13,7 +13,7 @@ _OPTIONALITY = ("title_display", "show_watch_badge", "show_seerr_badge")
 # Bump when bundled DNA changes so persisted preset JSON refreshes on boot.
 # Custom layouts (preset=false) are never overwritten. Netflix Hero is the gold
 # lock — do not drift its layer coordinates without an explicit DNA bump.
-DNA_REVISION = 1
+DNA_REVISION = 2
 
 
 def _layers(*rows: dict) -> list[Layer]:
@@ -50,7 +50,8 @@ PRESETS: dict[str, Layout] = {
         layers=_layers(
             {"id": "title", "slot": "title", "x": 96, "y": 488, "width": 1100, "height": 120, "font_size": 64, "font_weight": "bold"},
             {"id": "year", "slot": "year", "x": 96, "y": 628, "font_size": 24},
-            {"id": "genres", "slot": "genres", "x": 220, "y": 628, "font_size": 24, "max_items": 4},
+            {"id": "genres", "slot": "genres", "x": 220, "y": 628, "font_size": 24, "max_items": 3},
+            {"id": "runtime", "slot": "runtime", "x": 700, "y": 628, "font_size": 24},
             {"id": "rating", "slot": "rating", "x": 96, "y": 676, "font_size": 28, "font_weight": "bold"},
             {"id": "watch", "slot": "watch_status", "x": 96, "y": 728, "font_size": 22},
             {"id": "overview", "slot": "overview", "x": 96, "y": 788, "width": 980, "height": 56, "font_size": 22},
@@ -67,7 +68,8 @@ PRESETS: dict[str, Layout] = {
         layers=_layers(
             {"id": "title", "slot": "title", "x": 80, "y": 96, "width": 720, "height": 110, "font_size": 56, "font_weight": "bold"},
             {"id": "year", "slot": "year", "x": 80, "y": 230, "font_size": 22, "color": "#d0d0d0"},
-            {"id": "genres", "slot": "genres", "x": 210, "y": 230, "font_size": 22, "color": "#d0d0d0", "max_items": 3},
+            {"id": "genres", "slot": "genres", "x": 210, "y": 230, "font_size": 22, "color": "#d0d0d0", "max_items": 2},
+            {"id": "runtime", "slot": "runtime", "x": 560, "y": 230, "font_size": 22, "color": "#d0d0d0"},
             {"id": "watch", "slot": "watch_status", "x": 80, "y": 286, "font_size": 20},
             {"id": "overview", "slot": "overview", "x": 80, "y": 350, "width": 640, "height": 120, "font_size": 22, "color": "#e8e8e8"},
         ),
@@ -85,6 +87,7 @@ PRESETS: dict[str, Layout] = {
             {"id": "title", "slot": "title", "x": 80, "y": 180, "width": 900, "height": 130, "font_size": 64, "font_weight": "bold"},
             {"id": "year", "slot": "year", "x": 80, "y": 330, "font_size": 24},
             {"id": "age", "slot": "age", "x": 220, "y": 330, "font_size": 24},
+            {"id": "runtime", "slot": "runtime", "x": 400, "y": 330, "font_size": 24},
             {"id": "rating", "slot": "rating", "x": 80, "y": 378, "font_size": 32, "font_weight": "bold"},
             {"id": "source", "slot": "source", "x": 80, "y": 440, "font_size": 22},
         ),
@@ -120,7 +123,8 @@ PRESETS: dict[str, Layout] = {
         layers=_layers(
             {"id": "title", "slot": "title", "x": 88, "y": 140, "width": 900, "height": 120, "font_size": 64, "font_weight": "bold"},
             {"id": "year", "slot": "year", "x": 88, "y": 280, "font_size": 24},
-            {"id": "genres", "slot": "genres", "x": 220, "y": 280, "font_size": 24, "max_items": 3},
+            {"id": "genres", "slot": "genres", "x": 220, "y": 280, "font_size": 24, "max_items": 2},
+            {"id": "runtime", "slot": "runtime", "x": 620, "y": 280, "font_size": 24},
             {"id": "rating", "slot": "rating", "x": 88, "y": 328, "font_size": 30, "font_weight": "bold"},
             {"id": "watch", "slot": "watch_status", "x": 88, "y": 384, "font_size": 22},
             {"id": "overview", "slot": "overview", "x": 88, "y": 448, "width": 760, "height": 120, "font_size": 24},

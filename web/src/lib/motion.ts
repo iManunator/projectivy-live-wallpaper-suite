@@ -12,7 +12,8 @@ export function defaultDuration(quality: string): number {
 }
 
 export function describeMotion(style: MotionStyle, intensity: number, duration: number): string {
-  const depth = intensity >= 0.7 ? "bold" : intensity >= 0.4 ? "balanced" : "subtle";
+  const depth =
+    intensity >= 0.7 ? "bold" : intensity >= 0.45 ? "cinematic" : intensity >= 0.28 ? "balanced" : "subtle";
   const label =
     style === "parallax"
       ? "Parallax (artwork drifts; chrome stays locked)"
@@ -24,20 +25,26 @@ export function describeMotion(style: MotionStyle, intensity: number, duration: 
 
 export const INTENSITY_PRESETS: Record<string, number> = {
   subtle: 0.16,
+  balanced: 0.355,
   cinematic: 0.55,
   bold: 0.96,
 };
 
+/** UI order for Settings / Editor / Tonight intensity chips. */
+export const MOTION_PRESET_ORDER = ["subtle", "balanced", "cinematic", "bold"] as const;
+
 export const PRESET_DURATION: Record<string, number> = {
   subtle: 16,
+  balanced: 14,
   cinematic: 12,
   bold: 10,
 };
 
-/** Stay inside Subtle / Cinematic / Bold; matched in backend/app/motion.py. */
+/** Stay inside Subtle / Balanced / Cinematic / Bold; matched in backend/app/motion.py. */
 const PRESET_BAND: Record<string, [number, number]> = {
   subtle: [0.1, 0.28],
-  cinematic: [0.4, 0.72],
+  balanced: [0.29, 0.42],
+  cinematic: [0.43, 0.72],
   bold: [0.82, 1],
 };
 const INTENSITY_JITTER = 0.08;

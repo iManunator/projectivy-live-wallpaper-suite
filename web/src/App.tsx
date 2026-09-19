@@ -115,6 +115,7 @@ function GeneratePage() {
     limit: 8,
     skip_existing: true,
     replace_existing: false,
+    refresh_status: false,
     cleanup: false,
     motion: false,
     ids: "",
@@ -180,9 +181,18 @@ function GeneratePage() {
           <input value={form.skip_ids} onChange={(e) => setForm({ ...form, skip_ids: e.target.value })} placeholder="leave blank to skip none extra" />
           <label style={{ marginTop: 12 }}><input type="checkbox" checked={form.skip_existing} disabled={form.replace_existing} onChange={(e) => setForm({ ...form, skip_existing: e.target.checked })} /> Skip titles already generated (IMDb / TMDB / Jellyfin id)</label>
           <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked, skip_existing: e.target.checked ? false : form.skip_existing })} /> Replace / overwrite same show</label>
+          <label>
+            <input
+              type="checkbox"
+              checked={form.refresh_status}
+              disabled={form.replace_existing}
+              onChange={(e) => setForm({ ...form, refresh_status: e.target.checked })}
+            />{" "}
+            Refresh when watch / availability changes
+          </label>
           <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
           <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
-          <p className="muted flag-help">{describeBatchFlags({ skip_existing: form.skip_existing, replace_existing: form.replace_existing, cleanup: form.cleanup, ids: csvToIds(form.ids), skip_ids: csvToIds(form.skip_ids) })}</p>
+          <p className="muted flag-help">{describeBatchFlags({ skip_existing: form.skip_existing, replace_existing: form.replace_existing, refresh_status: form.refresh_status, cleanup: form.cleanup, ids: csvToIds(form.ids), skip_ids: csvToIds(form.skip_ids) })}</p>
           <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; Projectivy only gets <code>videoUrl</code> when an MP4 exists. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}{settings?.motion_vary !== false ? " · per-title variety" : ""}.</p>
           <div className="row" style={{ marginTop: 16 }}>
             <button
@@ -197,6 +207,7 @@ function GeneratePage() {
                     limit: form.limit,
                     skip_existing: form.skip_existing,
                     replace_existing: form.replace_existing,
+                    refresh_status: form.refresh_status,
                     cleanup: form.cleanup,
                     motion: form.motion,
                     ids: csvToIds(form.ids),
@@ -367,6 +378,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
     source: "jellyfin",
     skip_existing: true,
     replace_existing: false,
+    refresh_status: false,
     cleanup: true,
     motion: false,
     limit: 20,
@@ -388,7 +400,12 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   });
   async function testConnection(name: "jellyfin" | "jellyseerr" | "tmdb") {
     try {
-      const result = (await api.testProvider(name)) as { ok?: boolean; message?: string; error?: string };
+      const draft = settings![name] || {};
+      const result = (await api.testProvider(name, {
+        url: String(draft.url || ""),
+        api_key: String(draft.api_key || ""),
+        user_id: String((draft as { user_id?: string }).user_id || ""),
+      })) as { ok?: boolean; message?: string; error?: string };
       const toast = providerToast(result);
       notify(toast.kind, toast.text);
       setMsg(toast.text);
@@ -442,6 +459,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             }
           >
             <option value="subtle">Subtle</option>
+            <option value="balanced">Balanced</option>
             <option value="cinematic">Cinematic</option>
             <option value="bold">Bold</option>
           </select>
@@ -461,7 +479,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             />{" "}
             Vary motion slightly per wallpaper
           </label>
-          <p className="muted">Default on. Each bake/preview gets a mild seeded pan direction, intensity jitter, start phase, and style drift inside Subtle / Cinematic / Bold. Same title is stable. Off restores the exact CSS-matched ease/amplitude path.</p>
+          <p className="muted">Default on. Each bake/preview gets a mild seeded pan direction, intensity jitter, start phase, and style drift inside Subtle / Balanced / Cinematic / Bold. Same title is stable. Off restores the exact CSS-matched ease/amplitude path.</p>
           <label>Quality</label>
           <select value={settings.motion_quality} onChange={(e) => setSettings({ ...settings, motion_quality: e.target.value })}>
             <option value="light">light (~8s, 2.8 Mbps, 30 fps)</option>
@@ -609,6 +627,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
         </div>
         <div className="card">
           <h3>TMDB (optional enrichment)</h3>
+          <p className="muted">Fills missing year / genres / runtime and clearlogos for Seerr titles (discover has no logos). Free key at themoviedb.org.</p>
           <label>API key</label>
           <input value={settings.tmdb.api_key || ""} onChange={(e) => patch("tmdb", "api_key", e.target.value)} />
           <label>Language</label>
@@ -617,7 +636,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
         </div>
         <div className="card">
           <h3>Cron / batch</h3>
-          <p className="muted">Scheduled generate uses the same skip / replace / cleanup / id rules as the Generate page. Save settings to persist the schedule, or run now for a toast with created / skipped / cleaned counts.</p>
+          <p className="muted">Scheduled generate uses the same skip / replace / refresh-status / cleanup / id rules as the Generate page. Save settings to persist the schedule, or run now for a toast with created / skipped / cleaned counts.</p>
           <label>
             <input
               type="checkbox"
@@ -673,12 +692,22 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             />{" "}
             Overwrite / replace
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(cron.refresh_status)}
+              disabled={Boolean(cron.replace_existing)}
+              onChange={(e) => setCron({ ...cron, refresh_status: e.target.checked })}
+            />{" "}
+            Refresh when watch / availability changes
+          </label>
           <label><input type="checkbox" checked={Boolean(cron.cleanup)} onChange={(e) => setCron({ ...cron, cleanup: e.target.checked })} /> Cleanup missing titles</label>
           <label><input type="checkbox" checked={Boolean(cron.motion)} onChange={(e) => setCron({ ...cron, motion: e.target.checked })} /> Bake parallax VIDEO</label>
           <p className="muted flag-help">
             {describeBatchFlags({
               skip_existing: Boolean(cron.skip_existing),
               replace_existing: Boolean(cron.replace_existing),
+              refresh_status: Boolean(cron.refresh_status),
               cleanup: Boolean(cron.cleanup),
               ids: Array.isArray(cron.ids) ? cron.ids : csvToIds(String(cron.ids || "")),
               skip_ids: Array.isArray(cron.skip_ids) ? cron.skip_ids : csvToIds(String(cron.skip_ids || "")),
@@ -697,6 +726,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
                   limit: cron.limit,
                   skip_existing: cron.skip_existing,
                   replace_existing: cron.replace_existing,
+                  refresh_status: cron.refresh_status,
                   cleanup: cron.cleanup,
                   motion: cron.motion,
                   ids: Array.isArray(cron.ids) ? cron.ids : csvToIds(String(cron.ids || "")),

@@ -371,3 +371,63 @@ def test_bake_motion_varies_per_title_when_enabled(suite_dirs, monkeypatch):
     assert profiles[0].fg_pan == 0
     assert profiles[2].fg_pan == 0
 
+
+def test_run_generate_refreshes_when_status_changes(suite_dirs, monkeypatch):
+    from app import catalog as catalog_store
+    from app import generate as generate_mod
+    from app.generate import run_generate
+    from app.models import GenerateRequest, MediaItem, WallpaperRecord
+
+    catalog_store.upsert(
+        WallpaperRecord(
+            id="old",
+            layout="Netflix Hero",
+            filename="old.jpg",
+            title="Show",
+            jellyfin_id="jf-9",
+            watch_state="unwatched",
+            availability="requestable",
+            library_state="seerr_only",
+            source="jellyseerr",
+        )
+    )
+    item = MediaItem(
+        title="Show",
+        jellyfin_id="jf-9",
+        watch_state="watched",
+        availability="available",
+        library_state="in_library",
+        source="jellyfin",
+    )
+    calls = []
+
+    def fake_one(media, layout, motion=False, replace=False, http_get=None):
+        calls.append({"replace": replace, "watch": media.watch_state})
+        return WallpaperRecord(
+            id="new",
+            layout=layout,
+            filename="new.jpg",
+            title=media.title,
+            jellyfin_id=media.jellyfin_id,
+            watch_state=media.watch_state,
+            availability=media.availability,
+            library_state=media.library_state,
+            source=media.source,
+        )
+
+    monkeypatch.setattr(generate_mod, "collect_items", lambda *a, **k: [item])
+    monkeypatch.setattr(generate_mod, "generate_one", fake_one)
+
+    skipped = run_generate(
+        GenerateRequest(layout="Netflix Hero", source="jellyfin", limit=1, skip_existing=True, refresh_status=False)
+    )
+    assert skipped["skipped"] == ["Show"]
+    assert calls == []
+
+    refreshed = run_generate(
+        GenerateRequest(layout="Netflix Hero", source="jellyfin", limit=1, skip_existing=True, refresh_status=True)
+    )
+    assert refreshed["refreshed"] == ["Show"]
+    assert refreshed["created"] == ["Show"]
+    assert calls == [{"replace": True, "watch": "watched"}]
+

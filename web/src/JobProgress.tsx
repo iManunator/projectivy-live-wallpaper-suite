@@ -7,12 +7,14 @@ type JobContextValue = {
   job: JobSnapshot;
   busy: boolean;
   run: (body: Record<string, unknown>) => Promise<JobSnapshot>;
+  cancel: () => Promise<void>;
 };
 
 const JobContext = createContext<JobContextValue>({
   job: idleJob(),
   busy: false,
   run: async () => idleJob(),
+  cancel: async () => undefined,
 });
 
 export function JobProvider({ children }: { children: ReactNode }) {
@@ -34,6 +36,17 @@ export function JobProvider({ children }: { children: ReactNode }) {
     [notify],
   );
 
+  const cancel = useCallback(async () => {
+    if (!job.id || !isActiveJob(job)) return;
+    try {
+      const updated = await api.cancelJob(job.id);
+      setJob(updated);
+    } catch (err) {
+      const toast = failedJobToast(err);
+      notify(toast.kind, toast.text);
+    }
+  }, [job, notify]);
+
   useEffect(() => {
     let cancelled = false;
     let timer = 0;
@@ -54,7 +67,10 @@ export function JobProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value = useMemo(() => ({ job, busy: isActiveJob(job), run }), [job, run]);
+  const value = useMemo(
+    () => ({ job, busy: isActiveJob(job), run, cancel }),
+    [job, run, cancel],
+  );
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;
 }
 
@@ -65,21 +81,36 @@ export function useJobs(): JobContextValue {
 export function JobProgress({ job }: { job?: JobSnapshot | null }) {
   const ctx = useJobs();
   const snapshot = job ?? ctx.job;
-  if (!snapshot || typeof snapshot.status !== "string" || snapshot.status === "idle" || snapshot.status === "done") return null;
+  if (!snapshot || typeof snapshot.status !== "string" || snapshot.status === "idle" || snapshot.status === "done" || snapshot.status === "cancelled") {
+    return null;
+  }
   const active = isActiveJob(snapshot);
   const percent = Math.max(0, Math.min(100, snapshot.percent || 0));
+  const cancelling = Boolean(snapshot.cancel_requested);
   return (
     <div className={`job-progress ${snapshot.status}`} role="status" aria-live="polite" aria-busy={active}>
       <div className="job-progress-bar" aria-hidden="true">
         <span style={{ width: `${percent}%` }} />
       </div>
-      <p>
-        <strong>{active ? `${snapshot.done}/${snapshot.total || "?"}` : snapshot.status}</strong>
-        {snapshot.current ? ` · ${snapshot.current}` : ""}
-        {snapshot.message && snapshot.message !== `${snapshot.done}/${snapshot.total}`
-          ? ` — ${snapshot.message}`
-          : ""}
-      </p>
+      <div className="job-progress-row">
+        <p>
+          <strong>{active ? `${snapshot.done}/${snapshot.total || "?"}` : snapshot.status}</strong>
+          {snapshot.current ? ` · ${snapshot.current}` : ""}
+          {snapshot.message && snapshot.message !== `${snapshot.done}/${snapshot.total}`
+            ? ` — ${snapshot.message}`
+            : ""}
+        </p>
+        {active && snapshot.id ? (
+          <button
+            type="button"
+            className="btn ghost job-progress-cancel"
+            disabled={cancelling}
+            onClick={() => void ctx.cancel()}
+          >
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

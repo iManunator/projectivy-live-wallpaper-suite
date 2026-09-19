@@ -59,6 +59,13 @@ def test_netflix_hero_gold_reference_is_unchanged():
             assert getattr(layer, key) == value, (slot, key)
 
 
+def test_every_preset_has_runtime_slot():
+    for name, layout in PRESETS.items():
+        runtime = _layer(layout, "runtime")
+        assert runtime.visible, name
+        assert runtime.font_size >= 20, name
+
+
 def test_every_preset_has_tv_safe_watch_row_and_logo_slot():
     for name, layout in PRESETS.items():
         assert layout.dna_revision == DNA_REVISION, name

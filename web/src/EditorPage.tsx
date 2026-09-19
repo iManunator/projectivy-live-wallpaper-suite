@@ -11,7 +11,7 @@ import {
   type WallpaperRecord,
 } from "./lib/layout";
 import { errorToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, motionSeedKey, PRESET_DURATION, type MotionStyle } from "./lib/motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, MOTION_PRESET_ORDER, motionPreviewVars, motionSeedKey, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 import { keepWatchSlot } from "./lib/chrome";
 import { LAYOUT_DNA } from "./lib/queues";
@@ -49,7 +49,7 @@ const SAMPLE: Record<string, string> = {
   year: "2024",
   genres: "Sci-Fi  ·  Mystery",
   runtime: "2h 11m",
-  rating: "8.4",
+  rating: "★ 8.4",
   overview: "A cartographer maps a city that rearranges itself after dusk.",
   watch_status: "Unwatched",
   source: "Jellyfin",
@@ -66,7 +66,7 @@ function sampleFromMedia(item: MediaRow): Record<string, string> {
     year: item.year ? String(item.year) : "",
     genres,
     runtime: item.runtime || "",
-    rating: item.rating ? Number(item.rating).toFixed(1) : "",
+    rating: item.rating ? `★ ${Number(item.rating).toFixed(1)}` : "",
     overview: item.overview || "",
     watch_status: watch?.label || "",
     seerr_status: seerr?.label || "",
@@ -404,14 +404,14 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
             <button type="button" className={`chip ${showGuides ? "active" : ""}`} onClick={() => setShowGuides((v) => !v)}>
               Safe zone
             </button>
-            {(["subtle", "cinematic", "bold"] as const).map((preset) => (
+            {MOTION_PRESET_ORDER.map((preset) => (
               <button
                 key={preset}
                 type="button"
                 className={`chip ${motionPreset === preset ? "active" : ""}`}
                 onClick={() => setMotionPreset(preset)}
               >
-                {preset}
+                {preset[0].toUpperCase() + preset.slice(1)}
               </button>
             ))}
           </div>

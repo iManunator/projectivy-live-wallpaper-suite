@@ -73,6 +73,20 @@ object UrlSupport {
         return id.ifBlank { null }
     }
 
+    /** Seerr / Jellyseerr web deep links look like …/movie/123 or …/tv/456. */
+    fun isSeerrActionUrl(actionUrl: String?): Boolean {
+        if (actionUrl.isNullOrBlank()) return false
+        if (actionUrl.startsWith("jellyfin://")) return false
+        return try {
+            val path = URI(actionUrl).path?.lowercase().orEmpty()
+            path.contains("/movie/") || path.contains("/tv/") ||
+                path.matches(Regex(".*/(movie|tv)/\\d+/?$")) ||
+                path.matches(Regex("^/(movie|tv)/\\d+/?$"))
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun shouldUseVideo(preferMotion: Boolean, mediaType: String?, videoUrl: String?): Boolean {
         if (!preferMotion || videoUrl.isNullOrBlank()) return false
         return mediaType.equals("video", ignoreCase = true) ||

@@ -129,7 +129,7 @@ def suite_options() -> dict[str, Any]:
         ],
         "motion_styles": ["parallax", "kenburns", "drift"],
         "motion_qualities": ["light", "standard", "cinematic"],
-        "motion_presets": ["subtle", "cinematic", "bold"],
+        "motion_presets": ["subtle", "balanced", "cinematic", "bold"],
         "gradient_types": ["linear", "radial"],
         "title_displays": ["auto", "logo", "text"],
         "taste_profiles": list(TASTE_PRESETS.keys()),
@@ -171,6 +171,7 @@ def suite_options() -> dict[str, Any]:
         "clients": [
             {"name": "Moonfin", "package": "org.moonfin.androidtv", "type": "deep_link"},
             {"name": "Jellyfin", "package": "org.jellyfin.androidtv", "type": "deep_link"},
+            {"name": "SeerrTV", "package": "ca.devmesh.seerrtv", "type": "launch"},
             {"name": "Fladder", "package": "nl.jknaapen.fladder", "type": "launch"},
             {"name": "Kodi", "package": "org.xbmc.kodi", "type": "launch"},
             {"name": "Wholphin", "package": "com.github.damontecres.wholphin", "type": "launch"},
@@ -528,20 +529,24 @@ def post_settings(settings: AppSettings) -> dict[str, Any]:
 
 
 @router.post("/api/settings/test/{provider}")
-def test_provider(provider: str) -> dict[str, Any]:
+def test_provider(provider: str, body: dict[str, Any] | None = Body(default=None)) -> dict[str, Any]:
+    """Test a provider. Optional JSON body overrides saved URL/api_key so Settings can Test before Save."""
     settings = load_settings()
     key = provider.lower()
     from app.ops import record_event
 
+    draft = body if isinstance(body, dict) else {}
+    overrides = {k: v for k, v in draft.items() if v is not None and str(v).strip() != ""}
+
     result: dict[str, Any]
     if key == "jellyfin":
-        cfg = settings.jellyfin or {}
+        cfg = {**(settings.jellyfin or {}), **overrides}
         result = JellyfinProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "", user_id=cfg.get("user_id") or "").test()
     elif key in ("seerr", "jellyseerr"):
-        cfg = settings.jellyseerr or {}
+        cfg = {**(settings.jellyseerr or {}), **overrides}
         result = SeerrProvider(url=cfg.get("url") or "", api_key=cfg.get("api_key") or "").test()
     elif key == "tmdb":
-        cfg = settings.tmdb or {}
+        cfg = {**(settings.tmdb or {}), **overrides}
         result = TmdbProvider(api_key=cfg.get("api_key") or "").test()
     elif key == "demo":
         result = DemoProvider().test()
@@ -660,6 +665,16 @@ def jobs_get(job_id: str) -> dict[str, Any]:
     return job.as_dict()
 
 
+@router.post("/api/jobs/{job_id}/cancel")
+def jobs_cancel(job_id: str) -> dict[str, Any]:
+    from app.progress import request_cancel
+
+    job = request_cancel(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found or not running")
+    return job.as_dict()
+
+
 @router.post("/api/jobs")
 def jobs_start(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
     from app.ops import record_event
@@ -674,6 +689,7 @@ def jobs_start(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, A
                 "limit",
                 "skip_existing",
                 "replace_existing",
+                "refresh_status",
                 "cleanup",
                 "motion",
                 "ids",

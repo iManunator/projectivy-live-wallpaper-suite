@@ -148,6 +148,7 @@ class GenerateRequest(BaseModel):
     limit: int = 8
     skip_existing: bool = True
     replace_existing: bool = False
+    refresh_status: bool = False
     cleanup: bool = False
     motion: bool = False
     ids: list[str] = Field(default_factory=list)

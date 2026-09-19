@@ -63,6 +63,9 @@ export function jobToast(job: JobSnapshot): { kind: "ok" | "error" | "info"; tex
   if (job.status === "error") {
     return { kind: "error", text: job.error || job.message || "Job failed" };
   }
+  if (job.status === "cancelled") {
+    return { kind: "info", text: job.message || "Cancelled" };
+  }
   const result = (job.result || {}) as {
     message?: string;
     count?: number;

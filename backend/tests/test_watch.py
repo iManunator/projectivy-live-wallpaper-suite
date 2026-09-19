@@ -15,7 +15,7 @@ def test_watch_badge_labels_and_colors():
     partial = watch_badge("partial")
     watched = watch_badge("watched")
     assert unwatched and unwatched["label"] == "Unwatched"
-    assert partial and partial["label"] == "Continue"
+    assert partial and partial["label"] == "Partly watched"
     assert watched and watched["label"] == "Watched"
     assert unwatched["color"] != partial["color"] != watched["color"]
     assert watch_label("unwatched") == "Unwatched"

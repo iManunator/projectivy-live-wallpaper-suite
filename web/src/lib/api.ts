@@ -15,6 +15,7 @@ export type JobSnapshot = {
   error: string | null;
   result: Record<string, unknown> | null;
   percent: number;
+  cancel_requested?: boolean;
 };
 
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -52,6 +53,8 @@ export const api = {
   job: (id: string) => json<JobSnapshot>(`/api/jobs/${encodeURIComponent(id)}`),
   startJob: (body: Record<string, unknown>) =>
     json<JobSnapshot>("/api/jobs", { method: "POST", body: JSON.stringify(body) }),
+  cancelJob: (id: string) =>
+    json<JobSnapshot>(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   deleteGallery: (id: string) =>
     json<GalleryDeleteResult>(`/api/gallery/${encodeURIComponent(id)}`, { method: "DELETE" }),
   deleteGalleryMany: (ids: string[]) =>
@@ -77,7 +80,11 @@ export const api = {
     if (tmdbId) params.set("tmdb_id", tmdbId);
     return `/api/media/logo/${encodeURIComponent(itemId)}?${params.toString()}`;
   },
-  testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
+  testProvider: (name: string, draft?: Record<string, string>) =>
+    json(`/api/settings/test/${name}`, {
+      method: "POST",
+      body: JSON.stringify(draft || {}),
+    }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,
   flag: (id: string, body: { pinned?: boolean; hidden?: boolean }) =>

@@ -33,6 +33,7 @@ class JobState:
     result: dict[str, Any] | None = None
     started_at: float = 0.0
     updated_at: float = 0.0
+    cancel_requested: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -50,8 +51,9 @@ class JobState:
             "result": self.result,
             "started_at": self.started_at,
             "updated_at": self.updated_at,
+            "cancel_requested": self.cancel_requested,
             "percent": 100
-            if self.status == "done"
+            if self.status in {"done", "cancelled"}
             else (0 if self.total <= 0 else min(99, int(round(100 * self.done / max(self.total, 1))))),
         }
 
@@ -90,6 +92,26 @@ def patch_job(job_id: str, **fields: Any) -> JobState | None:
         return job
 
 
+def request_cancel(job_id: str) -> JobState | None:
+    """Ask a running job to stop after the current title finishes."""
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        if not job or job.status not in {"queued", "running"}:
+            return None
+        job.cancel_requested = True
+        job.message = "Cancelling…"
+        job.updated_at = time.time()
+        return job
+
+
+def is_cancelled(job_id: str | None) -> bool:
+    if not job_id:
+        return False
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        return bool(job and job.cancel_requested)
+
+
 def report(job_id: str | None, **fields: Any) -> None:
     if not job_id:
         return
@@ -115,13 +137,14 @@ def spawn(kind: str, worker: Callable[[str], dict[str, Any]], *, message: str = 
         if len(_JOBS) > 20:
             oldest = sorted(_JOBS.values(), key=lambda row: row.started_at)[: len(_JOBS) - 20]
             for stale in oldest:
-                if stale.status in {"done", "error"}:
+                if stale.status in {"done", "error", "cancelled"}:
                     _JOBS.pop(stale.id, None)
 
     def _run() -> None:
         patch_job(job.id, status="running", message=message)
         try:
             result = worker(job.id) or {}
+            cancelled = bool(result.get("cancelled")) or is_cancelled(job.id)
             try:
                 result_done = int(result["done"] if result.get("done") is not None else result.get("count") or job.done or 0)
             except (TypeError, ValueError):
@@ -132,9 +155,12 @@ def spawn(kind: str, worker: Callable[[str], dict[str, Any]], *, message: str = 
                 result_total = max(job.total, result_done)
             patch_job(
                 job.id,
-                status="done",
+                status="cancelled" if cancelled else "done",
                 result=result,
-                message=str(result.get("message") or "Done"),
+                message=str(
+                    result.get("message")
+                    or ("Cancelled" if cancelled else "Done")
+                ),
                 created=list(result.get("created") or result.get("generated") or []),
                 failed=list(result.get("failed") or []),
                 skipped=list(result.get("skipped") or []),

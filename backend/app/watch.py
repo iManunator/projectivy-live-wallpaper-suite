@@ -15,7 +15,7 @@ WATCH_WATCHED = frozenset({"watched", "played"})
 
 TONES: dict[str, dict[str, str]] = {
     "unwatched": {"label": "Unwatched", "color": "#7ad0c4"},
-    "partial": {"label": "Continue", "color": "#e2b657"},
+    "partial": {"label": "Partly watched", "color": "#e2b657"},
     "watched": {"label": "Watched", "color": "#87c38f"},
 }
 

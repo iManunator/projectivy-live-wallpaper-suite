@@ -27,7 +27,7 @@ SAMPLE = {
     "year": "2024",
     "genres": "Sci-Fi  ·  Mystery  ·  Drama  ·  Thriller  ·  Adventure",
     "runtime": "2h 11m",
-    "rating": "8.4",
+    "rating": "★ 8.4",
     "overview": "A cartographer maps a city that rearranges itself after dusk.",
     "watch_status": "Unwatched",
     "seerr_status": "Seerr only",
