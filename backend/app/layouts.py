@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+from app.catalog import safe_name
 from app.config import LAYOUTS_DIR, ensure_dirs
 from app.models import Layout, LayoutBackground, Layer
 
@@ -18,6 +20,16 @@ DNA_REVISION = 2
 
 def _layers(*rows: dict) -> list[Layer]:
     return [Layer.model_validate(row) for row in rows]
+
+
+def _layout_path(name: str) -> Path:
+    """Resolve a layout name to a path inside LAYOUTS_DIR, rejecting traversal."""
+    cleaned = safe_name(name)
+    path = (LAYOUTS_DIR / f"{cleaned}.json").resolve()
+    layouts_root = LAYOUTS_DIR.resolve()
+    if layouts_root not in path.parents:
+        raise ValueError("Invalid layout name")
+    return path
 
 
 PRESETS: dict[str, Layout] = {
@@ -173,7 +185,10 @@ def list_layouts() -> list[str]:
 
 def load_layout(name: str) -> Layout | None:
     seed_presets()
-    path = LAYOUTS_DIR / f"{name}.json"
+    try:
+        path = _layout_path(name)
+    except ValueError:
+        return PRESETS.get(name)
     if path.is_file():
         return Layout.model_validate(json.loads(path.read_text(encoding="utf-8")))
     return PRESETS.get(name)
@@ -181,7 +196,7 @@ def load_layout(name: str) -> Layout | None:
 
 def save_layout(layout: Layout) -> Layout:
     ensure_dirs()
-    path = LAYOUTS_DIR / f"{layout.name}.json"
+    path = _layout_path(layout.name)
     path.write_text(layout.model_dump_json(indent=2), encoding="utf-8")
     return layout
 
@@ -189,7 +204,7 @@ def save_layout(layout: Layout) -> Layout:
 def delete_layout(name: str) -> bool:
     if name in PRESETS:
         return False
-    path = LAYOUTS_DIR / f"{name}.json"
+    path = _layout_path(name)
     if path.is_file():
         path.unlink()
         return True

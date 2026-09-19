@@ -7,6 +7,7 @@ import {
   normalizeLayout,
   SLOTS,
   validateLayout,
+  type AppSettings,
   type Layout,
   type WallpaperRecord,
 } from "./lib/layout";
@@ -103,6 +104,7 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
   const [duration, setDuration] = useState(6);
   const [logoSrc, setLogoSrc] = useState("");
   const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
+  const [baseSettings, setBaseSettings] = useState<AppSettings | null>(null);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
@@ -118,6 +120,7 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
     api
       .settings()
       .then((settings) => {
+        setBaseSettings(settings);
         setMotionStyle((settings.motion_style || "parallax") as MotionStyle);
         setMotionPreset(settings.motion_preset || "cinematic");
         setLightLeak(Boolean(settings.light_leak));
@@ -236,6 +239,16 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
     try {
       await api.saveLayout(layout);
       setNames(await api.layouts());
+      const mergedSettings: AppSettings = {
+        ...(baseSettings || ((await api.settings()) as AppSettings)),
+        motion_style: motionStyle,
+        motion_preset: motionPreset,
+        light_leak: lightLeak,
+        motion_vary: motionVary,
+        motion_duration: duration,
+      };
+      await api.saveSettings(mergedSettings);
+      setBaseSettings(mergedSettings);
       const text = `Saved “${layout.name}”`;
       setStatus(text);
       notify("ok", text);
