@@ -12,7 +12,7 @@ Projectivy does **not** composite depth layers itself. A “parallax wallpaper�
 ## IMAGE vs VIDEO in this suite
 
 1. **Generate always writes a JPEG.** Stills remain first-class. The gallery, in-page editor preview, and `imageUrl` never go away. Jellyfin stills composite over downloaded Backdrop (then Primary) art.
-2. **Motion is optional.** Enable *Generate VIDEO loops* in Settings, check *Bake parallax / motion VIDEO* on a batch, or `POST /api/wallpaper/generate-motion`.
+2. **Motion is optional.** Enable *Generate VIDEO loops* in Settings, check *Bake parallax / motion VIDEO* on a batch, tap **Bake motion for tonight’s pick** / **this layout** on Tonight, Generate, or the editor, or `POST /api/wallpaper/generate-motion` (`path=` = one filename).
 3. **`GET /api/wallpaper/status`** (tvbgsuite-compatible) always returns `imageUrl` + `actionUrl` + `path` when a title is selected. When a sibling MP4 exists:
    - `videoUrl` is set
    - `mediaType` is `"video"`
@@ -32,9 +32,9 @@ status ──imageUrl──► JPEG  ──► WallpaperType.IMAGE
 | **kenburns** | Single composite still, classic slow zoom/pan |
 | **drift** | Same as Ken Burns with a larger pan and tiny zoom |
 
-Intensity presets **Subtle / Cinematic / Bold** (0.28 / 0.55 / 0.88), duration (2–20s), fps (12–30), and quality (`light` / `standard` / `cinematic`) are Settings fields. Parallax may add a third **light-leak** lavfi layer. Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
+Intensity presets **Subtle / Cinematic / Bold** (0.16 / 0.55 / 0.96) change zoom and pan enough to see on a TV. Duration defaults are longer (quality `light` / `standard` / `cinematic` ≈ 8 / 12 / 16s, clamp 2–24s). ffmpeg `zoompan` uses a sine cycle so the MP4 loops seamlessly. Parallax may add a third **light-leak** lavfi layer. Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
 
-The web UI plays a **CSS motion preview** of the same style/intensity on Tonight, the layout editor, Generate, and Settings so you can judge the look without a TV. That preview is not what Projectivy plays — bake a VIDEO (ffmpeg) for the real loop.
+The web UI plays a **CSS motion preview** of the same style/intensity on Tonight, the layout editor, Generate, and Settings so you can judge the look without a TV. The CSS loop returns to the start frame (no bounce). That preview is not what Projectivy plays — bake a VIDEO (ffmpeg) for the real loop. Projectivy **IMAGE** is the JPEG; **VIDEO** is only advertised when the sibling MP4 exists (`videoUrl` stays null otherwise).
 
 ## Bake pipeline
 

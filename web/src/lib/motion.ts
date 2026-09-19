@@ -6,9 +6,9 @@ export function clampIntensity(value: number): number {
 }
 
 export function defaultDuration(quality: string): number {
-  if (quality === "cinematic") return 10;
-  if (quality === "standard") return 8;
-  return 6;
+  if (quality === "cinematic") return 16;
+  if (quality === "standard") return 12;
+  return 8;
 }
 
 export function describeMotion(style: MotionStyle, intensity: number, duration: number): string {
@@ -23,9 +23,15 @@ export function describeMotion(style: MotionStyle, intensity: number, duration: 
 }
 
 export const INTENSITY_PRESETS: Record<string, number> = {
-  subtle: 0.28,
+  subtle: 0.16,
   cinematic: 0.55,
-  bold: 0.88,
+  bold: 0.96,
+};
+
+export const PRESET_DURATION: Record<string, number> = {
+  subtle: 16,
+  cinematic: 12,
+  bold: 10,
 };
 
 export function intensityFromPreset(name: string | null | undefined): number {
@@ -46,11 +52,11 @@ export function motionPreviewVars(
 ): Record<string, string> {
   const i = clampIntensity(intensity);
   const zoom =
-    style === "kenburns" ? 1 + i * 0.16 : style === "drift" ? 1 + i * 0.055 : 1 + i * 0.12;
-  const panX = style === "drift" ? i * 5.2 : i * 3.1;
-  const panY = style === "drift" ? i * 1.8 : i * 1.15;
+    style === "kenburns" ? 1 + i * 0.22 : style === "drift" ? 1 + i * 0.08 : 1 + i * 0.18;
+  const panX = style === "drift" ? i * 7.4 : i * 4.8;
+  const panY = style === "drift" ? i * 2.6 : i * 1.7;
   return {
-    "--motion-zoom-from": style === "parallax" ? "1.06" : "1.02",
+    "--motion-zoom-from": style === "parallax" ? "1.04" : "1.015",
     "--motion-zoom-to": String(zoom),
     "--motion-x": `-${panX.toFixed(2)}%`,
     "--motion-y": `${(panY * 0.4).toFixed(2)}%`,

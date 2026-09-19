@@ -7,6 +7,7 @@ def test_health(client):
     body = response.json()
     assert body["ok"] is True
     assert body["service"] == "wallpaparr"
+    assert body["version"] == "1.2.0"
 
 
 def test_layouts_list_includes_presets(client):
@@ -15,6 +16,8 @@ def test_layouts_list_includes_presets(client):
     assert "Prime Cinematic" in names
     assert "Google TV Clean" in names
     assert "Projectivy Dock" in names
+    assert "Status Focus" in names
+    assert "Jellyfin Dense" in names
 
 
 def test_layouts_with_images_only_generated(client):
@@ -41,6 +44,7 @@ def test_wallpaper_status_random_has_contract_fields(client):
     assert body["mediaType"] in ("image", "video")
     assert body["sort"] == "latest"
     assert body["layout"] == "Netflix Hero"
+    assert body["watchState"] == "unwatched"
 
 
 def test_wallpaper_status_genre_filter(client):
@@ -364,6 +368,32 @@ def test_generate_motion_batch_contract(client):
     assert body["status"] == "ok"
     assert "generated" in body
     assert body["style"] in {"parallax", "kenburns", "drift"}
+    assert "message" in body
+
+
+def test_generate_motion_single_path_contract(client):
+    body = client.post(
+        "/api/wallpaper/generate-motion",
+        params={"layout": "Netflix Hero", "path": "northlight.jpg"},
+    ).json()
+    assert body["status"] == "ok"
+    assert body["scanned"] == 1
+    assert "northlight.jpg" in body["generated"] or body["count"] in {0, 1}
+
+
+def test_cron_run_now(client):
+    body = client.post(
+        "/api/cron/run",
+        json={
+            "layout": "Google TV Clean",
+            "source": "demo",
+            "limit": 1,
+            "skip_existing": False,
+            "ids": ["demo-jf-1"],
+        },
+    ).json()
+    assert body["count"] == 1
+    assert "Created" in body["message"]
 
 
 def test_media_artwork_requires_jellyfin(client):

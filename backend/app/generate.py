@@ -11,7 +11,7 @@ from app.config import load_settings
 from app.demo_art import logo_bytes_for_item, still_path_for_item
 from app.images import looks_like_image
 from app.layouts import load_layout
-from app.messages import generate_message
+from app.messages import generate_message, motion_bake_message
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
 from app.motion import generate_motion, has_motion, profile_from_settings
 from app.providers import HttpClient
@@ -313,7 +313,7 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
     failed: list[str] = []
     pull = request.limit
     if request.ids:
-        pull = max(request.limit, 40)
+        pull = max(request.limit, 200)
     items = collect_items(request.source, pull, warnings=warnings)
     if request.ids:
         wanted = {i.lower() for i in request.ids}
@@ -369,6 +369,76 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         "count": len(created),
     }
     result["message"] = generate_message(request.layout, result)
+    return result
+
+
+def bake_motion(layout: str, filename: str | None = None) -> dict:
+    """Bake ffmpeg VIDEO for one still (filename) or every still in a layout."""
+    from app.overlays import apply_overlays
+
+    settings = load_settings()
+    profile = profile_from_settings(settings)
+    wanted = (filename or "").strip().lower()
+    if wanted.endswith(".mp4"):
+        wanted = Path(wanted).with_suffix(".jpg").name.lower()
+    elif wanted:
+        wanted = Path(wanted).name.lower()
+    done: list[str] = []
+    failed: list[str] = []
+    scanned = 0
+    for rec in catalog_store.load_catalog():
+        if rec.layout.lower() != layout.lower():
+            continue
+        if wanted and rec.filename.lower() != wanted:
+            continue
+        scanned += 1
+        jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
+        if not jpg:
+            failed.append(rec.filename)
+            continue
+        item = MediaItem(
+            title=rec.title,
+            year=rec.year,
+            overview=rec.overview,
+            rating=rec.rating,
+            genres=rec.genres,
+            official_rating=rec.official_rating,
+            watch_state=rec.watch_state,
+            source=rec.source,
+            jellyfin_id=rec.jellyfin_id,
+            tmdb_id=rec.tmdb_id,
+            imdb_id=rec.imdb_id,
+        )
+        layout_obj = load_layout(rec.layout)
+        plate = chrome = None
+        if layout_obj:
+            plate = jpg.with_name(jpg.stem + "_plate.jpg")
+            chrome = jpg.with_name(jpg.stem + "_chrome.png")
+            save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
+            save_png(apply_overlays(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), settings), chrome)
+        ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+        if plate:
+            plate.unlink(missing_ok=True)
+        if chrome:
+            chrome.unlink(missing_ok=True)
+        if ok:
+            rec.has_video = True
+            rec.parallax_style = profile.normalized_style()
+            catalog_store.upsert(rec)
+            done.append(rec.filename)
+        else:
+            failed.append(rec.filename)
+    result = {
+        "status": "ok",
+        "generated": done,
+        "failed": failed,
+        "scanned": scanned,
+        "style": profile.normalized_style(),
+        "preset": settings.motion_preset,
+        "duration": profile.duration,
+        "count": len(done),
+    }
+    result["message"] = motion_bake_message(layout, result)
     return result
 
 

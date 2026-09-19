@@ -16,6 +16,15 @@ export function generateToast(result: { message?: string; count?: number; warnin
   return { kind: "ok", text };
 }
 
+export function motionToast(result: { message?: string; count?: number; generated?: string[]; style?: string } | null | undefined): {
+  kind: "ok" | "info";
+  text: string;
+} {
+  const n = result?.count ?? result?.generated?.length ?? 0;
+  const text = result?.message || (n ? `Baked motion VIDEO for ${n} title${n === 1 ? "" : "s"}.` : "No VIDEO clips baked.");
+  return { kind: n ? "ok" : "info", text };
+}
+
 export function errorToast(err: unknown, fallback: string): { kind: "error"; text: string } {
   const raw = err instanceof Error ? err.message : String(err || fallback);
   let text = raw;

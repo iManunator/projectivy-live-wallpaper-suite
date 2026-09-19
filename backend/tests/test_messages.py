@@ -1,4 +1,4 @@
-from app.messages import enrich_provider_result, generate_message, provider_test_message
+from app.messages import enrich_provider_result, generate_message, motion_bake_message, provider_test_message
 
 
 def test_jellyfin_success_and_failure_copy():
@@ -31,3 +31,14 @@ def test_generate_message_counts():
     empty = generate_message("Prime Cinematic", {"created": [], "skipped": ["A", "B"], "warnings": ["Jellyfin is not configured. Using the demo catalog."]})
     assert empty.startswith("No new stills")
     assert "Jellyfin is not configured" in empty
+
+
+def test_motion_bake_message():
+    one = motion_bake_message(
+        "Netflix Hero",
+        {"generated": ["northlight.jpg"], "style": "parallax", "preset": "bold", "duration": 10},
+    )
+    assert "northlight.jpg" in one
+    assert "bold" in one
+    empty = motion_bake_message("Prime Cinematic", {"generated": [], "failed": []})
+    assert empty.startswith("No VIDEO clips")

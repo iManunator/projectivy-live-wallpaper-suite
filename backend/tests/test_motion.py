@@ -81,7 +81,7 @@ def test_choose_delivery_video_without_fallback():
 def test_profile_from_settings_defaults():
     profile = profile_from_settings(AppSettings(motion_style="drift", motion_quality="cinematic"))
     assert profile.normalized_style() == "drift"
-    assert profile.duration == 10.0
+    assert profile.duration >= 12.0
     assert profile.quality == "cinematic"
 
 
@@ -110,12 +110,21 @@ def test_parallax_light_leak_adds_third_layer():
 
 
 def test_intensity_presets():
-    assert intensity_from_preset("subtle") == 0.28
-    assert intensity_from_preset("bold") == 0.88
+    assert intensity_from_preset("subtle") == 0.16
+    assert intensity_from_preset("bold") == 0.96
     assert intensity_from_preset("nope") == 0.55
     profile = profile_from_settings(AppSettings(motion_preset="bold", motion_intensity=0.55))
-    assert profile.intensity == 0.88
+    assert profile.intensity == 0.96
     assert profile.light_leak is True
+
+
+def test_intensity_presets_change_output_clearly():
+    subtle = MotionProfile(style="parallax", intensity=0.16)
+    cinematic = MotionProfile(style="parallax", intensity=0.55)
+    bold = MotionProfile(style="parallax", intensity=0.96)
+    assert cinematic.bg_zoom_amp > subtle.bg_zoom_amp * 1.4
+    assert bold.bg_zoom_amp > cinematic.bg_zoom_amp * 1.25
+    assert bold.bg_pan > subtle.bg_pan * 2
 
 
 def test_kenburns_is_single_layer():

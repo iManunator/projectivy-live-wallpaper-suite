@@ -24,8 +24,13 @@ export const api = {
     json("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
   generate: (body: GenerateRequest) =>
     json("/api/generate", { method: "POST", body: JSON.stringify(body) }),
-  generateMotion: (layout: string) =>
-    json(`/api/wallpaper/generate-motion?layout=${encodeURIComponent(layout)}`, { method: "POST" }),
+  generateMotion: (layout: string, path?: string) => {
+    const params = new URLSearchParams({ layout });
+    if (path) params.set("path", path);
+    return json(`/api/wallpaper/generate-motion?${params.toString()}`, { method: "POST" });
+  },
+  runCron: (body: Record<string, unknown>) =>
+    json("/api/cron/run", { method: "POST", body: JSON.stringify(body) }),
   options: () => json<Record<string, unknown>>("/api/options"),
   media: (source: string, limit = 12) =>
     json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),

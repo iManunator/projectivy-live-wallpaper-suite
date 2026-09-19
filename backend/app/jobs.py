@@ -39,40 +39,63 @@ def reload_jobs() -> None:
         if not job.get("enabled", True):
             continue
         expr = job.get("cron") or job.get("schedule") or "0 4 * * *"
-        layout = job.get("layout") or "Netflix Hero"
-        source = job.get("source") or "demo"
         try:
             trigger = CronTrigger.from_crontab(expr)
         except Exception:
             continue
-        ids = job.get("ids") or []
-        skip_ids = job.get("skip_ids") or []
-        if isinstance(ids, str):
-            ids = [part.strip() for part in ids.split(",") if part.strip()]
-        if isinstance(skip_ids, str):
-            skip_ids = [part.strip() for part in skip_ids.split(",") if part.strip()]
         _scheduler.add_job(
             _run_job,
             trigger=trigger,
             id=f"cron-{index}",
             replace_existing=True,
-            kwargs={
-                "layout": layout,
-                "source": source,
-                "skip_existing": bool(job.get("skip_existing", True)),
-                "replace_existing": bool(job.get("replace_existing", False)),
-                "cleanup": bool(job.get("cleanup", False)),
-                "motion": bool(job.get("motion", False)),
-                "limit": int(job.get("limit") or 20),
-                "ids": list(ids),
-                "skip_ids": list(skip_ids),
-            },
+            kwargs=_job_kwargs(job),
         )
 
 
-def _run_job(**kwargs) -> None:
+def _job_kwargs(job: dict | None) -> dict:
+    spec = dict(job or {})
+    ids = spec.get("ids") or []
+    skip_ids = spec.get("skip_ids") or []
+    if isinstance(ids, str):
+        ids = [part.strip() for part in ids.split(",") if part.strip()]
+    if isinstance(skip_ids, str):
+        skip_ids = [part.strip() for part in skip_ids.split(",") if part.strip()]
+    return {
+        "layout": spec.get("layout") or "Netflix Hero",
+        "source": spec.get("source") or "demo",
+        "skip_existing": bool(spec.get("skip_existing", True)),
+        "replace_existing": bool(spec.get("replace_existing", False)),
+        "cleanup": bool(spec.get("cleanup", False)),
+        "motion": bool(spec.get("motion", False)),
+        "limit": int(spec.get("limit") or 20),
+        "ids": list(ids),
+        "skip_ids": list(skip_ids),
+    }
+
+
+def run_now(job: dict | None = None) -> dict:
+    """Run a cron-shaped generate immediately (Settings → Run now)."""
+    settings = load_settings()
+    spec = dict(job or {})
+    if not spec and settings.cron_jobs:
+        spec = dict(settings.cron_jobs[0] or {})
+    return _run_job(**_job_kwargs(spec))
+
+
+def _run_job(**kwargs) -> dict:
     from app.ops import record_event
 
     request = GenerateRequest(**kwargs)
     result = run_generate(request)
-    record_event("cron", {"layout": request.layout, "count": result.get("count"), "ok": True})
+    record_event(
+        "cron",
+        {
+            "layout": request.layout,
+            "count": result.get("count"),
+            "ok": True,
+            "skipped": len(result.get("skipped") or []),
+            "replaced": len(result.get("replaced") or []),
+            "cleaned": len(result.get("cleaned") or []),
+        },
+    )
+    return result

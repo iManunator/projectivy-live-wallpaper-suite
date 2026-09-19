@@ -233,11 +233,12 @@ input, select, textarea {
 .generate-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; align-items: start; }
 .generate-preview { max-width: 100%; }
 @keyframes wallpaparr-kenburns {
-  from { transform: scale(var(--motion-zoom-from, 1.04)) translate(0, 0); }
-  to { transform: scale(var(--motion-zoom-to, 1.12)) translate(var(--motion-x, -2%), var(--motion-y, 1%)); }
+  0% { transform: scale(var(--motion-zoom-from, 1.04)) translate(0, 0); }
+  50% { transform: scale(var(--motion-zoom-to, 1.12)) translate(var(--motion-x, -2%), var(--motion-y, 1%)); }
+  100% { transform: scale(var(--motion-zoom-from, 1.04)) translate(0, 0); }
 }
 .motion-art {
-  animation: wallpaparr-kenburns var(--motion-duration, 6s) ease-in-out infinite alternate;
+  animation: wallpaparr-kenburns var(--motion-duration, 12s) ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
 }
@@ -419,6 +420,32 @@ input, select, textarea {
   font-size: 11px;
   margin-right: 6px;
 }
+.badge-watch.unwatched { background: rgba(122, 208, 196, 0.2); color: #7ad0c4; }
+.badge-watch.partial { background: rgba(226, 182, 87, 0.22); color: #e2b657; }
+.badge-watch.watched { background: rgba(135, 195, 143, 0.2); color: #87c38f; }
+.badge-video { background: rgba(122, 208, 196, 0.14); color: var(--accent-2); }
+.thumb { position: relative; }
+.thumb-watch {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+.created-thumb { position: relative; }
+.created-thumb .badge-watch {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+.layer-chip.is-watch {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(8, 10, 14, 0.62);
+  border: 1px solid currentColor;
+  letter-spacing: 0.02em;
+}
+.flag-help { margin: 8px 0 0; }
 .layer-list { display: flex; flex-direction: column; gap: 8px; max-height: 520px; overflow: auto; }
 .layer-item {
   border: 1px solid var(--line);

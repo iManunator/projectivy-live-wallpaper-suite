@@ -21,6 +21,18 @@ def test_all_presets_render():
         assert image.size[0] == 1920, name
 
 
+def test_flagship_presets_include_watch_status():
+    for name in ("Netflix Hero", "Prime Cinematic", "Google TV Clean", "Projectivy Dock"):
+        slots = {layer.slot for layer in PRESETS[name].layers}
+        assert "watch_status" in slots, name
+
+
+def test_watch_status_renders_as_pill():
+    item = MediaItem(title="Probe", year=2024, watch_state="partial", overview="Test", rating=8.0)
+    image = render_still(item, PRESETS["Status Focus"])
+    assert image.size == (1920, 1080)
+
+
 def test_projectivy_dock_keeps_safe_zone():
     layout = PRESETS["Projectivy Dock"]
     assert layout.background.fade_bottom >= 0.4

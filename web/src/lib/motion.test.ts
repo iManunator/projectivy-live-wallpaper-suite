@@ -10,7 +10,7 @@ describe("motion options", () => {
 
   it("describes parallax loops", () => {
     expect(describeMotion("parallax", 0.55, 6)).toMatch(/Parallax/);
-    expect(defaultDuration("cinematic")).toBe(10);
+    expect(defaultDuration("cinematic")).toBe(16);
   });
 
   it("selects VIDEO vs IMAGE like the plugin", () => {
@@ -22,20 +22,22 @@ describe("motion options", () => {
   });
 
   it("defaults duration from quality", () => {
-    expect(defaultDuration("light")).toBe(6);
-    expect(defaultDuration("standard")).toBe(8);
+    expect(defaultDuration("light")).toBe(8);
+    expect(defaultDuration("standard")).toBe(12);
   });
 
   it("maps intensity presets", () => {
-    expect(intensityFromPreset("subtle")).toBe(0.28);
-    expect(intensityFromPreset("bold")).toBe(0.88);
+    expect(intensityFromPreset("subtle")).toBe(0.16);
+    expect(intensityFromPreset("bold")).toBe(0.96);
     expect(nearestMotionPreset(0.9)).toBe("bold");
     expect(nearestMotionPreset(0.3)).toBe("subtle");
   });
 
-  it("builds CSS motion preview variables", () => {
-    const vars = motionPreviewVars("parallax", 0.88, 6);
-    expect(Number(vars["--motion-zoom-to"])).toBeGreaterThan(1.05);
-    expect(vars["--motion-duration"]).toBe("6s");
+  it("builds CSS motion preview variables that change with intensity", () => {
+    const subtle = motionPreviewVars("parallax", 0.16, 16);
+    const bold = motionPreviewVars("parallax", 0.96, 10);
+    expect(Number(bold["--motion-zoom-to"])).toBeGreaterThan(Number(subtle["--motion-zoom-to"]));
+    expect(Math.abs(parseFloat(bold["--motion-x"]))).toBeGreaterThan(Math.abs(parseFloat(subtle["--motion-x"])));
+    expect(subtle["--motion-duration"]).toBe("16s");
   });
 });
