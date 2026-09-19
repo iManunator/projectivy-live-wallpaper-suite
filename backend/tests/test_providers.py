@@ -151,6 +151,58 @@ def test_unconfigured_providers_do_not_call_network():
     assert DemoProvider().test()["ok"] is True
 
 
+def test_seerr_test_uses_auth_me_not_public_status():
+    """``/api/v1/status`` is public; a real key check must hit ``/api/v1/auth/me``."""
+
+    class Client:
+        def __init__(self):
+            self.urls: list[str] = []
+
+        def get_json(self, url, headers=None, params=None):
+            self.urls.append(url)
+            assert headers and headers.get("X-Api-Key") == "secret"
+            assert headers.get("Authorization") == "Bearer secret"
+            if url.endswith("/auth/me"):
+                return {"id": 1, "displayName": "Admin", "email": "a@b.c"}
+            if url.endswith("/status"):
+                return {"version": "3.4.1"}
+            raise AssertionError(f"unexpected url {url}")
+
+    client = Client()
+    out = SeerrProvider(url="http://seerr:5055", api_key="  Bearer secret  ", client=client).test()
+    assert out["ok"] is True
+    assert out["server"] == "3.4.1"
+    assert any(u.endswith("/auth/me") for u in client.urls)
+    assert client.urls[0].endswith("/auth/me")
+
+
+def test_seerr_test_rejects_bad_api_key():
+    import httpx
+
+    class Client:
+        def get_json(self, url, headers=None, params=None):
+            request = httpx.Request("GET", url)
+            response = httpx.Response(403, request=request, json={"error": "forbidden"})
+            raise httpx.HTTPStatusError("forbidden", request=request, response=response)
+
+    out = SeerrProvider(url="http://seerr:5055", api_key="bad", client=Client()).test()
+    assert out["ok"] is False
+    assert "API key" in out["error"]
+
+
+def test_seerr_strips_bearer_prefix_and_sends_both_headers():
+    seen: dict = {}
+
+    class Client:
+        def get_json(self, url, headers=None, params=None):
+            seen["headers"] = headers
+            return {"results": []}
+
+    SeerrProvider(url="http://seerr:5055", api_key="Bearer abc.def", client=Client()).list_items()
+    assert seen["headers"]["X-Api-Key"] == "abc.def"
+    assert seen["headers"]["Authorization"] == "Bearer abc.def"
+
+
 def test_tmdb_enrich_fills_missing_artwork():
     class Client:
         def get_json(self, url, headers=None, params=None):

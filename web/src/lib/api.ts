@@ -77,7 +77,11 @@ export const api = {
     if (tmdbId) params.set("tmdb_id", tmdbId);
     return `/api/media/logo/${encodeURIComponent(itemId)}?${params.toString()}`;
   },
-  testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
+  testProvider: (name: string, draft?: Record<string, string>) =>
+    json(`/api/settings/test/${name}`, {
+      method: "POST",
+      body: JSON.stringify(draft || {}),
+    }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,
   flag: (id: string, body: { pinned?: boolean; hidden?: boolean }) =>

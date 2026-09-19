@@ -388,7 +388,12 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   });
   async function testConnection(name: "jellyfin" | "jellyseerr" | "tmdb") {
     try {
-      const result = (await api.testProvider(name)) as { ok?: boolean; message?: string; error?: string };
+      const draft = settings![name] || {};
+      const result = (await api.testProvider(name, {
+        url: String(draft.url || ""),
+        api_key: String(draft.api_key || ""),
+        user_id: String((draft as { user_id?: string }).user_id || ""),
+      })) as { ok?: boolean; message?: string; error?: string };
       const toast = providerToast(result);
       notify(toast.kind, toast.text);
       setMsg(toast.text);
