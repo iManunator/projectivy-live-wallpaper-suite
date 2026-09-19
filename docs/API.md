@@ -63,12 +63,16 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET/POST | `/api/layouts/save`, `/api/layouts/load/{name}` | Layout JSON |
 | GET | `/api/gallery` | Catalog |
 | POST | `/api/gallery/{id}/flag` | `{ "pinned": true }` / `{ "hidden": true }` never-show |
+| GET | `/api/media` | Live items from `source` (`demo`, `jellyfin`, `jellyseerr`). Query `limit`. |
+| GET | `/api/media/artwork/{item_id}` | Proxy Jellyfin Backdrop (or Primary). Query `kind=backdrop` (default) or `kind=poster`. 404 if Jellyfin is unset or the item has no image. |
 | GET | `/api/queues` | Smart-queue counts for a layout |
 | GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
 | GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
-| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`)
+| POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
 | POST | `/api/wallpaper/generate-motion` | Re-bake parallax/Ken Burns MP4s for a layout |
 | GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |
 
 Generate skip/replace matches **Jellyfin / TMDB / IMDb ids** (then title+year). `ids` limits the batch; `skip_ids` excludes those ids even when skip-existing is off.
+
+`POST /api/generate` downloads artwork before compositing. For Jellyfin that is **Backdrop**, then **Primary** poster, using the same MediaBrowser token as the library call. If neither image is reachable, the still is painted on the synthetic gradient. The editor does not go fullscreen: it loads `/api/media/artwork/{item_id}` onto the in-page 16:9 stage. Gallery stills open in a lightbox.

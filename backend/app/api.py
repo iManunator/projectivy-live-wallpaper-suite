@@ -6,11 +6,12 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app import catalog as catalog_store
 from app.config import load_settings, public_base_url, save_settings
 from app.generate import collect_items, run_generate
+from app.providers import HttpClient
 from app.jobs import reload_jobs
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
 from app import __version__
@@ -422,6 +423,31 @@ def test_provider(provider: str) -> dict[str, Any]:
 @router.get("/api/media")
 def media_preview(source: str = "demo", limit: int = 12) -> list[dict[str, Any]]:
     return [item.model_dump() for item in collect_items(source, limit)]
+
+
+@router.get("/api/media/artwork/{item_id}")
+def media_artwork(item_id: str, kind: str = Query("backdrop")):
+    """Proxy Jellyfin Primary/Backdrop so the editor can preview library art same-origin."""
+    settings = load_settings()
+    jf = settings.jellyfin or {}
+    base = (jf.get("url") or "").rstrip("/")
+    key = jf.get("api_key") or ""
+    if not base or not key:
+        raise HTTPException(404, "Jellyfin is not configured")
+    headers = JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "")._headers()
+    kinds = ["Primary", "Backdrop"] if kind == "poster" else ["Backdrop", "Primary"]
+    last_error = "No image"
+    for image_kind in kinds:
+        query = "maxWidth=1920" if image_kind == "Backdrop" else "maxHeight=1080"
+        url = f"{base}/Items/{item_id}/Images/{image_kind}?{query}"
+        try:
+            data = HttpClient(timeout=20.0).get_bytes(url, headers=headers)
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+        if data:
+            return Response(content=data, media_type="image/jpeg")
+    raise HTTPException(404, last_error)
 
 
 @router.post("/api/generate")

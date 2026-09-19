@@ -358,3 +358,28 @@ def test_generate_motion_batch_contract(client):
     assert body["status"] == "ok"
     assert "generated" in body
     assert body["style"] in {"parallax", "kenburns", "drift"}
+
+
+def test_media_artwork_requires_jellyfin(client):
+    assert client.get("/api/media/artwork/abc").status_code == 404
+
+
+def test_media_artwork_proxies_jellyfin_bytes(client, monkeypatch):
+    from app.config import save_settings
+    from app.models import AppSettings
+
+    save_settings(AppSettings(jellyfin={"url": "http://jf:8096", "api_key": "secret", "user_id": "u"}))
+
+    class FakeHttp:
+        def __init__(self, timeout: float = 15.0):
+            self.timeout = timeout
+
+        def get_bytes(self, url, headers=None):
+            assert "Backdrop" in url or "Primary" in url
+            assert headers and "secret" in headers["Authorization"]
+            return b"\xff\xd8\xffFAKE"
+
+    monkeypatch.setattr("app.api.HttpClient", FakeHttp)
+    response = client.get("/api/media/artwork/abc")
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xff\xd8\xff")

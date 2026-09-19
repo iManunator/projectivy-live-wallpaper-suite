@@ -11,7 +11,7 @@ Projectivy does **not** composite depth layers itself. A â€œparallax wallpaperâ€
 
 ## IMAGE vs VIDEO in this suite
 
-1. **Generate always writes a JPEG.** Stills remain first-class. The gallery, editor preview, and `imageUrl` never go away.
+1. **Generate always writes a JPEG.** Stills remain first-class. The gallery, in-page editor preview, and `imageUrl` never go away. Jellyfin stills composite over downloaded Backdrop (then Primary) art.
 2. **Motion is optional.** Enable *Generate VIDEO loops* in Settings, check *Bake parallax / motion VIDEO* on a batch, or `POST /api/wallpaper/generate-motion`.
 3. **`GET /api/wallpaper/status`** (tvbgsuite-compatible) always returns `imageUrl` + `actionUrl` + `path` when a title is selected. When a sibling MP4 exists:
    - `videoUrl` is set

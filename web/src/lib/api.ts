@@ -27,7 +27,10 @@ export const api = {
   generateMotion: (layout: string) =>
     json(`/api/wallpaper/generate-motion?layout=${encodeURIComponent(layout)}`, { method: "POST" }),
   options: () => json<Record<string, unknown>>("/api/options"),
-  media: (source: string) => json<Array<Record<string, unknown>>>(`/api/media?source=${source}`),
+  media: (source: string, limit = 12) =>
+    json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),
+  mediaArtwork: (itemId: string, kind = "backdrop") =>
+    `/api/media/artwork/${encodeURIComponent(itemId)}?kind=${encodeURIComponent(kind)}`,
   testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,

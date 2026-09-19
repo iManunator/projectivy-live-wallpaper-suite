@@ -190,6 +190,14 @@ input, select, textarea {
   overflow: hidden;
   border: 1px solid var(--line);
 }
+.canvas-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .canvas-stage {
   position: absolute;
   inset: 0;
@@ -198,6 +206,83 @@ input, select, textarea {
     linear-gradient(0deg, rgba(0,0,0,0.55), transparent 45%),
     radial-gradient(circle at 70% 40%, #3a4a63, #12141a 60%);
 }
+.canvas-stage.has-art {
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.18) 42%, transparent 70%),
+    linear-gradient(0deg, rgba(0,0,0,0.55), transparent 45%);
+}
+.created-strip { margin-top: 16px; }
+.created-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 4px;
+}
+.created-thumb {
+  flex: 0 0 160px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+}
+.created-thumb img { width: 160px; height: 90px; object-fit: cover; display: block; }
+.thumb-hit {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.88);
+  display: grid;
+  place-items: center;
+  padding: 28px 56px 40px;
+}
+.lightbox-frame {
+  margin: 0;
+  max-width: min(96vw, 1600px);
+  max-height: 92vh;
+  display: grid;
+  gap: 10px;
+}
+.lightbox-frame img {
+  max-width: 96vw;
+  max-height: 84vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.lightbox-frame figcaption {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  color: var(--text);
+}
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+.lightbox-nav.prev { left: 12px; }
+.lightbox-nav.next { right: 12px; }
 .layer-chip {
   position: absolute;
   transform: translate(0, 0);

@@ -11,6 +11,7 @@ from app.config import load_settings
 from app.layouts import load_layout
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
 from app.motion import generate_motion, has_motion, profile_from_settings
+from app.providers import HttpClient
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
@@ -76,6 +77,56 @@ def _filename_for(item: MediaItem) -> str:
     return f"{slug[:40]}-{suffix}.jpg"
 
 
+def _artwork_urls(item: MediaItem) -> list[str]:
+    """Backdrop first; poster fills in when Jellyfin has no wide art."""
+    seen: set[str] = set()
+    urls: list[str] = []
+    for url in (item.backdrop_url, item.poster_url):
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+
+def _headers_for_url(url: str) -> dict[str, str] | None:
+    settings = load_settings()
+    jf = settings.jellyfin or {}
+    base = (jf.get("url") or "").rstrip("/")
+    key = jf.get("api_key") or ""
+    if base and key and url.startswith(base):
+        return JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "")._headers()
+    return None
+
+
+def _looks_like_image(data: bytes) -> bool:
+    return bool(data) and (
+        data[:3] == b"\xff\xd8\xff"
+        or data[:8] == b"\x89PNG\r\n\x1a\n"
+        or data[:6] in (b"GIF87a", b"GIF89a")
+        or data[:4] == b"RIFF"
+        or data[:4] == b"\x00\x00\x00\x0c"
+    )
+
+
+def _default_http_get(url: str) -> bytes:
+    data = HttpClient(timeout=30.0).get_bytes(url, headers=_headers_for_url(url))
+    if not _looks_like_image(data):
+        raise ValueError(f"Not an image: {url}")
+    return data
+
+
+def _fetch_artwork(item: MediaItem, http_get=None) -> bytes | None:
+    getter = http_get or _default_http_get
+    for url in _artwork_urls(item):
+        try:
+            data = getter(url)
+        except Exception:
+            continue
+        if data:
+            return data
+    return None
+
+
 def generate_one(
     item: MediaItem,
     layout_name: str,
@@ -94,12 +145,7 @@ def generate_one(
         doomed = previous
         if doomed:
             catalog_store.remove_records({rec.id for rec in doomed})
-    backdrop_bytes = None
-    if item.backdrop_url and http_get:
-        try:
-            backdrop_bytes = http_get(item.backdrop_url)
-        except Exception:
-            backdrop_bytes = None
+    backdrop_bytes = _fetch_artwork(item, http_get=http_get)
     settings = load_settings()
     from app.overlays import apply_overlays
 

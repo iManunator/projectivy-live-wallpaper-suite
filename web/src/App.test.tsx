@@ -7,7 +7,41 @@ vi.stubGlobal(
   vi.fn(async (input: RequestInfo) => {
     const url = String(input);
     let body: unknown = [];
-    if (url.includes("/api/gallery")) body = [];
+    if (url.includes("/api/gallery")) {
+      body = [
+        {
+          id: "1",
+          layout: "Netflix Hero",
+          filename: "from.jpg",
+          title: "From",
+          year: 2022,
+          rating: 8.5,
+          genres: ["Horror"],
+          official_rating: "TV-MA",
+          watch_state: "unwatched",
+          library_state: "in_library",
+          source: "jellyfin",
+          has_video: false,
+        },
+      ];
+    }
+    if (url.includes("/api/media?")) {
+      body = [
+        {
+          title: "From",
+          year: 2022,
+          overview: "A town that will not let you leave.",
+          rating: 8.5,
+          genres: ["Horror", "Drama"],
+          official_rating: "TV-MA",
+          runtime: "52m",
+          watch_state: "unwatched",
+          source: "jellyfin",
+          jellyfin_id: "from1",
+          backdrop_url: "http://jf:8096/Items/from1/Images/Backdrop",
+        },
+      ];
+    }
     if (url.includes("/api/layouts/list")) body = ["Netflix Hero", "Projectivy Dock"];
     if (url.includes("/api/layouts/load")) {
       body = {
@@ -92,7 +126,15 @@ describe("App smoke", () => {
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
-    expect(screen.getByText(/0 wallpapers/)).toBeInTheDocument();
+    expect(screen.getByText(/1 wallpapers/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
+    expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editor" }));
+    expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /From artwork/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Jellyfin preview")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Health" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
