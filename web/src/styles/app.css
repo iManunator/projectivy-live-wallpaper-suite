@@ -243,6 +243,19 @@ input, select, textarea {
   color: var(--danger);
   border: 1px solid rgba(224, 112, 112, 0.45);
 }
+.btn.danger.fill {
+  background: var(--danger);
+  color: #1a0808;
+  border-color: transparent;
+}
+.btn.danger.fill.strong {
+  background: #c44545;
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .job-progress {
   margin: 0 0 16px;
@@ -276,6 +289,59 @@ input, select, textarea {
   z-index: 3;
   width: auto;
 }
+.gallery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.gallery-toolbar .btn { min-height: 44px; }
+.gallery-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.thumb-actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.62);
+  display: grid;
+  place-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+.confirm-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  max-width: 28rem;
+  width: min(100%, 28rem);
+  box-shadow: var(--shadow);
+}
+.confirm-dialog h2 {
+  font-family: "Fraunces", serif;
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+.confirm-dialog p {
+  margin: 0 0 10px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.confirm-note { color: var(--muted) !important; font-size: 13px; }
+.confirm-actions { margin-top: 16px; }
+.confirm-actions .btn { min-height: 44px; }
 .lightbox-actions {
   display: flex;
   gap: 8px;
@@ -614,4 +680,8 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
     max-width: none;
   }
   .toast { font-size: 16px; }
+  .gallery-toolbar .btn,
+  .confirm-actions .btn {
+    min-height: 44px;
+  }
 }

@@ -214,7 +214,7 @@ Compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `
 | `GET` | `/api/wallpaper/status` | Next wallpaper. Query: `layout`, `sort`, `pool`, `queue`, `profile`, `exclude`, filters |
 | `GET` | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
 | `GET` | `/api/dashboard` | Gallery size, last cron/generate, providers |
-| `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides; `DELETE /api/gallery/{id}` removes the still + MP4 |
+| `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides; `DELETE /api/gallery/{id}` removes one still + MP4; `POST /api/gallery/delete-all` clears the library (skips pins unless `include_pins`) |
 | `GET` | `/api/jobs/latest` | Latest generate / motion / cron job (`idle` if none) |
 | `POST` | `/api/jobs` | Start a pollable generate / motion / cron job |
 | `GET` | `/api/media` | Live provider preview (`source=jellyfin` / `demo` / `jellyseerr`) |

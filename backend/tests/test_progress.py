@@ -54,6 +54,97 @@ def test_gallery_delete_post_and_bulk(client, suite_dirs):
     assert client.post("/api/gallery/delete", json={"ids": []}).status_code == 400
 
 
+def test_gallery_delete_missing_file_drops_catalog_row(client, suite_dirs):
+    catalog_mod = suite_dirs["catalog_mod"]
+    rec = catalog_mod.load_catalog()[0]
+    jpg = suite_dirs["gallery"] / rec.layout / rec.filename
+    jpg.unlink()
+    out = client.delete(f"/api/gallery/{rec.id}").json()
+    assert rec.id in out["deleted"]
+    leftover = client.get("/api/gallery").json()
+    assert all(item["id"] != rec.id for item in leftover)
+
+
+def test_gallery_delete_all_skips_pins_by_default(client, suite_dirs):
+    catalog_mod = suite_dirs["catalog_mod"]
+    pinned = next(r for r in catalog_mod.load_catalog() if r.title == "Northlight")
+    client.post(f"/api/gallery/{pinned.id}/flag", json={"pinned": True})
+    before = client.get("/api/gallery").json()
+    assert len(before) == 6
+    out = client.post("/api/gallery/delete-all", json={}).json()
+    assert out["status"] == "ok"
+    assert pinned.id not in out["deleted"]
+    assert pinned.id in out["skipped_pinned"]
+    assert out["pinned_kept"] == 1
+    assert out["include_pins"] is False
+    assert out["count"] == 5
+    assert "Kept 1 pinned wallpaper" in out["message"]
+    leftover = client.get("/api/gallery").json()
+    assert [item["id"] for item in leftover] == [pinned.id]
+    status = client.get("/api/wallpaper/status", params={"layout": "Netflix Hero", "pool": "pinned"}).json()
+    assert status["title"] == "Northlight"
+    assert status["imageUrl"]
+    assert status["path"]
+
+
+def test_gallery_delete_all_including_pins(client):
+    pinned = next(item for item in client.get("/api/gallery").json() if item["title"] == "Harbor Season")
+    client.post(f"/api/gallery/{pinned['id']}/flag", json={"pinned": True})
+    out = client.post("/api/gallery/delete-all", json={"include_pins": True}).json()
+    assert out["count"] == 6
+    assert out["include_pins"] is True
+    assert out["pinned_kept"] == 0
+    assert pinned["id"] in out["deleted"]
+    assert client.get("/api/gallery").json() == []
+    status = client.get("/api/wallpaper/status", params={"layout": "Netflix Hero"}).json()
+    assert status["imageUrl"] is None
+    assert status.get("path") in {None, ""}
+
+
+def test_gallery_delete_all_empty_and_pins_only(client):
+    wiped = client.post("/api/gallery/delete-all", json={"include_pins": True}).json()
+    assert wiped["count"] == 6
+    assert client.get("/api/gallery").json() == []
+    empty = client.post("/api/gallery/delete-all", json={}).json()
+    assert empty["count"] == 0
+    assert empty["message"] == "Gallery is already empty."
+    again = client.post("/api/gallery/delete-all", json={"include_pins": True}).json()
+    assert again["message"] == "Gallery is already empty."
+    seed = client.post(
+        "/api/generate",
+        json={
+            "layout": "Netflix Hero",
+            "source": "demo",
+            "limit": 1,
+            "skip_existing": False,
+            "ids": ["demo-jf-1"],
+        },
+    )
+    assert seed.status_code == 200
+    rec = client.get("/api/gallery").json()[0]
+    client.post(f"/api/gallery/{rec['id']}/flag", json={"pinned": True})
+    kept = client.post("/api/gallery/delete-all", json={}).json()
+    assert kept["count"] == 0
+    assert kept["pinned_kept"] == 1
+    assert "Nothing else to delete" in kept["message"]
+    assert client.get("/api/gallery").json()[0]["id"] == rec["id"]
+
+
+def test_gallery_delete_all_layout_filter_and_bulk_all_alias(client):
+    north = next(item for item in client.get("/api/gallery").json() if item["title"] == "Northlight")
+    client.post(f"/api/gallery/{north['id']}/flag", json={"pinned": True})
+    scoped = client.post("/api/gallery/delete-all", json={"layout": "Netflix Hero"}).json()
+    assert scoped["count"] == 2
+    leftover = client.get("/api/gallery").json()
+    titles = {item["title"] for item in leftover}
+    assert "Northlight" in titles
+    assert "Harbor Season" not in titles
+    assert "Glass Orchard" not in titles
+    alias = client.post("/api/gallery/delete", json={"all": True, "include_pins": True}).json()
+    assert alias["count"] == len(leftover)
+    assert client.get("/api/gallery").json() == []
+
+
 def test_jobs_generate_reports_progress(client):
     reset_for_tests()
     start = client.post(
