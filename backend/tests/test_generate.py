@@ -230,3 +230,72 @@ def test_bake_motion_uses_source_artwork_not_composite(suite_dirs, monkeypatch):
     assert captured.get("bytes")
     assert captured["bytes"] != composite
 
+
+def test_generate_one_motion_puts_atmosphere_on_chrome_not_plate(suite_dirs, monkeypatch):
+    """Batch VIDEO must Ken-Burns artwork only; vignette/letterbox live on chrome."""
+    from app import generate as generate_mod
+    from app.config import save_settings
+    from app.generate import generate_one
+    from app.models import AppSettings, MediaItem
+    from PIL import Image
+
+    save_settings(AppSettings(motion_style="parallax", motion_preset="bold", light_leak=True, motion_duration=2))
+    captured: dict = {}
+
+    def spy(jpg, **kwargs):
+        captured["plate"] = Image.open(kwargs["plate"]).convert("RGB") if kwargs.get("plate") else None
+        captured["chrome"] = Image.open(kwargs["chrome"]).convert("RGBA") if kwargs.get("chrome") else None
+        captured["still"] = Image.open(jpg).convert("RGB")
+        return True, "ok"
+
+    monkeypatch.setattr(generate_mod, "generate_motion", spy)
+    monkeypatch.setattr(generate_mod, "has_motion", lambda p: True)
+
+    jpeg = _jpeg((220, 40, 30))
+    item = MediaItem(
+        title="Red Planet",
+        year=2024,
+        backdrop_url="http://jf:8096/Items/1/Images/Backdrop?maxWidth=1920",
+        jellyfin_id="1",
+        source="jellyfin",
+    )
+    record = generate_one(item, "Netflix Hero", motion=True, http_get=lambda url: jpeg)
+    assert record is not None
+    assert captured["plate"] is not None
+    assert captured["chrome"] is not None
+    plate_corner = captured["plate"].getpixel((4, 4))
+    still_corner = captured["still"].getpixel((4, 4))
+    chrome_corner = captured["chrome"].getpixel((4, 4))
+    assert plate_corner[0] > 150
+    assert still_corner[0] < plate_corner[0]
+    assert chrome_corner[3] == 255
+
+
+def test_bake_motion_one_tap_locks_atmosphere_on_chrome(suite_dirs, monkeypatch):
+    from app import generate as generate_mod
+    from app.generate import bake_motion, generate_one
+    from app.models import MediaItem
+    from PIL import Image
+
+    item = MediaItem(
+        title="Harbor Season",
+        year=2022,
+        jellyfin_id="demo-jf-2",
+        source="demo",
+    )
+    record = generate_one(item, "Netflix Hero", motion=False)
+    captured: dict = {}
+
+    def spy(jpg, **kwargs):
+        captured["chrome"] = Image.open(kwargs["chrome"]).convert("RGBA") if kwargs.get("chrome") else None
+        captured["plate"] = Image.open(kwargs["plate"]).convert("RGB") if kwargs.get("plate") else None
+        return True, "ok"
+
+    monkeypatch.setattr(generate_mod, "generate_motion", spy)
+    monkeypatch.setattr(generate_mod, "has_motion", lambda p: True)
+    out = bake_motion("Netflix Hero", record.filename)
+    assert out["chrome_locked"] is True
+    assert captured["chrome"] is not None
+    assert captured["chrome"].getpixel((4, 4))[3] == 255
+    assert captured["plate"].getpixel((4, 4))[0] > captured["chrome"].getpixel((4, 4))[0]
+

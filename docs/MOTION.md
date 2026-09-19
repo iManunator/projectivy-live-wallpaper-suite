@@ -15,8 +15,8 @@ Treat every wallpaper as two layers. Intensity presets only change the **backgro
 
 | Layer | Content | Motion |
 | --- | --- | --- |
-| **Background** | Backdrop / still art (the plate) | Subtle pan / zoom / parallax drift. Subtle / Cinematic / Bold change amplitude and loop length. |
-| **Foreground / target** | Logo or title text, watch badges, Seerr/requestable chips, metadata, overlay widgets | **Static.** Pinned in layout DNA / safe-zone coordinates. Never Ken-Burns with the plate. |
+| **Background** | Backdrop / still art (the plate), optional padded light-leak | Subtle pan / zoom / parallax drift. Subtle / Cinematic / Bold change amplitude and loop length. |
+| **Foreground / target** | Logo or title text, watch badges, Seerr/requestable chips, metadata, overlay widgets, **and static atmosphere** (vignette, letterbox shadows, edge gradients) | **Static.** Pinned in layout DNA / safe-zone coordinates. Never Ken-Burns with the plate. |
 
 IMAGE stills can bake chrome into the JPEG (nothing moves). VIDEO **must** keep chrome locked: animate the plate, then overlay the chrome PNG each frame.
 
@@ -55,11 +55,11 @@ Styles describe **how the background moves**. Chrome stays locked for every styl
 
 | Style | Background look |
 | --- | --- |
-| **parallax** (default) | Stronger Ken-Burns on the plate; optional light-leak wash on top. Chrome overlay `x=0,y=0`. |
+| **parallax** (default) | Stronger Ken-Burns on the plate; optional light-leak wash **under** locked chrome. Chrome overlay `x=0,y=0`. |
 | **kenburns** | Classic slow zoom/pan of the **artwork plate**, then the same static chrome overlay. Never zoompan a text-burned JPEG. |
 | **drift** | Larger pan, tiny zoom of the plate; chrome still pinned. |
 
-Intensity presets **Subtle / Cinematic / Bold** (0.16 / 0.55 / 0.96) change **background** zoom and pan enough to see on a TV. Duration defaults are longer (quality `light` / `standard` / `cinematic` ≈ 8 / 12 / 16s, clamp 2–24s). ffmpeg `zoompan` uses a sine cycle so the MP4 loops seamlessly. Parallax may add a third **light-leak** lavfi layer (atmosphere only — not title chrome). Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
+Intensity presets **Subtle / Cinematic / Bold** (0.16 / 0.55 / 0.96) change **background** zoom and pan enough to see on a TV (same amplitude as the CSS preview). Duration defaults are longer (quality `light` / `standard` / `cinematic` ≈ 8 / 12 / 16s, clamp 2–24s). Bake uses a **CSS-like ping-pong** (ease in at the start, peak mid-loop, ease out to a seamless join) — it does **not** zoom out past the cover crop. Plate motion is 2× lanczos, `zoompan` at 2× (nearest-neighbour), then lanczos-down, default **30 fps**, H.264 Main @ L4.0 `yuv420p` `+faststart`. Parallax may add a third **light-leak** lavfi layer on the **background** (padded so it cannot uncover the frame edge — not title chrome, not vignette). Unknown styles (including the typo “parrallelx”) normalize to **parallax**.
 
 The web UI plays a **CSS motion preview** of the same layered model on Tonight, the layout editor, Generate, Settings, and the **Gallery lightbox**. Grid thumbs stay static JPEGs. Opening a gallery item plays the baked sibling MP4 when it exists (looping, muted; chrome already in the file). If there is no clip, the lightbox pans the artwork plate and keeps title/logo/badges locked in `.stage-fg` — it does not Ken-Burns the composited JPEG. A failed VIDEO load toasts and falls back to that CSS preview. The CSS loop returns to the start frame (no bounce). That preview is not what Projectivy plays — bake a VIDEO (ffmpeg) for the real loop. Projectivy **IMAGE** is the JPEG; **VIDEO** is only advertised when the sibling MP4 exists (`videoUrl` stays null otherwise).
 
@@ -76,13 +76,17 @@ Frontend tests in `web/src/lib/stage.test.ts` lock this contract (no parent over
 ## Bake pipeline
 
 ```
-render_plate (RGB art, no text)     ─┐
-                                      ├─ ffmpeg zoompan(plate) + overlay(chrome @ 0,0) ─► title.mp4
-render_chrome (RGBA logo/text/pills) ─┘
+render_plate (RGB art, no vignette)  ─┐
+                                      ├─ ffmpeg 2× lanczos → ping-pong zoompan @2× → lanczos 1080p
+optional light-leak (padded, under)  ─┤     + overlay(chrome @ 0,0) ─► title.mp4
+render_chrome (RGBA logo/text/pills   ─┘
+              + locked vignette / letterbox / edge fades)
 render_still  ─► title.jpg     (always; chrome baked static)
 ```
 
 Requires `ffmpeg` in the image (`libx264`). If ffmpeg is missing, generation still succeeds with the JPEG.
+
+The Ken Burns path matches the editor CSS loop: zoom **in** only (never below the cover crop), ping-pong ease (`sin(πt)²`, not a bipolar `sin(2πt)` zoom-out), zoom/pan amplitude from the same `--motion-zoom-*` / `--motion-x` numbers as `web/src/lib/motion.ts`, default **30 fps**. ffmpeg `zoompan` has **no interpolator** (nearest-neighbour), so the plate is lanczos-scaled to **2×**, Ken-Burned at 2×, then lanczos-down to 1080p. Quality presets pick an x264 speed (`fast` / `medium` / `slow`) and a higher bitrate (2.8 / 4 / 5.5 Mbps) but always emit **H.264 Main 4.0 yuv420p +faststart** for Projectivy / Android TV. Duration defaults stay 8 / 12 / 16s (quality) so the loop is not shorter than the CSS preview.
 
 **Do not** Ken-Burns the composited JPEG. A later “Bake motion” pass re-fetches the original backdrop (demo still or Jellyfin Backdrop/Primary) as the plate. Additive bake fields: `layered`, `chrome_locked`.
 

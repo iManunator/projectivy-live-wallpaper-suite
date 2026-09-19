@@ -23,7 +23,7 @@ const EMPTY_SETTINGS: AppSettings = {
   motion_style: "parallax",
   motion_intensity: 0.55,
   motion_duration: null,
-  motion_fps: 24,
+  motion_fps: 30,
   overwrite_existing: false,
   editor_theme: "cinema",
   motion_preset: "cinematic",
@@ -427,9 +427,9 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           </label>
           <label>Quality</label>
           <select value={settings.motion_quality} onChange={(e) => setSettings({ ...settings, motion_quality: e.target.value })}>
-            <option value="light">light (~8s, 2.2 Mbps)</option>
-            <option value="standard">standard (~12s, 3.5 Mbps)</option>
-            <option value="cinematic">cinematic (~16s, 5 Mbps)</option>
+            <option value="light">light (~8s, 2.8 Mbps, 30 fps)</option>
+            <option value="standard">standard (~12s, 4 Mbps, 30 fps)</option>
+            <option value="cinematic">cinematic (~16s, 5.5 Mbps, slow encode)</option>
           </select>
           <label>Loop duration seconds (blank = longer quality / intensity default, 2–24s)</label>
           <input
@@ -449,9 +449,10 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             type="number"
             min={12}
             max={30}
-            value={settings.motion_fps || 24}
+            value={settings.motion_fps || 30}
             onChange={(e) => setSettings({ ...settings, motion_fps: Number(e.target.value) })}
           />
+          <p className="muted">30 fps is closest to the editor CSS preview; 24 is a lighter encode. Android TV stays at H.264 1080p yuv420p.</p>
           <p className="muted">{describeMotion(style, intensity, duration)}. Intensity changes background amplitude only.</p>
           <div style={{ marginTop: 12 }}>
             <WallpaperStage

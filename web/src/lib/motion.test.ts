@@ -41,4 +41,14 @@ describe("motion options", () => {
     expect(Math.abs(parseFloat(bold["--motion-x"]))).toBeGreaterThan(Math.abs(parseFloat(subtle["--motion-x"])));
     expect(subtle["--motion-duration"]).toBe("16s");
   });
+
+  it("cinematic zoom/pan matches the ffmpeg bake contract", () => {
+    const parallax = motionPreviewVars("parallax", 0.55, 12);
+    expect(parallax["--motion-zoom-from"]).toBe("1.04");
+    expect(Number(parallax["--motion-zoom-to"])).toBeCloseTo(1 + 0.55 * 0.18, 4);
+    expect(parallax["--motion-x"]).toBe("-2.64%");
+    const kenburns = motionPreviewVars("kenburns", 0.55, 12);
+    expect(kenburns["--motion-zoom-from"]).toBe("1.015");
+    expect(Number(kenburns["--motion-zoom-to"])).toBeCloseTo(1 + 0.55 * 0.22, 4);
+  });
 });
