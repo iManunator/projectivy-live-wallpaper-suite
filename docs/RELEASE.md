@@ -1,6 +1,6 @@
 # Shipping Wallpaparr (GHCR + GitHub Release APK)
 
-The product version is **1.2.0** (`VERSION`). Binaries are **not** committed to git. They are published by GitHub Actions.
+The product version is **1.2.1** (`VERSION`). Binaries are **not** committed to git. They are published by GitHub Actions.
 
 | What you want | Where it lives |
 | --- | --- |
@@ -31,24 +31,24 @@ OCI labels `org.opencontainers.image.source` / `.url` point at this repo so GitH
 
 If a GHCR push is denied, check **Settings → Actions → General → Workflow permissions** (must allow read/write) and that the workflow YAML still has `packages: write`. First publish creates the package; visibility is already **public** for `wallpaparr`.
 
-## Tag `v1.2.0` — ship after this lands on `main`
+## Tag `v1.2.1` — ship after this lands on `main`
 
-**Do not retag `v1.1.0`.** After the 1.2.0 version bump is on `main`:
+**Do not retag `v1.1.0` or `v1.2.0`.** After the 1.2.1 version bump is on `main`:
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v1.2.0 -m "Wallpaparr 1.2.0"
-git push origin v1.2.0
+git tag -a v1.2.1 -m "Wallpaparr 1.2.1"
+git push origin v1.2.1
 ```
 
 The **Release** workflow then publishes:
 
-- Image: `ghcr.io/imanunator/wallpaparr:v1.2.0`, `:1.2.0`, and `:latest`
-- GitHub Release: `https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.2.0`
+- Image: `ghcr.io/imanunator/wallpaparr:v1.2.1`, `:1.2.1`, and `:latest`
+- GitHub Release: `https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/tag/v1.2.1`
 - Primary APK: `wallpaparr-plugin-release.apk`
 
-`v1.1.0` remains the previous ship (`975d4ae` era). For a later ship, bump `VERSION` + `CHANGELOG.md` and tag `v1.2.1` (or later) the same way.
+`v1.2.0` remains the previous ship (`7165c93` era). For a later ship, bump `VERSION` + `CHANGELOG.md` and tag `v1.2.2` (or later) the same way.
 
 `workflow_dispatch` on Release (from `main`) rebuilds and pushes `:latest` without creating a GitHub Release. Use a `v*` tag when you want the APK on the Releases page.
 
@@ -56,7 +56,7 @@ The **Release** workflow then publishes:
 
 ```bash
 docker pull ghcr.io/imanunator/wallpaparr:latest
-docker pull ghcr.io/imanunator/wallpaparr:1.2.0
+docker pull ghcr.io/imanunator/wallpaparr:1.2.1
 ```
 
 Compose in this repo still **builds the Dockerfile** by default (`pull_policy: build`) so `./scripts/verify.sh` works before GHCR exists. To run the published image:

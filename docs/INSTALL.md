@@ -9,7 +9,7 @@ The GitHub repository may still be named `projectivy-live-wallpaper-suite`. The 
 | Artifact | Where |
 | --- | --- |
 | **Plugin APK** | [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) on the [GitHub Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest) |
-| **Container** | [`ghcr.io/imanunator/wallpaparr`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) (`:latest` from `main`, `:1.2.0` from tag `v1.2.0`) |
+| **Container** | [`ghcr.io/imanunator/wallpaparr`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) (`:latest` from `main`, `:1.2.1` from tag `v1.2.1`) |
 
 Packaging, `packages: write`, and the exact tag command: **[RELEASE.md](RELEASE.md)**.
 
@@ -50,15 +50,15 @@ Open `http://YOUR_LAN_IP:8787`.
 
 ### Tag a GitHub Release (GHCR + APKs)
 
-**Do not retag `v1.1.0`.** After 1.2.0 is on `main`, tag `v1.2.0` so Release + GHCR publish `wallpaparr-plugin-release.apk` and `:v1.2.0` / `:1.2.0` / `:latest`.
+**Do not retag `v1.1.0` or `v1.2.0`.** After 1.2.1 is on `main`, tag `v1.2.1` so Release + GHCR publish `wallpaparr-plugin-release.apk` and `:v1.2.1` / `:1.2.1` / `:latest`.
 
 `.github/workflows/release.yml` runs on `v*` tags: pushes `ghcr.io/imanunator/wallpaparr:<tag>` and `:latest` (`packages: write`), then attaches **`wallpaparr-plugin-release.apk`** (and debug) to a GitHub Release (`contents: write`). Details: [RELEASE.md](RELEASE.md).
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v1.2.0 -m "Wallpaparr 1.2.0"
-git push origin v1.2.0
+git tag -a v1.2.1 -m "Wallpaparr 1.2.1"
+git push origin v1.2.1
 ```
 
 Merges to **main** also run CI, which pushes GHCR `:latest` when the event is not a pull request.
@@ -67,7 +67,7 @@ Merges to **main** also run CI, which pushes GHCR `:latest` when the event is no
 
 ```bash
 docker pull ghcr.io/imanunator/wallpaparr:latest
-# or ghcr.io/imanunator/wallpaparr:1.2.0
+# or ghcr.io/imanunator/wallpaparr:1.2.1
 
 export PUBLIC_BASE_URL=http://YOUR_LAN_IP:8787
 docker compose pull

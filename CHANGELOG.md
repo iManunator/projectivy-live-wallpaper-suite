@@ -2,12 +2,14 @@
 
 ## Unreleased
 
+## 1.2.1 - 2026-09-19
+
+Post-1.2.0 TV polish: slight per-wallpaper motion variety, layout DNA preset audit, clearer plugin settings with next-clip preload, and a subpixel Ken Burns bake that stops MP4 stutter. Also folds the gallery, Tonight, Seerr chrome, and layered-parallax work that landed on `main` after 1.2.0.
+
 - **Slight per-wallpaper motion variety.** Settings and Generate have **Vary motion slightly per wallpaper** (**default on**). When on, each bake/preview gets a mild seeded drift (pan direction/axis, tiny intensity jitter, start phase, style mix inside Subtle / Cinematic / Bold). Same title/path/id rebakes the same loop. CSS preview uses the same helper as ffmpeg bake. Off is the exact CSS-matched ease/amplitude path. Chrome / vignette stay locked. Additive settings field `motion_vary`. See [MOTION.md](docs/MOTION.md).
 - **Layout DNA presets.** Netflix Hero is unchanged (gold). Prime Cinematic, Google TV Clean, Status Focus, Jellyfin Dense, and Projectivy Dock were restacked so logo/title/badges do not collide, watch/Seerr sit on their own row, and chrome stays inside Projectivy clock/dock safe zones on 16:9. Title boxes now have width+height so logos do not overflow tags. Overview height is clipped in the editor and in baked still/VIDEO chrome. Bundled JSON refreshes on `dna_revision` without clobbering user copies (`preset: false`) or logo/text/auto. Tests lock geometry invariants.
-
 - **Plugin settings (Leanback).** Wallpaparr settings are grouped with titles and when-to-use copy (Connection, Layouts, What to show, Filters, Mix, Motion, Home screen). Pick-mode ids and status-API mapping are unchanged; a few labels were clarified (e.g. **Play baked motion (MP4)**, **If no MP4, show the JPEG still**, **No-repeat bag (same as Random)** — Random already sends `exclude`). Open a pick mode or client row for the full hint.
 - **Smoother MP4 / wallpaper rotates.** The plugin double-buffers the next pick, downloads JPEG/MP4 into cache, and returns a local `content://` URI when ready. If the next clip is not ready or `/status` fails, the previous URI is held instead of an empty list (empty often flashes black). AIDL still has no crossfade: Projectivy tears down the previous player when the URI changes, so a short hitch can remain. Details: [PROJECTIVY.md](docs/PROJECTIVY.md).
-
 - **Baked VIDEO stutter.** The CSS preview was already smooth after the vignette-lock pass, but generated MP4s still juddered on TV and in the gallery lightbox. Root causes: ffmpeg `zoompan` is nearest-neighbour (discrete pixel steps / shimmer), x264 defaulted to B-frames + scenecut (hitch at GOP / loop join), and VBV `maxrate == bitrate` could underflow on pans. Bake now uses **subpixel bicubic** Ken Burns (CSS ping-pong, same zoom/pan numbers), encoded **CFR** H.264 Main @ L4.0 `yuv420p` `+faststart` with **no B-frames**, **no scenecut**, and 2× VBV maxrate headroom. Chrome / vignette stay locked. Automated tests cover frame-to-frame continuity, CFR, no duplicate timestamps, and seamless loop join.
 
 Tonight is a one-pick preview: what Projectivy will show next, with bake / editor / refresh as the only primary actions.
@@ -31,6 +33,7 @@ Layered parallax: the 16:9 editor stage always fits its panel, CSS/ffmpeg motion
 - **Gallery delete.** Pin, never-show, and delete are on each card and in the lightbox. Multi-select delete is available. `DELETE /api/gallery/{id}` and `POST /api/gallery/delete` remove the JPEG, companion MP4 / plate / chrome, and catalog row.
 - CSS preview (Tonight, Editor, Generate, Settings) mirrors the bake: `.stage-bg` moves, `.stage-fg` does not.
 - Docs: [MOTION.md](docs/MOTION.md). Frontend contain tests in `web/src/lib/stage.test.ts`.
+- Plugin versionName **1.2.1** (`versionCode` 3). Image `ghcr.io/imanunator/wallpaparr:v1.2.1` / `:1.2.1` / `:latest` from the `v1.2.1` tag. Do not retag `v1.1.0` or `v1.2.0`.
 
 ## 1.2.0
 
