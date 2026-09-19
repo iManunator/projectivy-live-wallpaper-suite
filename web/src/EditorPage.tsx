@@ -14,8 +14,11 @@ import { errorToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 import { LAYOUT_DNA } from "./lib/queues";
+import { seerrBadge } from "./lib/seerr";
 import { watchBadge } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
+import { SeerrBadge } from "./SeerrBadge";
+import { ChromePills } from "./ChromePills";
 import { WallpaperStage } from "./WallpaperStage";
 import { useJobs } from "./JobProgress";
 import { useToasts } from "./toasts";
@@ -29,6 +32,8 @@ type MediaRow = {
   official_rating?: string;
   runtime?: string;
   watch_state?: string;
+  library_state?: string;
+  availability?: string;
   source?: string;
   jellyfin_id?: string | null;
   tmdb_id?: string | null;
@@ -52,8 +57,8 @@ const SAMPLE: Record<string, string> = {
 
 function sampleFromMedia(item: MediaRow): Record<string, string> {
   const genres = (item.genres || []).slice(0, 3).join("  ·  ");
-  const watch = (item.watch_state || "").replace(/_/g, " ");
-  const watchLabel = watch ? watch.charAt(0).toUpperCase() + watch.slice(1) : "";
+  const watch = watchBadge(item.watch_state);
+  const seerr = seerrBadge(item.library_state, item.availability, item.source);
   const source = item.source || "demo";
   return {
     title: item.title || "Untitled",
@@ -62,7 +67,8 @@ function sampleFromMedia(item: MediaRow): Record<string, string> {
     runtime: item.runtime || "",
     rating: item.rating ? Number(item.rating).toFixed(1) : "",
     overview: item.overview || "",
-    watch_status: watchLabel,
+    watch_status: watch?.label || "",
+    seerr_status: seerr?.label || "",
     source: source.charAt(0).toUpperCase() + source.slice(1),
     age: item.official_rating || "",
   };
@@ -130,8 +136,12 @@ export function EditorPage() {
 
   const errors = useMemo(() => validateLayout(layout), [layout]);
   const showWatch = layout.show_watch_badge !== false;
+  const showSeerr = layout.show_seerr_badge !== false;
   const hasWatchLayer = layout.layers.some(
     (row) => row.visible && (row.slot === "watch_status" || row.slot === "watch_state"),
+  );
+  const hasSeerrLayer = layout.layers.some(
+    (row) => row.visible && (row.slot === "seerr_status" || row.slot === "seerr_state"),
   );
 
   async function deleteCreated(item: WallpaperRecord) {
@@ -263,8 +273,8 @@ export function EditorPage() {
     <section>
       <h1>Layout editor</h1>
       <p className="lede">
-        Flagship 16:9 stage for Projectivy: the preview always fits this panel. Artwork pans/zooms; logo, title, and
-        badges stay locked. Drag metadata chips. Save persists the layout JSON.
+        Flagship 16:9 stage for Projectivy: the preview always fits this panel. Artwork pans/zooms; logo, title, watch
+        badges, and Seerr chips stay locked. Drag metadata chips. Save persists the layout JSON.
       </p>
       <div className="grid two">
         <div className="card">
@@ -372,6 +382,13 @@ export function EditorPage() {
             >
               Watch badge
             </button>
+            <button
+              type="button"
+              className={`chip ${layout.show_seerr_badge !== false ? "active" : ""}`}
+              onClick={() => setLayout({ ...layout, show_seerr_badge: layout.show_seerr_badge === false })}
+            >
+              Seerr badge
+            </button>
             <button type="button" className={`chip ${showGuides ? "active" : ""}`} onClick={() => setShowGuides((v) => !v)}>
               Safe zone
             </button>
@@ -405,15 +422,24 @@ export function EditorPage() {
                 )}
                 {layout.layers
                   .map((item, index) => ({ item, index }))
-                  .filter(({ item }) => item.visible && (showWatch || (item.slot !== "watch_status" && item.slot !== "watch_state")))
+                  .filter(({ item }) => {
+                    if (!item.visible) return false;
+                    const watchSlot = item.slot === "watch_status" || item.slot === "watch_state";
+                    const seerrSlot = item.slot === "seerr_status" || item.slot === "seerr_state";
+                    if (watchSlot && !showWatch) return false;
+                    if (seerrSlot && !showSeerr) return false;
+                    return true;
+                  })
                   .map(({ item, index }) => {
                     const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
+                    const isWatch = item.slot === "watch_status" || item.slot === "watch_state";
+                    const isSeerr = item.slot === "seerr_status" || item.slot === "seerr_state";
                     const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
                     const x = isLogoTitle && logoBox ? logoBox.x : item.x;
                     return (
                       <div
                         key={item.id}
-                        className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
+                        className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${isWatch ? "is-watch" : ""} ${isSeerr ? "is-seerr" : ""}`}
                         onMouseDown={(event) => startDrag(event, index)}
                         style={{
                           left: `${(x / layout.canvas_width) * 100}%`,
@@ -428,8 +454,23 @@ export function EditorPage() {
                       >
                         {isLogoTitle ? (
                           <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
-                        ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
-                          watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
+                        ) : isWatch ? (
+                          <>
+                            <WatchBadge state={preview?.watch_state || sample.watch_status} />
+                            {showSeerr && !hasSeerrLayer ? (
+                              <SeerrBadge
+                                libraryState={preview?.library_state}
+                                availability={preview?.availability}
+                                source={preview?.source}
+                              />
+                            ) : null}
+                          </>
+                        ) : isSeerr ? (
+                          <SeerrBadge
+                            libraryState={preview?.library_state}
+                            availability={preview?.availability}
+                            source={preview?.source}
+                          />
                         ) : (
                           sample[item.slot] || item.slot
                         )}
@@ -446,9 +487,17 @@ export function EditorPage() {
                   <div className="tv-dock" />
                 </div>
               )}
-              {showWatch && !hasWatchLayer && (
-                <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
-              )}
+              {(showWatch && !hasWatchLayer) || (showSeerr && !hasSeerrLayer && !hasWatchLayer) ? (
+                <ChromePills
+                  className="chrome-pills-fallback"
+                  watchState={preview?.watch_state || sample.watch_status}
+                  libraryState={preview?.library_state}
+                  availability={preview?.availability}
+                  source={preview?.source}
+                  showWatch={showWatch && !hasWatchLayer}
+                  showSeerr={showSeerr && !hasSeerrLayer && !hasWatchLayer}
+                />
+              ) : null}
             </WallpaperStage>
           </div>
           <p className="muted">
@@ -473,7 +522,12 @@ export function EditorPage() {
                     aria-label={`View ${item.title} full screen`}
                   >
                     <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
-                    <WatchBadge state={item.watch_state} />
+                    <ChromePills
+                      watchState={item.watch_state}
+                      libraryState={item.library_state}
+                      availability={item.availability}
+                      source={item.source}
+                    />
                   </button>
                 ))}
               </div>

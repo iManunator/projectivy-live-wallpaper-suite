@@ -7,7 +7,7 @@ import type { WallpaperRecord } from "./lib/layout";
 import { errorToast } from "./lib/messages";
 import { queueBadges } from "./lib/queues";
 import { badgeClass } from "./lib/watch";
-import { WatchBadge } from "./WatchBadge";
+import { ChromePills } from "./ChromePills";
 import { useToasts } from "./toasts";
 
 type ConfirmState =
@@ -196,7 +196,13 @@ export function GalleryPage({ onEdit }: { onEdit: () => void }) {
             </label>
             <button type="button" className="thumb-hit" onClick={() => setViewer(index)} aria-label={`View ${item.title} full screen`}>
               <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
-              <WatchBadge state={item.watch_state} className="thumb-watch" />
+              <ChromePills
+                className="thumb-watch"
+                watchState={item.watch_state}
+                libraryState={item.library_state}
+                availability={item.availability}
+                source={item.source}
+              />
             </button>
             <div className="meta">
               <strong>{item.title}</strong>

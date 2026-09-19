@@ -19,6 +19,7 @@ from app.jobs import reload_jobs, run_now
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
 from app import __version__
 from app.models import AppSettings, GenerateRequest, Layout, WallpaperStatus
+from app.seerr_status import seerr_kind
 from app.motion import generate_motion, intensity_from_preset, profile_from_settings
 from app.ops import load_ops
 from app.providers.demo import DemoProvider
@@ -258,6 +259,10 @@ def _fill_status(request: Request, status: WallpaperStatus, selected, settings) 
     queues = queue_ids_for(selected)
     status.queue = queues[0] if queues else None
     status.watchState = selected.watch_state or None
+    status.libraryState = selected.library_state or None
+    status.availability = selected.availability or None
+    status.seerrStatus = seerr_kind(selected.library_state, selected.availability, selected.source)
+    status.source = selected.source or None
     mp4 = jpg.with_suffix(".mp4")
     has_clip = mp4.is_file() and mp4.stat().st_size > 1000
     if has_clip:

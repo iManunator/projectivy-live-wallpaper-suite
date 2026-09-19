@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode, type Ref } from "react";
+import { ChromePills } from "./ChromePills";
 
 type WallpaperStageProps = {
   stageRef?: Ref<HTMLDivElement | null>;
@@ -92,10 +93,28 @@ export function WallpaperStage({
   );
 }
 
-export function SampleLockedChrome({ title = "Northlight" }: { title?: string }) {
+export function SampleLockedChrome({
+  title = "Northlight",
+  watchState = "unwatched",
+  libraryState,
+  availability,
+  source,
+}: {
+  title?: string;
+  watchState?: string;
+  libraryState?: string;
+  availability?: string;
+  source?: string;
+}) {
   return (
     <div className="sample-chrome" aria-hidden="true">
-      <span className="badge badge-watch unwatched sample-badge">Unwatched</span>
+      <ChromePills
+        className="chrome-pills-fallback"
+        watchState={watchState}
+        libraryState={libraryState}
+        availability={availability}
+        source={source}
+      />
       <strong className="sample-title">{title}</strong>
     </div>
   );

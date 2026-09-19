@@ -253,6 +253,8 @@ vi.stubGlobal(
             official_rating: "TV-MA",
             runtime: "52m",
             watch_state: "unwatched",
+            library_state: "in_library",
+            availability: "available",
             source: "jellyfin",
             jellyfin_id: "from1",
             backdrop_url: "http://jf:8096/Items/from1/Images/Backdrop",
@@ -269,8 +271,24 @@ vi.stubGlobal(
             official_rating: "PG-13",
             runtime: "2h 11m",
             watch_state: "unwatched",
+            library_state: "in_library",
+            availability: "available",
             source: "jellyfin",
             jellyfin_id: "demo-jf-1",
+          },
+          {
+            title: "Signal Country",
+            year: 2023,
+            overview: "A radio host in the desert starts receiving tomorrow's news.",
+            rating: 7.6,
+            genres: ["Thriller", "Sci-Fi"],
+            official_rating: "TV-MA",
+            runtime: "52m",
+            watch_state: "unwatched",
+            library_state: "seerr_only",
+            availability: "requestable",
+            source: "jellyseerr",
+            jellyfin_id: "demo-jf-4",
           },
         ];
       }
@@ -342,6 +360,9 @@ vi.stubGlobal(
           pinned: false,
           path: "northlight.jpg",
           watchState: "unwatched",
+          libraryState: "in_library",
+          availability: "available",
+          source: "jellyfin",
         },
         queues: [
           { id: "unwatched", label: "Unwatched", count: 2, titles: ["Northlight"] },
@@ -468,11 +489,13 @@ describe("App smoke", () => {
     expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Motion on" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Watch badge" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Seerr badge" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bake motion for this layout" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Status Focus" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
     expect(await screen.findByRole("heading", { name: "Generate" })).toBeInTheDocument();
+    expect(screen.getByText("Seerr only")).toBeInTheDocument();
     expect(screen.getByText(/Skip leaves titles/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
     expect((await screen.findAllByText(/Created 2 stills/)).length).toBeGreaterThan(0);

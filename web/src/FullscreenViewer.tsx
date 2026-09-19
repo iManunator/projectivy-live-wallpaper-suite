@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { WatchBadge } from "./WatchBadge";
+import { ChromePills } from "./ChromePills";
 import { WallpaperStage } from "./WallpaperStage";
 import { api } from "./lib/api";
 import { galleryPreviewSources } from "./lib/gallery";
@@ -12,6 +12,9 @@ export type ViewerItem = {
   title: string;
   subtitle?: string;
   watchState?: string;
+  libraryState?: string;
+  availability?: string;
+  source?: string;
   id?: string;
   pinned?: boolean;
   hidden?: boolean;
@@ -33,6 +36,9 @@ export function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
     watchState: item.watch_state,
+    libraryState: item.library_state,
+    availability: item.availability,
+    source: item.source,
     id: item.id,
     pinned: item.pinned,
     hidden: item.hidden,
@@ -189,7 +195,13 @@ export function FullscreenViewer({
                   onError={() => setShowLogo(false)}
                 />
               ) : null}
-              <WatchBadge state={item.watchState} className="sample-badge" />
+              <ChromePills
+                className="sample-badge"
+                watchState={item.watchState}
+                libraryState={item.libraryState}
+                availability={item.availability}
+                source={item.source}
+              />
               <strong className="sample-title">{item.title}</strong>
             </div>
           ) : null}
@@ -197,7 +209,12 @@ export function FullscreenViewer({
         <figcaption>
           <strong>{item.title}</strong>
           {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
-          <WatchBadge state={item.watchState} />
+          <ChromePills
+            watchState={item.watchState}
+            libraryState={item.libraryState}
+            availability={item.availability}
+            source={item.source}
+          />
           <span className={`badge ${useVideo ? "badge-video" : ""}`}>{modeLabel}</span>
         </figcaption>
         <div className="lightbox-actions" onClick={(event) => event.stopPropagation()}>

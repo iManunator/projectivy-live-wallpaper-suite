@@ -85,6 +85,7 @@ class Layout(BaseModel):
     logo_max_height: int = 450
     logo_padding: int = 25
     show_watch_badge: bool = True
+    show_seerr_badge: bool = True
 
 
 class WallpaperRecord(BaseModel):
@@ -134,6 +135,10 @@ class WallpaperStatus(BaseModel):
     queue: str | None = None
     pinned: bool = False
     watchState: str | None = None
+    libraryState: str | None = None
+    availability: str | None = None
+    seerrStatus: str | None = None
+    source: str | None = None
 
 
 class GenerateRequest(BaseModel):

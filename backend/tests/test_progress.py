@@ -248,3 +248,49 @@ def test_watch_badge_injected_and_hideable():
     assert with_badge.tobytes() != without.tobytes()
     hidden = layout.model_copy(update={"show_watch_badge": False})
     assert render_chrome(watched, hidden).tobytes() == without.tobytes()
+
+
+def test_seerr_badge_injected_next_to_watch_and_hideable():
+    layout = Layout(
+        name="Bare",
+        canvas_width=1920,
+        canvas_height=1080,
+        background=LayoutBackground(
+            fade_left=0,
+            fade_right=0,
+            fade_top=0,
+            fade_bottom=0,
+            vignette=0,
+            overlay_opacity=0,
+            gradient_opacity=0,
+        ),
+        layers=[],
+        show_watch_badge=True,
+        show_seerr_badge=True,
+    )
+    seerr_only = MediaItem(
+        title="Probe",
+        year=2024,
+        watch_state="unwatched",
+        library_state="seerr_only",
+        availability="requestable",
+        source="jellyseerr",
+    )
+    library = MediaItem(
+        title="Probe",
+        year=2024,
+        watch_state="unwatched",
+        library_state="in_library",
+        availability="available",
+        source="jellyfin",
+    )
+    blank = MediaItem(title="Probe", year=2024)
+    with_seerr = render_chrome(seerr_only, layout)
+    library_only = render_chrome(library, layout)
+    empty = render_chrome(blank, layout)
+    assert with_seerr.tobytes() != library_only.tobytes()
+    assert library_only.tobytes() != empty.tobytes()
+    hidden = layout.model_copy(update={"show_seerr_badge": False})
+    assert render_chrome(seerr_only, hidden).tobytes() == library_only.tobytes()
+    both_hidden = layout.model_copy(update={"show_watch_badge": False, "show_seerr_badge": False})
+    assert render_chrome(seerr_only, both_hidden).tobytes() == empty.tobytes()

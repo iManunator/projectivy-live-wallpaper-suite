@@ -7,7 +7,7 @@ import { describeBatchFlags } from "./lib/batch";
 import { errorToast, providerToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { formatOpsTime, LAYOUT_DNA, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
-import { WatchBadge } from "./WatchBadge";
+import { ChromePills } from "./ChromePills";
 import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
 import { JobProgress, JobProvider, useJobs } from "./JobProgress";
 import { ToastProvider, useToasts } from "./toasts";
@@ -96,6 +96,10 @@ type TonightPayload = {
     layout?: string | null;
     path?: string | null;
     watchState?: string | null;
+    libraryState?: string | null;
+    availability?: string | null;
+    seerrStatus?: string | null;
+    source?: string | null;
   };
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
@@ -217,7 +221,12 @@ function TonightPage() {
             </div>
             <div className="tv-hero-meta">
               <span className="badge">{queueLabel}</span>
-              <WatchBadge state={payload?.status?.watchState} />
+              <ChromePills
+                watchState={payload?.status?.watchState}
+                libraryState={payload?.status?.libraryState}
+                availability={payload?.status?.availability}
+                source={payload?.status?.source}
+              />
               {payload?.status?.pinned && <span className="badge">Pinned</span>}
               {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
               <h2>{payload?.status?.title || "Waiting for a title"}</h2>
@@ -403,17 +412,23 @@ function GeneratePage() {
         </div>
         <div className="card">
           <h3>Motion preview</h3>
-          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops. Artwork moves; title chrome stays put.</p>
+          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops. Artwork moves; watch and Seerr chrome stay put.</p>
           <WallpaperStage
             className="generate-preview"
             wrapClassName="canvas-wrap generate-preview"
-            artSrc={api.mediaArtwork("demo-jf-1")}
-            artAlt="Northlight motion preview"
+            artSrc={api.mediaArtwork("demo-jf-4")}
+            artAlt="Signal Country motion preview"
             motionOn
             motionVars={motionVars as CSSProperties}
             lightLeak={Boolean(settings?.light_leak)}
           >
-            <SampleLockedChrome title="Northlight" />
+            <SampleLockedChrome
+              title="Signal Country"
+              watchState="unwatched"
+              libraryState="seerr_only"
+              availability="requestable"
+              source="jellyseerr"
+            />
             <div className="tv-chrome editor-tv" aria-hidden="true">
               <div className="tv-top">
                 <span className="tv-logo">projectivy</span>

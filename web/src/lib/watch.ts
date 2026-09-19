@@ -25,9 +25,12 @@ export function watchBadge(value?: string | null): { id: WatchKind; label: strin
 }
 
 export function badgeClass(label: string): string {
-  if (label === "Unwatched") return "badge badge-watch unwatched";
-  if (label === "Continue") return "badge badge-watch partial";
-  if (label === "Watched") return "badge badge-watch watched";
-  if (label === "VIDEO") return "badge badge-video";
-  return "badge";
+  if (label === "Unwatched") return "chrome-pill badge badge-watch unwatched";
+  if (label === "Continue") return "chrome-pill badge badge-watch partial";
+  if (label === "Watched") return "chrome-pill badge badge-watch watched";
+  if (label === "Seerr only") return "chrome-pill badge badge-seerr seerr_only";
+  if (label === "Requestable") return "chrome-pill badge badge-seerr requestable";
+  if (label === "On Seerr") return "chrome-pill badge badge-seerr on_seerr";
+  if (label === "VIDEO") return "chrome-pill badge badge-video";
+  return "chrome-pill badge";
 }

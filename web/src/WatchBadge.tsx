@@ -10,7 +10,10 @@ export function WatchBadge({
   const badge = watchBadge(state);
   if (!badge) return null;
   return (
-    <span className={`badge badge-watch ${badge.id} ${className}`.trim()} title={`Watch status: ${badge.label}`}>
+    <span
+      className={`chrome-pill badge badge-watch ${badge.id} ${className}`.trim()}
+      title={`Watch status: ${badge.label}`}
+    >
       {badge.label}
     </span>
   );
