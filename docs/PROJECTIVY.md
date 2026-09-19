@@ -21,7 +21,7 @@ The `:core` JVM module holds pick-mode mapping, URL rewrite, IMAGE vs VIDEO choi
 
 ## IMAGE vs VIDEO
 
-Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VIDEO` (4) loops `videoUrl` (H.264 MP4). Wallpaparr always keeps the still; motion is an optional sibling file. The plugin setting **Prefer parallax / motion VIDEO** picks VIDEO when `videoUrl` is present; **Fallback to still JPEG** uses IMAGE otherwise. Depth layers are baked into the MP4 (Projectivy is not a compositor). Details: [MOTION.md](MOTION.md).
+Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VIDEO` (4) loops `videoUrl` (H.264 MP4). Wallpaparr always keeps the still; motion is an optional sibling file. The plugin setting **Prefer parallax / motion VIDEO** picks VIDEO when `videoUrl` is present; **Fallback to still JPEG** uses IMAGE otherwise. Depth layers are baked into the MP4 (Projectivy is not a compositor): ffmpeg pans the artwork plate and overlays static logo/title chrome. Details: [MOTION.md](MOTION.md).
 
 ## Settings the plugin sends to the suite
 

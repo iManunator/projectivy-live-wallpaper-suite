@@ -4,9 +4,15 @@ Projectivy wallpaper plugins return either:
   - IMAGE (JPEG URL) — static, or
   - VIDEO (H.264 MP4 URL) — looping live wallpaper.
 
-This module bakes the VIDEO. The ``parallax`` style keeps metadata chrome
-(including a movie/series logo) nearly still while the artwork layer breathes
-and drifts (true depth). ``kenburns`` / ``drift`` animate a single composite still.
+This module bakes the VIDEO as **layers**:
+
+* **Background** — artwork plate. Subtle pan / zoom / drift (intensity presets).
+* **Foreground / target** — logo or title, watch badges, metadata chrome.
+  Overlay is pinned at layout DNA coordinates (``overlay=x=0:y=0``). Chrome
+  never Ken-Burns with the plate.
+
+Do not zoompan a flat JPEG that already has text burned in — that makes the
+title swim. Animate the plate, then overlay the static chrome PNG each frame.
 """
 
 from __future__ import annotations
@@ -62,8 +68,8 @@ class MotionProfile:
 
     @property
     def fg_pan(self) -> float:
-        # Foreground moves less → depth. Zero-ish at low intensity.
-        return round(self.bg_pan * 0.22, 2)
+        """Foreground chrome is pinned. Intensity never pans or zooms metadata."""
+        return 0.0
 
     def normalized_style(self) -> str:
         style = (self.style or "parallax").strip().lower()
@@ -132,14 +138,13 @@ def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
     w, h, fps, frames = p.width, p.height, p.fps, p.frames
     prep = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
     leak = bool(p.light_leak) and has_chrome and p.style == "parallax"
-    if has_chrome and p.style == "parallax":
+    if has_chrome:
         bg = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
-        fg_x = f"{p.fg_pan}*sin(2*PI*n/{frames})"
-        fg_y = f"{p.fg_pan * 0.4}*cos(2*PI*n/{frames})"
+        # Pin chrome in layout-DNA pixels. Never pan/zoom the overlay with the plate.
         graph = (
             f"[0:v]{prep},{bg}[bg];"
             f"[1:v]scale={w}:{h},format=rgba[fg];"
-            f"[bg][fg]overlay=x='{fg_x}':y='{fg_y}':shortest=1"
+            f"[bg][fg]overlay=x=0:y=0:shortest=1"
         )
         if leak:
             leak_x = f"{int(w * 0.12)}*sin(2*PI*n/{frames})"
@@ -151,7 +156,7 @@ def build_filtergraph(profile: MotionProfile, has_chrome: bool) -> str:
         else:
             graph += ",format=yuv420p"
         return graph
-    # Single-layer kenburns / drift (or parallax without a chrome plate)
+    # Artwork-only: no chrome PNG, so zoompan the plate (never a text-burned JPEG).
     zp = zoompan_expr(p.bg_zoom_amp, p.bg_pan, frames, w, h, fps)
     return f"{prep},{zp},format=yuv420p"
 
@@ -194,10 +199,10 @@ def generate_motion(
             profile = MotionProfile(quality="standard", duration=8.0, style=profile.style)
         elif quality == "cinematic":
             profile = MotionProfile(quality="cinematic", duration=10.0, style=profile.style)
-    style = profile.normalized_style()
-    use_chrome = bool(chrome and chrome.is_file() and style == "parallax")
+    use_chrome = bool(chrome and Path(chrome).is_file())
     graph = build_filtergraph(profile, has_chrome=use_chrome)
-    src = plate if plate and plate.is_file() else jpg
+    # Prefer the artwork plate. Never Ken-Burns the composited JPEG when a plate exists.
+    src = plate if plate and Path(plate).is_file() else jpg
     mp4 = mp4_path_for(jpg)
     use_leak = use_chrome and profile.light_leak and "[2:v]" in graph
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:

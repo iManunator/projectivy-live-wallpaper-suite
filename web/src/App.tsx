@@ -9,6 +9,7 @@ import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, m
 import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { badgeClass } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
+import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
 import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
 
@@ -107,6 +108,7 @@ type TonightPayload = {
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
   motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean };
+  preview?: { artworkUrl?: string | null; itemId?: string | null; layered?: boolean };
 };
 
 function TonightPage() {
@@ -136,6 +138,7 @@ function TonightPage() {
   }, [layout]);
   const image = payload?.status?.imageUrl;
   const video = payload?.status?.videoUrl;
+  const artwork = payload?.preview?.artworkUrl;
   const queueLabel = payload?.status?.queue ? QUEUE_LABELS[payload.status.queue] || payload.status.queue : "Tonight";
   const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
   const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
@@ -143,6 +146,7 @@ function TonightPage() {
   const duration = PRESET_DURATION[motionPreset] || defaultDuration("light");
   const motionVars = motionPreviewVars(motionStyle, intensity, duration);
   const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
+  const layeredArt = Boolean(!video && artwork);
   async function bakeTonight(wholeLayout = false) {
     setBakeBusy(true);
     try {
@@ -165,8 +169,7 @@ function TonightPage() {
     <section>
       <h1>Tonight’s home screen</h1>
       <p className="lede">
-        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock — then one-click a layout DNA preset.
-        Smart queues mix unwatched, continue watching, newly added, and Seerr titles from the demo catalog or your library.
+        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock. Artwork can drift; the title and TV chrome stay put.
       </p>
       <div className="chip-row">
         {LAYOUT_DNA.map((preset) => (
@@ -211,20 +214,16 @@ function TonightPage() {
       </div>
       {error && <p className="error">{error}</p>}
       <div className="tonight-grid">
-        <div className="tv-preview" aria-label="Projectivy home screen preview">
-          {video ? (
-            <video className="tv-art" src={video} autoPlay muted loop playsInline />
-          ) : image ? (
-            <img
-              className="tv-art motion-art"
-              style={motionVars as CSSProperties}
-              src={image}
-              alt={payload?.status?.title || "Wallpaper"}
-            />
-          ) : (
-            <div className="tv-art tv-art-empty">Generate a batch to fill tonight</div>
-          )}
-          {payload?.motion?.light_leak && <div className="motion-leak" />}
+        <WallpaperStage
+          wrapClassName="tv-preview"
+          ariaLabel="Projectivy home screen preview"
+          artSrc={layeredArt ? artwork : image}
+          artAlt={payload?.status?.title || "Wallpaper"}
+          videoSrc={video}
+          motionOn={layeredArt}
+          motionVars={motionVars as CSSProperties}
+          lightLeak={Boolean(payload?.motion?.light_leak)}
+        >
           <div className="tv-chrome">
             <div className="tv-top">
               <span className="tv-logo">projectivy</span>
@@ -246,7 +245,7 @@ function TonightPage() {
             </div>
             <div className="tv-dock" />
           </div>
-        </div>
+        </WallpaperStage>
         <div className="card">
           <h3>Taste · {payload?.profile || "tonight"}</h3>
           <p className="muted">Weighted mix used by pick mode “Tonight’s mix” (`taste:tonight`).</p>
@@ -259,7 +258,8 @@ function TonightPage() {
           </ul>
           <p className="muted">
             Motion {motionPreset} · {motionStyle}
-            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}. CSS preview on the TV bezel; bake VIDEO for tonight’s pick or this layout so Projectivy can play a real MP4.
+            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}.
+            CSS preview pans the artwork only; title and TV chrome stay pinned. Bake VIDEO so Projectivy can play a real MP4.
           </p>
         </div>
       </div>
@@ -526,15 +526,17 @@ function GeneratePage() {
         </div>
         <div className="card">
           <h3>Motion preview</h3>
-          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops.</p>
-          <div className="canvas-wrap generate-preview">
-            <img
-              className="canvas-art motion-art"
-              style={motionVars as CSSProperties}
-              src={api.mediaArtwork("demo-jf-1")}
-              alt="Northlight motion preview"
-            />
-            {settings?.light_leak && <div className="motion-leak" />}
+          <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops. Artwork moves; title chrome stays put.</p>
+          <WallpaperStage
+            className="generate-preview"
+            wrapClassName="canvas-wrap generate-preview"
+            artSrc={api.mediaArtwork("demo-jf-1")}
+            artAlt="Northlight motion preview"
+            motionOn
+            motionVars={motionVars as CSSProperties}
+            lightLeak={Boolean(settings?.light_leak)}
+          >
+            <SampleLockedChrome title="Northlight" />
             <div className="tv-chrome editor-tv" aria-hidden="true">
               <div className="tv-top">
                 <span className="tv-logo">projectivy</span>
@@ -542,7 +544,7 @@ function GeneratePage() {
               </div>
               <div className="tv-dock" />
             </div>
-          </div>
+          </WallpaperStage>
         </div>
       </div>
     </section>
@@ -681,9 +683,9 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           </label>
           <label>Motion style</label>
           <select value={settings.motion_style || "parallax"} onChange={(e) => setSettings({ ...settings, motion_style: e.target.value })}>
-            <option value="parallax">Parallax — artwork drifts, chrome stays</option>
-            <option value="kenburns">Ken Burns — single-layer zoom</option>
-            <option value="drift">Drift — slow pan, tiny zoom</option>
+            <option value="parallax">Parallax — artwork drifts, chrome stays locked</option>
+            <option value="kenburns">Ken Burns — artwork zoom; chrome locked</option>
+            <option value="drift">Drift — slow pan of artwork; chrome locked</option>
           </select>
           <label>Intensity preset</label>
           <select
@@ -735,15 +737,18 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             value={settings.motion_fps || 24}
             onChange={(e) => setSettings({ ...settings, motion_fps: Number(e.target.value) })}
           />
-          <p className="muted">{describeMotion(style, intensity, duration)}</p>
-          <div className="canvas-wrap generate-preview" style={{ marginTop: 12 }}>
-            <img
-              className="canvas-art motion-art"
-              style={motionVars as CSSProperties}
-              src={api.mediaArtwork("demo-jf-1")}
-              alt="Motion intensity preview"
-            />
-            {settings.light_leak && <div className="motion-leak" />}
+          <p className="muted">{describeMotion(style, intensity, duration)}. Intensity changes background amplitude only.</p>
+          <div style={{ marginTop: 12 }}>
+            <WallpaperStage
+              wrapClassName="canvas-wrap generate-preview"
+              artSrc={api.mediaArtwork("demo-jf-1")}
+              artAlt="Motion intensity preview"
+              motionOn
+              motionVars={motionVars as CSSProperties}
+              lightLeak={Boolean(settings.light_leak)}
+            >
+              <SampleLockedChrome title="Northlight" />
+            </WallpaperStage>
           </div>
         </div>
         <div className="card">

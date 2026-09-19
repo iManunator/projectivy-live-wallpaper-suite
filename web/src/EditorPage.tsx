@@ -15,6 +15,7 @@ import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/log
 import { LAYOUT_DNA } from "./lib/queues";
 import { watchBadge } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
+import { WallpaperStage } from "./WallpaperStage";
 import { useToasts } from "./toasts";
 
 type MediaRow = {
@@ -319,8 +320,8 @@ export function EditorPage() {
     <section>
       <h1>Layout editor</h1>
       <p className="lede">
-        Flagship 16:9 stage for Projectivy: multi-stop gradients, vignette, edge fades, movie logos, and a motion
-        preview so you can see parallax / Ken Burns without a TV. Drag metadata chips. Save persists the layout JSON.
+        Flagship 16:9 stage for Projectivy: the preview always fits this panel. Artwork pans/zooms; logo, title, and
+        badges stay locked. Drag metadata chips. Save persists the layout JSON.
       </p>
       <div className="grid two">
         <div className="card">
@@ -441,72 +442,74 @@ export function EditorPage() {
               </button>
             ))}
           </div>
-          <div className="canvas-wrap" ref={stageRef} style={{ marginTop: 14 }}>
-            {artSrc && (
-              <img
-                className={`canvas-art ${motionOn ? "motion-art" : ""}`}
-                style={motionOn ? (motionVars as CSSProperties) : undefined}
-                src={artSrc}
-                alt={`${preview?.title || "Library"} artwork`}
-              />
-            )}
-            <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={stageOverlayStyle(layout.background)}>
-              {showGuides && (
-                <div className="safe-guides" aria-hidden="true">
-                  <span className="safe-clock" />
-                  <span className="safe-dock" />
+          <div style={{ marginTop: 14 }}>
+            <WallpaperStage
+              stageRef={stageRef}
+              className="editor-stage"
+              artSrc={artSrc}
+              artAlt={`${preview?.title || "Library"} artwork`}
+              motionOn={motionOn}
+              motionVars={motionVars as CSSProperties}
+              lightLeak={lightLeak}
+            >
+              <div className={`canvas-stage ${artSrc ? "has-art" : ""}`} style={stageOverlayStyle(layout.background)}>
+                {showGuides && (
+                  <div className="safe-guides" aria-hidden="true">
+                    <span className="safe-clock" />
+                    <span className="safe-dock" />
+                  </div>
+                )}
+                {layout.layers
+                  .map((item, index) => ({ item, index }))
+                  .filter(({ item }) => item.visible)
+                  .map(({ item, index }) => {
+                    const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
+                    const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
+                    const x = isLogoTitle && logoBox ? logoBox.x : item.x;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
+                        onMouseDown={(event) => startDrag(event, index)}
+                        style={{
+                          left: `${(x / layout.canvas_width) * 100}%`,
+                          top: `${(y / layout.canvas_height) * 100}%`,
+                          fontSize: Math.max(10, item.font_size * 0.35),
+                          fontWeight: item.font_weight === "bold" ? 700 : 500,
+                          color: item.color,
+                          width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
+                          maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
+                          whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
+                        }}
+                      >
+                        {isLogoTitle ? (
+                          <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
+                        ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
+                          watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
+                        ) : (
+                          sample[item.slot] || item.slot
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              {showTv && (
+                <div className="tv-chrome editor-tv" aria-hidden="true">
+                  <div className="tv-top">
+                    <span className="tv-logo">projectivy</span>
+                    <span className="tv-clock">9:41</span>
+                  </div>
+                  <div className="tv-dock" />
                 </div>
               )}
-              {layout.layers
-                .map((item, index) => ({ item, index }))
-                .filter(({ item }) => item.visible)
-                .map(({ item, index }) => {
-                  const isLogoTitle = Boolean(item.slot === "title" && showLogo && logoBox);
-                  const y = isLogoTitle && logoBox ? logoBox.y : item.y + (item.slot === "title" ? 0 : logoShift);
-                  const x = isLogoTitle && logoBox ? logoBox.x : item.x;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
-                      onMouseDown={(event) => startDrag(event, index)}
-                      style={{
-                        left: `${(x / layout.canvas_width) * 100}%`,
-                        top: `${(y / layout.canvas_height) * 100}%`,
-                        fontSize: Math.max(10, item.font_size * 0.35),
-                        fontWeight: item.font_weight === "bold" ? 700 : 500,
-                        color: item.color,
-                        width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
-                        maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
-                        whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
-                      }}
-                    >
-                      {isLogoTitle ? (
-                        <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
-                      ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
-                        watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
-                      ) : (
-                        sample[item.slot] || item.slot
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-            {showTv && (
-              <div className="tv-chrome editor-tv" aria-hidden="true">
-                <div className="tv-top">
-                  <span className="tv-logo">projectivy</span>
-                  <span className="tv-clock">9:41</span>
-                </div>
-                <div className="tv-dock" />
-              </div>
-            )}
-            {motionOn && lightLeak && <div className="motion-leak" />}
-            <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+              <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
+            </WallpaperStage>
           </div>
           <p className="muted">
             {describeMotion(motionStyle, intensity, previewDuration)}
-            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} is a CSS preview — bake VIDEO for this layout
-            so Projectivy can play a real MP4 (<code>videoUrl</code> is set only when the file exists).
+            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} moves the <strong>background</strong> only —
+            logo, title, and badges stay pinned. Bake VIDEO for this layout so Projectivy can play a real MP4 (
+            <code>videoUrl</code> is set only when the file exists).
           </p>
           {created.length > 0 && (
             <div className="created-strip">

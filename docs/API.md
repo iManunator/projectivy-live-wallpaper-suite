@@ -70,10 +70,10 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET | `/api/demo/catalog` | License, artist, Commons URL for each demo still. |
 | GET | `/api/demo/attribution` | Markdown attribution file. |
 | GET | `/api/queues` | Smart-queue counts for a layout |
-| GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
+| GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI. Additive `preview.artworkUrl` / `preview.itemId` / `preview.layered` for the in-browser layered motion preview (not consumed by the plugin). |
 | GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
 | POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
-| POST | `/api/wallpaper/generate-motion` | Bake parallax/Ken Burns MP4s for a layout. Query `path=` (filename) to bake one title (tonight’s pick). |
+| POST | `/api/wallpaper/generate-motion` | Bake parallax/Ken Burns MP4s for a layout (layered plate + locked chrome). Query `path=` (filename) to bake one title (tonight’s pick). Additive `layered` / `chrome_locked` on the JSON result. |
 | POST | `/api/cron/run` | Run a cron-shaped generate immediately. Body is the job flags (layout, source, skip/replace/cleanup/ids/motion). Returns the same `{ message, created, skipped, … }` as `/api/generate`. |
 | GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme, default `title_display` |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |

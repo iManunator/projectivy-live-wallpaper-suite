@@ -232,6 +232,49 @@ def _fetch_artwork(item: MediaItem, http_get=None) -> bytes | None:
     return None
 
 
+def _item_from_record(rec) -> MediaItem:
+    return MediaItem(
+        title=rec.title,
+        year=rec.year,
+        overview=rec.overview,
+        rating=rec.rating,
+        genres=rec.genres,
+        official_rating=rec.official_rating,
+        watch_state=rec.watch_state,
+        source=rec.source,
+        jellyfin_id=rec.jellyfin_id,
+        tmdb_id=rec.tmdb_id,
+        imdb_id=rec.imdb_id,
+        action_url=rec.action_url,
+    )
+
+
+def _hydrate_item_art_urls(item: MediaItem) -> MediaItem:
+    """Fill Jellyfin / demo artwork URLs so a later bake can recover the plate.
+
+    Never treat the composited JPEG as backdrop art — that burns title text into
+    the moving layer.
+    """
+    from app.demo_art import attach_demo_art
+
+    settings = load_settings()
+    jf = settings.jellyfin or {}
+    base = (jf.get("url") or "").rstrip("/")
+    key = jf.get("api_key") or ""
+    updates: dict = {}
+    if base and key and item.jellyfin_id:
+        jf_id = item.jellyfin_id
+        if not item.backdrop_url:
+            updates["backdrop_url"] = f"{base}/Items/{jf_id}/Images/Backdrop?maxWidth=1920"
+        if not item.poster_url:
+            updates["poster_url"] = f"{base}/Items/{jf_id}/Images/Primary?maxHeight=1080"
+        if not item.logo_url:
+            updates["logo_url"] = f"{base}/Items/{jf_id}/Images/Logo"
+    if updates:
+        item = item.model_copy(update=updates)
+    return attach_demo_art(item)
+
+
 def generate_one(
     item: MediaItem,
     layout_name: str,
@@ -400,25 +443,15 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
         if not jpg:
             failed.append(rec.filename)
             continue
-        item = MediaItem(
-            title=rec.title,
-            year=rec.year,
-            overview=rec.overview,
-            rating=rec.rating,
-            genres=rec.genres,
-            official_rating=rec.official_rating,
-            watch_state=rec.watch_state,
-            source=rec.source,
-            jellyfin_id=rec.jellyfin_id,
-            tmdb_id=rec.tmdb_id,
-            imdb_id=rec.imdb_id,
-        )
+        item = _hydrate_item_art_urls(_item_from_record(rec))
         layout_obj = load_layout(rec.layout)
         plate = chrome = None
         if layout_obj:
+            artwork = _fetch_artwork(item)
             plate = jpg.with_name(jpg.stem + "_plate.jpg")
             chrome = jpg.with_name(jpg.stem + "_chrome.png")
-            save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
+            # Artwork plate only — never the text-burned JPEG.
+            save_jpeg(render_plate(item, layout_obj, backdrop_bytes=artwork), plate)
             save_png(apply_overlays(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), settings), chrome)
         ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
         if plate:
@@ -441,6 +474,8 @@ def bake_motion(layout: str, filename: str | None = None) -> dict:
         "preset": settings.motion_preset,
         "duration": profile.duration,
         "count": len(done),
+        "layered": True,
+        "chrome_locked": True,
     }
     result["message"] = motion_bake_message(layout, result)
     return result

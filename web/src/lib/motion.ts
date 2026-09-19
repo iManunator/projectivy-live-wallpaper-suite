@@ -15,10 +15,10 @@ export function describeMotion(style: MotionStyle, intensity: number, duration: 
   const depth = intensity >= 0.7 ? "bold" : intensity >= 0.4 ? "balanced" : "subtle";
   const label =
     style === "parallax"
-      ? "Parallax (artwork drifts; chrome stays)"
+      ? "Parallax (artwork drifts; chrome stays locked)"
       : style === "drift"
-        ? "Drift (slow pan, tiny zoom)"
-        : "Ken Burns (single-layer zoom)";
+        ? "Drift (slow pan of artwork; chrome locked)"
+        : "Ken Burns (zoom/pan artwork; chrome locked)";
   return `${label} · ${depth} · ${duration}s loop`;
 }
 

@@ -331,6 +331,17 @@ def tonight(
         exclude=exclude,
     )
     queues = list_queues(layout)
+    selected_id = None
+    artwork_url = None
+    path = status.path
+    if path:
+        rec = next((r for r in catalog if r.layout.lower() == layout.lower() and r.filename == path), None)
+        if rec is None:
+            rec = next((r for r in catalog if r.filename == path), None)
+        if rec:
+            selected_id = rec.jellyfin_id or rec.tmdb_id or rec.imdb_id
+            if rec.jellyfin_id or rec.tmdb_id:
+                artwork_url = f"/api/media/artwork/{quote(str(rec.jellyfin_id or rec.tmdb_id), safe='')}"
     return {
         "status": status.model_dump(),
         "queues": queues,
@@ -340,6 +351,11 @@ def tonight(
             "preset": settings.motion_preset,
             "intensity": intensity_from_preset(settings.motion_preset),
             "light_leak": settings.light_leak,
+        },
+        "preview": {
+            "artworkUrl": artwork_url,
+            "itemId": selected_id,
+            "layered": True,
         },
     }
 

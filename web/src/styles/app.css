@@ -84,6 +84,64 @@ button, input, select, textarea {
   gap: 18px;
   margin-bottom: 18px;
 }
+/* 16:9 stage: object-fit:contain in the parent. Width never exceeds the panel;
+   height scales down to remaining viewport so the stage cannot blow out the page. */
+.stage-frame {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+.stage-frame.editor-stage {
+  --stage-chrome: 18rem;
+}
+.stage-frame > .canvas-wrap,
+.stage-frame > .tv-preview {
+  --stage-chrome: 14rem;
+  --stage-max-height: min(68dvh, calc(100dvh - var(--stage-chrome)));
+  width: min(100%, calc(var(--stage-max-height) * 16 / 9));
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: var(--stage-max-height);
+  margin-inline: auto;
+}
+.stage-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+.stage-fg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  transform: none;
+  pointer-events: none;
+}
+.stage-fg .layer-chip,
+.stage-fg .canvas-stage {
+  pointer-events: auto;
+}
+.sample-chrome { pointer-events: none; }
+.sample-badge {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+}
+.sample-title {
+  position: absolute;
+  left: 6%;
+  top: 16%;
+  font-family: "Fraunces", serif;
+  font-size: clamp(22px, 3.6cqi, 42px);
+  text-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+  max-width: 46%;
+  color: #fff;
+}
 .tv-preview {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -141,7 +199,7 @@ button, input, select, textarea {
 .dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .dash-stat { font-family: "Fraunces", serif; font-size: 28px; margin: 0 0 6px; }
 
-.main { padding: 28px 36px 64px; }
+.main { padding: 28px 36px 64px; overflow-x: clip; max-width: 100%; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 h1 { font-family: "Fraunces", serif; font-weight: 650; font-size: 32px; margin: 0 0 8px; }
 .lede { color: var(--muted); margin: 0 0 24px; max-width: 62ch; }
@@ -184,11 +242,13 @@ input, select, textarea {
 .canvas-wrap {
   position: relative;
   width: 100%;
+  max-width: 100%;
   aspect-ratio: 16 / 9;
   background: #08090c;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--line);
+  container-type: inline-size;
 }
 .canvas-art {
   position: absolute;
@@ -201,6 +261,7 @@ input, select, textarea {
 .canvas-stage {
   position: absolute;
   inset: 0;
+  transform: none;
   background:
     linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.15) 42%, transparent 70%),
     linear-gradient(0deg, rgba(0,0,0,0.55), transparent 45%),
@@ -237,7 +298,11 @@ input, select, textarea {
   50% { transform: scale(var(--motion-zoom-to, 1.12)) translate(var(--motion-x, -2%), var(--motion-y, 1%)); }
   100% { transform: scale(var(--motion-zoom-from, 1.04)) translate(0, 0); }
 }
+/* Background layer only. Foreground chrome (.stage-fg) must never use this. */
 .motion-art {
+  inset: -10%;
+  width: 120%;
+  height: 120%;
   animation: wallpaparr-kenburns var(--motion-duration, 12s) ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
@@ -488,6 +553,14 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
   .nav button { width: auto; min-height: 44px; }
   .brand-sub { display: none; }
   .grid.two, .grid.three, .tonight-grid, .dash-grid, .generate-grid { grid-template-columns: 1fr; }
+  .stage-frame > .canvas-wrap,
+  .stage-frame > .tv-preview {
+    --stage-chrome: 16rem;
+    --stage-max-height: min(52dvh, calc(100dvh - var(--stage-chrome)));
+  }
+  .stage-frame.editor-stage {
+    --stage-chrome: 20rem;
+  }
   .toasts {
     left: max(12px, env(safe-area-inset-left));
     right: max(12px, env(safe-area-inset-right));

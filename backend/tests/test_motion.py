@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -59,7 +60,8 @@ def test_profile_scales_with_intensity():
     high = MotionProfile(style="parallax", intensity=1.0)
     assert high.bg_zoom_amp > low.bg_zoom_amp
     assert high.bg_pan > low.bg_pan
-    assert high.fg_pan < high.bg_pan
+    assert high.fg_pan == 0
+    assert low.fg_pan == 0
 
 
 def test_unknown_style_normalizes_to_parallax():
@@ -93,10 +95,22 @@ def test_parallax_filtergraph_has_two_layers():
     assert "[0:v]" in graph
     assert "[1:v]" in graph
     assert "[2:v]" not in graph
-    assert "overlay=" in graph
+    assert "overlay=x=0:y=0" in graph
     assert "zoompan=" in graph
     assert "[mid],format" not in graph
+    assert "overlay=x='" not in graph
     assert "," not in zoompan_expr(0.05, 20, 48, 1920, 1080, 24).split("z=")[1].split(":")[0]
+
+
+def test_kenburns_and_drift_lock_chrome_when_layered():
+    for style in ("kenburns", "drift", "parallax"):
+        graph = build_filtergraph(
+            MotionProfile(style=style, intensity=0.8, duration=6, light_leak=False),
+            has_chrome=True,
+        )
+        assert "[1:v]" in graph
+        assert "overlay=x=0:y=0" in graph
+        assert "zoompan=" in graph
 
 
 def test_parallax_light_leak_adds_third_layer():
@@ -127,7 +141,7 @@ def test_intensity_presets_change_output_clearly():
     assert bold.bg_pan > subtle.bg_pan * 2
 
 
-def test_kenburns_is_single_layer():
+def test_kenburns_without_chrome_is_single_layer():
     graph = build_filtergraph(MotionProfile(style="kenburns"), has_chrome=False)
     assert "[0:v]" not in graph
     assert "overlay=" not in graph
@@ -188,3 +202,60 @@ def test_ffmpeg_bakes_small_parallax_loop(tmp_path: Path):
     )
     ok, msg = generate_motion(jpg, profile=leak_profile, force=True, plate=plate, chrome=chrome)
     assert ok, msg
+
+
+@pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
+def test_ffmpeg_keeps_chrome_pinned_on_kenburns(tmp_path: Path):
+    from PIL import ImageDraw
+
+    width, height = 320, 180
+    plate_img = Image.new("RGB", (width, height), (200, 24, 24))
+    chrome_img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ImageDraw.Draw(chrome_img).rectangle([0, 0, 56, 32], fill=(250, 250, 250, 255))
+    jpg = tmp_path / "locked.jpg"
+    plate = tmp_path / "locked_plate.jpg"
+    chrome = tmp_path / "locked_chrome.png"
+    save_jpeg(plate_img, jpg)
+    save_jpeg(plate_img, plate)
+    save_png(chrome_img, chrome)
+    profile = MotionProfile(
+        style="kenburns",
+        quality="light",
+        intensity=0.96,
+        duration=1.0,
+        fps=12,
+        width=width,
+        height=height,
+        light_leak=False,
+    )
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    mp4 = jpg.with_suffix(".mp4")
+
+    def grab(frame: int, dest: Path) -> None:
+        result = subprocess.run(
+            [
+                ffmpeg_bin(),
+                "-y",
+                "-i",
+                str(mp4),
+                "-vf",
+                f"select=eq(n\\,{frame})",
+                "-vframes",
+                "1",
+                str(dest),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr[-500:]
+
+    first = tmp_path / "f0.png"
+    mid = tmp_path / "f6.png"
+    grab(0, first)
+    grab(6, mid)
+    p0 = Image.open(first).convert("RGB").getpixel((10, 8))
+    p6 = Image.open(mid).convert("RGB").getpixel((10, 8))
+    assert min(p0) > 180, p0
+    assert min(p6) > 180, p6
+

@@ -133,6 +133,7 @@ vi.stubGlobal(
         ],
         profile: "tonight",
         motion: { style: "parallax", preset: "cinematic", intensity: 0.55, light_leak: true },
+        preview: { artworkUrl: "/api/media/artwork/demo-jf-1", itemId: "demo-jf-1", layered: true },
       };
     }
     if (url.includes("/api/dashboard")) {
@@ -197,6 +198,12 @@ describe("App smoke", () => {
     expect(await screen.findByRole("heading", { name: /home screen/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Wallpaparr" })).toBeInTheDocument();
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
+    const tonightStage = screen.getByLabelText("Projectivy home screen preview");
+    const tonightArt = tonightStage.querySelector("img");
+    expect(tonightArt?.className).toMatch(/motion-art/);
+    expect(tonightArt?.getAttribute("src") || "").toMatch(/artwork/);
+    expect(tonightStage.querySelector(".tv-hero-meta")?.closest(".stage-fg")).toBeTruthy();
+    expect(tonightArt?.closest(".stage-bg")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Bake motion for tonight/i })).toBeInTheDocument();
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
@@ -209,9 +216,14 @@ describe("App smoke", () => {
     fireEvent.click(screen.getByRole("button", { name: "Editor" }));
     expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
     expect(await screen.findByRole("img", { name: /Northlight artwork/i })).toBeInTheDocument();
+    const art = screen.getByRole("img", { name: /Northlight artwork/i });
+    expect(art.className).toMatch(/motion-art/);
+    expect(art.closest(".stage-bg")).toBeTruthy();
+    expect(document.querySelector(".stage-frame.editor-stage")).toBeTruthy();
     expect(screen.getByLabelText("Demo preview")).toBeInTheDocument();
     expect(screen.getByLabelText("Title display")).toBeInTheDocument();
     expect(await screen.findByRole("img", { name: /Northlight logo/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Northlight logo/i }).closest(".stage-fg")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Title display"), { target: { value: "text" } });
     expect(screen.queryByRole("img", { name: /Northlight logo/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
