@@ -8,9 +8,13 @@ from pathlib import Path
 
 from app import catalog as catalog_store
 from app.config import load_settings
+from app.demo_art import logo_bytes_for_item, still_path_for_item
+from app.images import looks_like_image
 from app.layouts import load_layout
+from app.messages import generate_message
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
 from app.motion import generate_motion, has_motion, profile_from_settings
+from app.providers import HttpClient
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
 from app.providers.seerr import SeerrProvider
@@ -32,26 +36,52 @@ def _providers_from_settings():
     }
 
 
-def collect_items(source: str, limit: int) -> list[MediaItem]:
+def collect_items(source: str, limit: int, warnings: list[str] | None = None) -> list[MediaItem]:
     providers = _providers_from_settings()
     key = (source or "demo").lower()
     if key in ("seerr", "jellyseerr"):
         key = "jellyseerr"
+    notes = warnings if warnings is not None else []
+
+    def warn(message: str) -> None:
+        notes.append(message)
+
     if key == "all":
         items: list[MediaItem] = []
         for name in ("jellyfin", "jellyseerr", "demo"):
-            try:
-                items.extend(providers[name].list_items(limit=limit))
-            except Exception:
+            provider = providers[name]
+            if name != "demo" and not provider.is_configured():
                 continue
+            try:
+                items.extend(provider.list_items(limit=limit))
+            except Exception as exc:
+                warn(f"{name}: {exc}")
+                continue
+        if not items:
+            warn("No configured libraries returned titles; using the demo catalog.")
+            items = providers["demo"].list_items(limit=limit)
         return _dedupe(items)[:limit]
     provider = providers.get(key) or providers["demo"]
-    try:
-        items = provider.list_items(limit=limit)
-    except Exception:
-        items = []
-    if not items and key != "demo":
+    items = []
+    used_fallback = False
+    if key != "demo" and not provider.is_configured():
+        label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+        warn(f"{label} is not configured. Using the demo catalog.")
+        used_fallback = True
         items = providers["demo"].list_items(limit=limit)
+    else:
+        try:
+            items = provider.list_items(limit=limit)
+        except Exception as exc:
+            label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+            warn(f"{label} request failed: {exc}. Using the demo catalog.")
+            used_fallback = True
+            items = []
+        if not items and key != "demo":
+            if not used_fallback:
+                label = "Jellyfin" if key == "jellyfin" else "Jellyseerr / Seerr" if key == "jellyseerr" else key
+                warn(f"{label} returned no movies or series. Using the demo catalog.")
+            items = providers["demo"].list_items(limit=limit)
     tmdb = providers["tmdb"]
     if tmdb.is_configured():
         items = [tmdb.enrich(item) for item in items]
@@ -76,6 +106,132 @@ def _filename_for(item: MediaItem) -> str:
     return f"{slug[:40]}-{suffix}.jpg"
 
 
+def _artwork_urls(item: MediaItem) -> list[str]:
+    """Backdrop first; poster fills in when Jellyfin has no wide art."""
+    seen: set[str] = set()
+    urls: list[str] = []
+    for url in (item.backdrop_url, item.poster_url):
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+
+def _headers_for_url(url: str) -> dict[str, str] | None:
+    settings = load_settings()
+    jf = settings.jellyfin or {}
+    base = (jf.get("url") or "").rstrip("/")
+    key = jf.get("api_key") or ""
+    if base and key and url.startswith(base):
+        return JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "").auth_headers()
+    return None
+
+
+def _looks_like_image(data: bytes) -> bool:
+    return looks_like_image(data)
+
+
+def _default_http_get(url: str) -> bytes:
+    data = HttpClient(timeout=30.0).get_bytes(url, headers=_headers_for_url(url))
+    if not _looks_like_image(data):
+        raise ValueError(f"Not an image: {url}")
+    return data
+
+
+def _logo_urls(item: MediaItem) -> list[str]:
+    urls: list[str] = []
+    for url in (item.logo_url,):
+        if url and url not in urls and url.startswith(("http://", "https://")):
+            urls.append(url)
+    return urls
+
+
+def _fetch_logo(item: MediaItem, http_get=None) -> bytes | None:
+    bundled = logo_bytes_for_item(item)
+    if bundled:
+        return bundled
+    getter = http_get or _default_http_get
+    for url in _logo_urls(item):
+        try:
+            data = getter(url)
+        except Exception:
+            continue
+        if data and looks_like_image(data):
+            return data
+    tmdb_url = _tmdb_logo_url(item)
+    if tmdb_url:
+        try:
+            data = getter(tmdb_url)
+        except Exception:
+            return None
+        if data and looks_like_image(data):
+            return data
+    return None
+
+
+def _tmdb_logo_url(item: MediaItem) -> str | None:
+    if item.logo_url and item.logo_url.startswith(("http://", "https://")):
+        return None
+    settings = load_settings()
+    tm = settings.tmdb or {}
+    key = tm.get("api_key") or ""
+    if not key or not item.tmdb_id:
+        return None
+    try:
+        return TmdbProvider(api_key=key, language=tm.get("language") or "en-US").fetch_logo_url(
+            item.tmdb_id, item.media_type
+        )
+    except Exception:
+        return None
+
+
+def resolve_logo_bytes(
+    item_id: str,
+    tmdb_id: str | None = None,
+    media_type: str = "movie",
+    http_get=None,
+) -> bytes | None:
+    """Demo fixture, then Jellyfin Logo, then TMDB logos. Never raises."""
+    from app.demo_art import logo_bytes
+
+    try:
+        bundled = logo_bytes(item_id) or (logo_bytes(tmdb_id) if tmdb_id else None)
+        if bundled:
+            return bundled
+        kind = "tv" if media_type == "tv" else "movie"
+        settings = load_settings()
+        jf = settings.jellyfin or {}
+        base = (jf.get("url") or "").rstrip("/")
+        key = jf.get("api_key") or ""
+        logo_url = f"{base}/Items/{item_id}/Images/Logo" if base and key and item_id else None
+        item = MediaItem(
+            title="",
+            media_type=kind,
+            jellyfin_id=item_id or None,
+            tmdb_id=tmdb_id or None,
+            logo_url=logo_url,
+            source="jellyfin" if logo_url else "tmdb",
+        )
+        return _fetch_logo(item, http_get=http_get)
+    except Exception:
+        return None
+
+
+def _fetch_artwork(item: MediaItem, http_get=None) -> bytes | None:
+    getter = http_get or _default_http_get
+    for url in _artwork_urls(item):
+        try:
+            data = getter(url)
+        except Exception:
+            continue
+        if data and looks_like_image(data):
+            return data
+    local = still_path_for_item(item)
+    if local and local.is_file():
+        return local.read_bytes()
+    return None
+
+
 def generate_one(
     item: MediaItem,
     layout_name: str,
@@ -94,16 +250,12 @@ def generate_one(
         doomed = previous
         if doomed:
             catalog_store.remove_records({rec.id for rec in doomed})
-    backdrop_bytes = None
-    if item.backdrop_url and http_get:
-        try:
-            backdrop_bytes = http_get(item.backdrop_url)
-        except Exception:
-            backdrop_bytes = None
+    backdrop_bytes = _fetch_artwork(item, http_get=http_get)
+    logo_bytes = _fetch_logo(item, http_get=http_get)
     settings = load_settings()
     from app.overlays import apply_overlays
 
-    image = apply_overlays(render_still(item, layout, backdrop_bytes=backdrop_bytes), settings)
+    image = apply_overlays(render_still(item, layout, backdrop_bytes=backdrop_bytes, logo_bytes=logo_bytes), settings)
     filename = _filename_for(item)
     dest: Path = catalog_store.layout_dir(layout_name) / filename
     save_jpeg(image, dest)
@@ -115,7 +267,7 @@ def generate_one(
         plate_path = dest.with_name(dest.stem + "_plate.jpg")
         chrome_path = dest.with_name(dest.stem + "_chrome.png")
         save_jpeg(render_plate(item, layout, backdrop_bytes=backdrop_bytes), plate_path)
-        save_png(apply_overlays(render_chrome(item, layout), settings), chrome_path)
+        save_png(apply_overlays(render_chrome(item, layout, logo_bytes=logo_bytes), settings), chrome_path)
         ok, _ = generate_motion(
             dest,
             profile=profile,
@@ -157,7 +309,12 @@ def generate_one(
 
 
 def run_generate(request: GenerateRequest, http_get=None) -> dict:
-    items = collect_items(request.source, request.limit)
+    warnings: list[str] = []
+    failed: list[str] = []
+    pull = request.limit
+    if request.ids:
+        pull = max(request.limit, 40)
+    items = collect_items(request.source, pull, warnings=warnings)
     if request.ids:
         wanted = {i.lower() for i in request.ids}
         items = [
@@ -180,13 +337,20 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
             continue
         if request.replace_existing and matching_records(catalog, item, request.layout):
             replaced.append(item.title)
-        record = generate_one(
-            item,
-            request.layout,
-            motion=request.motion,
-            replace=request.replace_existing,
-            http_get=http_get,
-        )
+        try:
+            record = generate_one(
+                item,
+                request.layout,
+                motion=request.motion,
+                replace=request.replace_existing,
+                http_get=http_get,
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            failed.append(item.title)
+            warnings.append(f"{item.title}: could not render ({exc})")
+            continue
         if record:
             created.append(record.title)
             catalog = catalog_store.load_catalog()
@@ -195,13 +359,17 @@ def run_generate(request: GenerateRequest, http_get=None) -> dict:
         doomed = records_to_cleanup(catalog_store.load_catalog(), items, request.layout)
         cleaned = [rec.title for rec in doomed]
         catalog_store.remove_records({rec.id for rec in doomed})
-    return {
+    result = {
         "created": created,
         "skipped": skipped,
         "replaced": replaced,
         "cleaned": cleaned,
+        "failed": failed,
+        "warnings": warnings,
         "count": len(created),
     }
+    result["message"] = generate_message(request.layout, result)
+    return result
 
 
 def seed_demo_catalog(layout: str = "Netflix Hero", limit: int = 6) -> dict:

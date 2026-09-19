@@ -7,7 +7,64 @@ vi.stubGlobal(
   vi.fn(async (input: RequestInfo) => {
     const url = String(input);
     let body: unknown = [];
-    if (url.includes("/api/gallery")) body = [];
+    if (url.includes("/api/gallery")) {
+      body = [
+        {
+          id: "1",
+          layout: "Netflix Hero",
+          filename: "from.jpg",
+          title: "From",
+          year: 2022,
+          rating: 8.5,
+          genres: ["Horror"],
+          official_rating: "TV-MA",
+          watch_state: "unwatched",
+          library_state: "in_library",
+          source: "jellyfin",
+          has_video: false,
+        },
+      ];
+    }
+    if (url.includes("/api/media?")) {
+      if (url.includes("jellyfin")) {
+        body = [
+          {
+            title: "From",
+            year: 2022,
+            overview: "A town that will not let you leave.",
+            rating: 8.5,
+            genres: ["Horror", "Drama"],
+            official_rating: "TV-MA",
+            runtime: "52m",
+            watch_state: "unwatched",
+            source: "jellyfin",
+            jellyfin_id: "from1",
+            backdrop_url: "http://jf:8096/Items/from1/Images/Backdrop",
+          },
+        ];
+      } else {
+        body = [
+          {
+            title: "Northlight",
+            year: 2024,
+            overview: "A cartographer maps a city that rearranges itself after dusk.",
+            rating: 8.4,
+            genres: ["Sci-Fi", "Mystery"],
+            official_rating: "PG-13",
+            runtime: "2h 11m",
+            watch_state: "unwatched",
+            source: "jellyfin",
+            jellyfin_id: "demo-jf-1",
+          },
+        ];
+      }
+    }
+    if (url.includes("/api/settings/test/")) {
+      body = { ok: true, message: "Connected to Jellyfin (Living Room)", server: "Living Room" };
+    }
+    if (url.includes("/api/generate")) {
+      body = { count: 2, created: ["Northlight", "Harbor Season"], message: "Created 2 stills for Netflix Hero (Northlight, Harbor Season)." };
+    }
     if (url.includes("/api/layouts/list")) body = ["Netflix Hero", "Projectivy Dock"];
     if (url.includes("/api/layouts/load")) {
       body = {
@@ -23,8 +80,28 @@ vi.stubGlobal(
           fade_bottom: 0.3,
           fade_softness: 0.4,
           brightness: 1,
+          gradient_type: "linear",
+          gradient_angle: 90,
+          gradient_opacity: 0.4,
+          gradient_stops: [],
+          vignette: 0.1,
+          overlay_color: "#000000",
+          overlay_opacity: 0,
         },
-        layers: [],
+        layers: [
+          {
+            id: "title",
+            slot: "title",
+            x: 80,
+            y: 80,
+            font_size: 64,
+            color: "#ffffff",
+            font_weight: "bold",
+            visible: true,
+            align: "left",
+          },
+        ],
+        title_display: "auto",
       };
     }
     if (url.includes("/api/tonight")) {
@@ -54,7 +131,7 @@ vi.stubGlobal(
         taste: { profile: "tonight" },
       };
     }
-    if (url.includes("/api/settings")) {
+    if (url.includes("/api/settings") && !url.includes("/api/settings/test/")) {
       body = {
         public_base_url: "http://127.0.0.1:8787",
         timezone: "UTC",
@@ -74,6 +151,7 @@ vi.stubGlobal(
         jellyseerr: {},
         tmdb: {},
         cron_jobs: [],
+        title_display: "auto",
       };
     }
     return {
@@ -84,6 +162,21 @@ vi.stubGlobal(
   }),
 );
 
+class ProbeImage {
+  onload: ((ev?: Event) => void) | null = null;
+  onerror: ((ev?: Event) => void) | null = null;
+  naturalWidth = 900;
+  naturalHeight = 140;
+  set src(value: string) {
+    const ok = String(value).includes("demo-jf-1");
+    queueMicrotask(() => {
+      if (ok) this.onload?.(new Event("load"));
+      else this.onerror?.(new Event("error"));
+    });
+  }
+}
+vi.stubGlobal("Image", ProbeImage);
+
 describe("App smoke", () => {
   it("renders tonight preview and can open the gallery", async () => {
     render(<App />);
@@ -92,13 +185,34 @@ describe("App smoke", () => {
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
-    expect(screen.getByText(/0 wallpapers/)).toBeInTheDocument();
+    expect(screen.getByText(/1 wallpapers/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
+    expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editor" }));
+    expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Northlight artwork/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Demo preview")).toBeInTheDocument();
+    expect(screen.getByLabelText("Title display")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Northlight logo/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Title display"), { target: { value: "text" } });
+    expect(screen.queryByRole("img", { name: /Northlight logo/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Motion on" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(await screen.findByRole("heading", { name: "Generate" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
+    expect((await screen.findAllByText(/Created 2 stills/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Health" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText(/Taste profile/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Default title display")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Overlay widgets/i })).toBeInTheDocument();
     expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Test Jellyfin" }));
+    expect((await screen.findAllByText(/Connected to Jellyfin/)).length).toBeGreaterThan(0);
   });
 });

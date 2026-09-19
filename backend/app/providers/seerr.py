@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.models import MediaItem
 from app.providers import HttpClient
+from app.providers.tmdb import TMDB_IMAGE, logo_image_url, select_logo_path
 
 
 class SeerrProvider:
@@ -60,9 +61,17 @@ class SeerrProvider:
         in_library = bool(jellyfin_id) or status.lower() in ("available", "partially_available")
         availability = "available" if in_library else "requestable"
         library_state = "in_library" if in_library else "seerr_only"
-        backdrop = raw.get("backdropPath")
-        poster = raw.get("posterPath")
-        tmdb_img = "https://image.tmdb.org/t/p"
+        backdrop = raw.get("backdropPath") or raw.get("backdrop_path")
+        poster = raw.get("posterPath") or raw.get("poster_path")
+        logo_url = None
+        try:
+            images = raw.get("images") if isinstance(raw.get("images"), dict) else {}
+            path = select_logo_path(images, "en-US") if images else None
+            logo_url = logo_image_url(path) or (
+                f"{TMDB_IMAGE}/original{raw['logoPath']}" if raw.get("logoPath") else None
+            )
+        except Exception:
+            logo_url = None
         return MediaItem(
             title=str(title),
             year=year,
@@ -78,6 +87,7 @@ class SeerrProvider:
             jellyfin_id=jellyfin_id,
             tmdb_id=tmdb,
             action_url=f"{self.url}/{media_type}/{tmdb}" if self.url else None,
-            backdrop_url=f"{tmdb_img}/w1280{backdrop}" if backdrop else None,
-            poster_url=f"{tmdb_img}/w500{poster}" if poster else None,
+            backdrop_url=f"{TMDB_IMAGE}/w1280{backdrop}" if backdrop else None,
+            poster_url=f"{TMDB_IMAGE}/w500{poster}" if poster else None,
+            logo_url=logo_url,
         )

@@ -13,24 +13,43 @@ export type Layer = {
   align: string;
 };
 
+export type GradientStop = {
+  color: string;
+  position: number;
+  opacity: number;
+};
+
+export type LayoutBackground = {
+  mode: string;
+  color: string;
+  fade_left: number;
+  fade_right: number;
+  fade_top: number;
+  fade_bottom: number;
+  fade_softness: number;
+  brightness: number;
+  gradient_type: "linear" | "radial" | string;
+  gradient_angle: number;
+  gradient_opacity: number;
+  gradient_stops: GradientStop[];
+  vignette: number;
+  overlay_color: string;
+  overlay_opacity: number;
+};
+
 export type Layout = {
   name: string;
   canvas_width: number;
   canvas_height: number;
-  background: {
-    mode: string;
-    color: string;
-    fade_left: number;
-    fade_right: number;
-    fade_top: number;
-    fade_bottom: number;
-    fade_softness: number;
-    brightness: number;
-  };
+  background: LayoutBackground;
   layers: Layer[];
   preset?: boolean;
   preset_id?: string | null;
   description?: string;
+  title_display?: "auto" | "logo" | "text";
+  logo_max_width?: number;
+  logo_max_height?: number;
+  logo_padding?: number;
 };
 
 export type WallpaperRecord = {
@@ -85,6 +104,7 @@ export type AppSettings = {
   overlays_enabled?: boolean;
   overlay_clock?: boolean;
   overlays?: Array<Record<string, unknown>>;
+  title_display?: "auto" | "logo" | "text";
   jellyfin: Record<string, string>;
   jellyseerr: Record<string, string>;
   tmdb: Record<string, string>;
@@ -129,6 +149,17 @@ export function emptyLayout(name = "Untitled"): Layout {
       fade_bottom: 0.38,
       fade_softness: 0.45,
       brightness: 1,
+      gradient_type: "linear",
+      gradient_angle: 90,
+      gradient_opacity: 0.55,
+      gradient_stops: [
+        { color: "#050505", position: 0, opacity: 0.88 },
+        { color: "#050505", position: 0.42, opacity: 0.28 },
+        { color: "#050505", position: 1, opacity: 0 },
+      ],
+      vignette: 0.22,
+      overlay_color: "#000000",
+      overlay_opacity: 0.08,
     },
     layers: [
       {
@@ -144,6 +175,10 @@ export function emptyLayout(name = "Untitled"): Layout {
         align: "left",
       },
     ],
+    title_display: "auto",
+    logo_max_width: 1200,
+    logo_max_height: 450,
+    logo_padding: 25,
   };
 }
 
@@ -161,6 +196,12 @@ export function validateLayout(layout: Layout): string[] {
     ids.add(layer.id);
     if (layer.x < 0 || layer.y < 0) errors.push(`Layer ${layer.id} is off-canvas`);
   }
+  const bg = layout.background;
+  if (bg.gradient_opacity < 0 || bg.gradient_opacity > 1) errors.push("Gradient opacity must be 0–1");
+  if (bg.vignette < 0 || bg.vignette > 1) errors.push("Vignette must be 0–1");
+  for (const stop of bg.gradient_stops || []) {
+    if (stop.position < 0 || stop.position > 1) errors.push("Gradient stops must sit between 0% and 100%");
+  }
   return errors;
 }
 
@@ -170,5 +211,23 @@ export function duplicateLayout(layout: Layout, newName: string): Layout {
     name: newName,
     preset: false,
     preset_id: null,
+  };
+}
+
+export function normalizeLayout(raw: Partial<Layout> | Layout | null | undefined): Layout {
+  const base = emptyLayout(raw?.name || "Untitled");
+  if (!raw) return base;
+  return {
+    ...base,
+    ...raw,
+    name: raw.name || base.name,
+    canvas_width: raw.canvas_width || base.canvas_width,
+    canvas_height: raw.canvas_height || base.canvas_height,
+    background: { ...base.background, ...(raw.background || {}) },
+    layers: raw.layers?.length ? raw.layers : base.layers,
+    title_display: raw.title_display === "logo" || raw.title_display === "text" ? raw.title_display : "auto",
+    logo_max_width: raw.logo_max_width || base.logo_max_width,
+    logo_max_height: raw.logo_max_height || base.logo_max_height,
+    logo_padding: raw.logo_padding || base.logo_padding,
   };
 }

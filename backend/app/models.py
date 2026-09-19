@@ -47,6 +47,12 @@ class Layer(BaseModel):
     align: str = "left"
 
 
+class GradientStop(BaseModel):
+    color: str = "#000000"
+    position: float = 0.0
+    opacity: float = 1.0
+
+
 class LayoutBackground(BaseModel):
     mode: str = "backdrop"
     color: str = "#050505"
@@ -56,6 +62,13 @@ class LayoutBackground(BaseModel):
     fade_bottom: float = 0.38
     fade_softness: float = 0.45
     brightness: float = 1.0
+    gradient_type: str = "linear"
+    gradient_angle: float = 90.0
+    gradient_opacity: float = 0.0
+    gradient_stops: list[GradientStop] = Field(default_factory=list)
+    vignette: float = 0.0
+    overlay_color: str = "#000000"
+    overlay_opacity: float = 0.0
 
 
 class Layout(BaseModel):
@@ -67,6 +80,10 @@ class Layout(BaseModel):
     preset: bool = False
     preset_id: str | None = None
     description: str = ""
+    title_display: Literal["logo", "text", "auto"] = "auto"
+    logo_max_width: int = 1200
+    logo_max_height: int = 450
+    logo_padding: int = 25
 
 
 class WallpaperRecord(BaseModel):
@@ -149,6 +166,7 @@ class AppSettings(BaseModel):
     overlays_enabled: bool = False
     overlay_clock: bool = True
     overlays: list[dict[str, Any]] = Field(default_factory=list)
+    title_display: Literal["logo", "text", "auto"] = "auto"
     jellyfin: dict[str, Any] = Field(default_factory=dict)
     jellyseerr: dict[str, Any] = Field(default_factory=dict)
     tmdb: dict[str, Any] = Field(default_factory=dict)

@@ -27,6 +27,8 @@ This **builds the Dockerfile** via `docker compose up --build` (`pull_policy: bu
 | --- | --- |
 | Health | `http://127.0.0.1:8787/api/health` |
 | Demo wallpaper | `http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&sort=latest` |
+| Demo catalog | `http://127.0.0.1:8787/api/demo/catalog` |
+| Demo still | `http://127.0.0.1:8787/api/media/artwork/demo-jf-1` |
 | UI | `http://127.0.0.1:8787` |
 
 Empty data dirs auto-seed a demo catalog.
@@ -111,6 +113,10 @@ UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
 ## 3. Generate wallpapers
 
 In the web UI: **Generate** → Demo (or Jellyfin / Seerr) → optional *Bake parallax / motion VIDEO*.  
+Jellyfin batches download **Backdrop**, then **Primary**, so titles get real library art instead of a gradient with metadata only. Use **Replace existing** to rebuild stills that were generated before that fetch existed.
+
+**Editor** stays an in-page 16:9 stage. With Jellyfin connected, pick a title under **Jellyfin preview** to place layers on the real backdrop. Click a generated still in **Gallery** (or the strip under the editor) for a full-screen view.
+
 Cron lives under **Settings**. Skip/replace matches Jellyfin, TMDB, and IMDb ids.
 
 ## Migrating from TV Background Suite

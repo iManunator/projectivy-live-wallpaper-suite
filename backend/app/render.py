@@ -8,7 +8,16 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
-from app.models import Layout, MediaItem
+from app.logo import (
+    layout_padding,
+    load_logo,
+    place_logo,
+    prefers_logo,
+    prepare_logo,
+    tag_shift,
+    title_layer,
+)
+from app.models import GradientStop, Layout, LayoutBackground, MediaItem
 
 CANVAS = (1920, 1080)
 
@@ -85,6 +94,104 @@ def _load_image(path_or_bytes: str | Path | bytes | None, size: tuple[int, int])
         return None
 
 
+def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, value))
+
+
+def _normalized_stops(bg: LayoutBackground) -> list[tuple[float, tuple[int, int, int, int]]]:
+    master = _clamp(bg.gradient_opacity)
+    raw = list(bg.gradient_stops or [])
+    if not raw:
+        raw = [
+            GradientStop(color=bg.color, position=0.0, opacity=0.92),
+            GradientStop(color=bg.color, position=1.0, opacity=0.0),
+        ]
+    stops: list[tuple[float, tuple[int, int, int, int]]] = []
+    for stop in raw:
+        r, g, b, a = _hex_color(stop.color)
+        alpha = int(a * _clamp(stop.opacity) * master)
+        stops.append((_clamp(stop.position), (r, g, b, alpha)))
+    stops.sort(key=lambda item: item[0])
+    if not any(item[0] <= 0.0 for item in stops):
+        stops.insert(0, (0.0, stops[0][1]))
+    if not any(item[0] >= 1.0 for item in stops):
+        stops.append((1.0, stops[-1][1]))
+    return stops
+
+
+def _lerp_color(
+    stops: list[tuple[float, tuple[int, int, int, int]]], t: float
+) -> tuple[int, int, int, int]:
+    t = _clamp(t)
+    if t <= stops[0][0]:
+        return stops[0][1]
+    for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
+        if t <= t1:
+            span = max(t1 - t0, 1e-6)
+            u = _clamp((t - t0) / span)
+            return tuple(int(a + (b - a) * u) for a, b in zip(c0, c1))  # type: ignore[return-value]
+    return stops[-1][1]
+
+
+def linear_gradient_rgba(size: tuple[int, int], bg: LayoutBackground) -> Image.Image:
+    width, height = size
+    stops = _normalized_stops(bg)
+    diag = max(int((width**2 + height**2) ** 0.5) + 8, 8)
+    strip = Image.new("RGBA", (diag, 1))
+    px = strip.load()
+    last = diag - 1 or 1
+    for x in range(diag):
+        px[x, 0] = _lerp_color(stops, x / last)
+    band = strip.resize((diag, diag), Image.Resampling.BILINEAR)
+    # CSS: 0deg = up, 90deg = right. A left-to-right strip is 90deg.
+    rotated = band.rotate(90.0 - float(bg.gradient_angle or 90.0), resample=Image.Resampling.BICUBIC, expand=True)
+    left = (rotated.width - width) // 2
+    top = (rotated.height - height) // 2
+    return rotated.crop((left, top, left + width, top + height))
+
+
+def radial_gradient_rgba(size: tuple[int, int], bg: LayoutBackground) -> Image.Image:
+    stops = _normalized_stops(bg)
+    sample = 256
+    shade = Image.radial_gradient("L").resize((sample, sample), Image.Resampling.BICUBIC)
+    lut = [_lerp_color(stops, i / 255) for i in range(256)]
+    out = Image.new("RGBA", (sample, sample))
+    sp = shade.load()
+    op = out.load()
+    for y in range(sample):
+        for x in range(sample):
+            op[x, y] = lut[sp[x, y]]
+    return out.resize(size, Image.Resampling.BICUBIC)
+
+
+def gradient_overlay(size: tuple[int, int], bg: LayoutBackground) -> Image.Image | None:
+    if bg.gradient_opacity <= 0.001:
+        return None
+    kind = (bg.gradient_type or "linear").lower()
+    if kind == "radial":
+        return radial_gradient_rgba(size, bg)
+    return linear_gradient_rgba(size, bg)
+
+
+def vignette_overlay(size: tuple[int, int], amount: float) -> Image.Image | None:
+    strength = _clamp(amount)
+    if strength <= 0.001:
+        return None
+    shade = Image.radial_gradient("L").resize(size, Image.Resampling.BICUBIC)
+    alpha = shade.point(lambda v: int(v * strength * 0.92))
+    overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    overlay.putalpha(alpha)
+    return overlay
+
+
+def color_overlay(size: tuple[int, int], color: str, opacity: float) -> Image.Image | None:
+    amount = _clamp(opacity)
+    if amount <= 0.001:
+        return None
+    r, g, b, _ = _hex_color(color)
+    return Image.new("RGBA", size, (r, g, b, int(255 * amount)))
+
+
 def fade_alpha_mask(layout: Layout, size: tuple[int, int]) -> Image.Image:
     width, height = size
     bg = layout.background
@@ -149,12 +256,23 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
     return ""
 
 
-def _draw_text_layers(canvas: Image.Image, item: MediaItem, layout: Layout) -> None:
+def _draw_text_layers(
+    canvas: Image.Image,
+    item: MediaItem,
+    layout: Layout,
+    *,
+    skip_slots: set[str] | None = None,
+    shift_after_y: float | None = None,
+    y_delta: int = 0,
+) -> None:
+    skip = skip_slots or set()
     draw = ImageDraw.Draw(canvas, "RGBA")
     for layer in layout.layers:
         if not layer.visible:
             continue
         if layer.slot in ("backdrop", "poster"):
+            continue
+        if layer.slot in skip:
             continue
         text = slot_text(item, layer.slot, layer.max_items)
         if not text:
@@ -163,12 +281,33 @@ def _draw_text_layers(canvas: Image.Image, item: MediaItem, layout: Layout) -> N
         font = _font(layer.font_size, bold=bold)
         color = _hex_color(layer.color)
         x, y = int(layer.x), int(layer.y)
+        if y_delta and shift_after_y is not None and layer.y > shift_after_y:
+            y += y_delta
         max_width = int(layer.width or 0)
         if max_width and layer.slot == "overview":
             wrapped = _wrap(draw, text, font, max_width)
             text = "\n".join(wrapped[:4])
         draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 180))
         draw.text((x, y), text, font=font, fill=color)
+
+
+def _draw_logo_layer(canvas: Image.Image, layout: Layout, logo_bytes: bytes | None) -> tuple[bool, int]:
+    """Paste a prepared logo. Returns (drew_logo, metadata_y_shift)."""
+    if not prefers_logo(layout.title_display):
+        return False, 0
+    image = load_logo(logo_bytes)
+    if image is None:
+        return False, 0
+    layer = title_layer(layout)
+    if layer is None:
+        return False, 0
+    try:
+        prepared = prepare_logo(image, layout, layer)
+        x, y = place_logo(layout, layer, prepared.size)
+        canvas.paste(prepared, (x, y), prepared)
+        return True, tag_shift(layout, layer, y, prepared.height, layout_padding(layout))
+    except Exception:
+        return False, 0
 
 
 def render_plate(
@@ -188,14 +327,33 @@ def render_plate(
     return backdrop.convert("RGB")
 
 
-def render_chrome(item: MediaItem, layout: Layout) -> Image.Image:
+def render_chrome(item: MediaItem, layout: Layout, logo_bytes: bytes | None = None) -> Image.Image:
     """Transparent vignette + metadata (moves less / stays put in parallax VIDEO)."""
     size = (layout.canvas_width, layout.canvas_height)
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    bg = layout.background
+    extra = gradient_overlay(size, bg)
+    if extra is not None:
+        overlay = Image.alpha_composite(overlay, extra)
+    wash_overlay = color_overlay(size, bg.overlay_color, bg.overlay_opacity)
+    if wash_overlay is not None:
+        overlay = Image.alpha_composite(overlay, wash_overlay)
+    vignette = vignette_overlay(size, bg.vignette)
+    if vignette is not None:
+        overlay = Image.alpha_composite(overlay, vignette)
     mask = fade_alpha_mask(layout, size)
-    wash = Image.new("RGBA", size, (*_hex_color(layout.background.color)[:3], 255))
+    wash = Image.new("RGBA", size, (*_hex_color(bg.color)[:3], 255))
     overlay = Image.composite(wash, overlay, mask)
-    _draw_text_layers(overlay, item, layout)
+    title = title_layer(layout)
+    used_logo, y_delta = _draw_logo_layer(overlay, layout, logo_bytes)
+    _draw_text_layers(
+        overlay,
+        item,
+        layout,
+        skip_slots={"title"} if used_logo else set(),
+        shift_after_y=title.y if used_logo and title else None,
+        y_delta=y_delta,
+    )
     return overlay
 
 
@@ -203,9 +361,10 @@ def render_still(
     item: MediaItem,
     layout: Layout,
     backdrop_bytes: bytes | None = None,
+    logo_bytes: bytes | None = None,
 ) -> Image.Image:
     plate = render_plate(item, layout, backdrop_bytes=backdrop_bytes)
-    chrome = render_chrome(item, layout)
+    chrome = render_chrome(item, layout, logo_bytes=logo_bytes)
     return Image.alpha_composite(plate.convert("RGBA"), chrome).convert("RGB")
 
 

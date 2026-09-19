@@ -17,7 +17,7 @@ export const TASTE_PRESETS: Record<string, Record<string, number>> = {
 };
 
 export const LAYOUT_DNA = [
-  { name: "Netflix Hero", blurb: "Left-stacked hero over a heavy fade" },
+  { name: "Netflix Hero", blurb: "Left-stacked hero over a heavy fade — logo when available" },
   { name: "Prime Cinematic", blurb: "Low title card, deep bottom gradient" },
   { name: "Google TV Clean", blurb: "Minimal chrome, artwork breathing room" },
   { name: "Projectivy Dock", blurb: "Safe zones below the clock, above the row dock" },

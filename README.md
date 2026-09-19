@@ -56,9 +56,9 @@ The GitHub repository is still named `projectivy-live-wallpaper-suite`. The prod
 | UI callout | What you are looking at |
 | --- | --- |
 | **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock), see the wallpaper *as the launcher will*. |
-| **Gallery** | Every generated still. Badges for smart queues and baked VIDEO. Pin a title. Hide it forever. |
-| **Editor** | Layout DNA — safe zones, fades, type slots. |
-| **Generate** | Demo catalog or live Jellyfin/Seerr. Optional parallax VIDEO bake (ffmpeg). |
+| **Gallery** | Every generated still. Click a still for a full-screen view. Badges for smart queues and baked VIDEO. Pin a title. Hide it forever. |
+| **Editor** | Flagship 16:9 stage — linear/radial multi-stop gradients, vignette, overlays, edge fades, **title display** (logo / text / auto), TV chrome, motion preview. Demo or Jellyfin artwork. Drag metadata; save persists the layout. |
+| **Generate** | Demo catalog (real public-domain cinematic stills) or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Optional parallax VIDEO bake (ffmpeg). Connection/generate toasts. |
 | **Dashboard** | Ops: last cron, provider config, queue counts. |
 | **Settings** | Motion intensity, taste weights, overlays, cron. |
 
@@ -122,7 +122,7 @@ curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
 curl -sf http://127.0.0.1:8787/api/dashboard
 ```
 
-Open **http://127.0.0.1:8787** — Tonight is the home page. Empty data dirs auto-seed a demo catalog (**Northlight** is `sort=latest`). No Jellyfin keys required.
+Open **http://127.0.0.1:8787** — Tonight is the home page. Empty data dirs auto-seed a demo catalog of **license-safe cinematic stills** (NASA aurora, NARA harbor/desert, Ortelius map, NASA Black Marble, Kew Palm House). **Northlight** is `sort=latest`. No Jellyfin keys required. Attribution: `backend/app/demo_stills/ATTRIBUTION.md`.
 
 Unit tests (no Docker): `./scripts/test.sh`.
 
@@ -155,6 +155,8 @@ Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523af
 | **Demo mode** | Six fixture titles, no Jellyfin. `./scripts/verify.sh` builds the image, waits for health, curls status. |
 | **Pin / never-show** | Hidden titles never enter `/api/wallpaper/status`. Pinned pool does not silently fall back. |
 | **Overlays** | Off by default. Optional clock card + HA / news / JSON hooks. |
+| **Jellyfin artwork** | Generate fetches Backdrop, then Primary. Clearlogos use Jellyfin **Logo** (or TMDB `logos` for Seerr). The editor previews the same art in-page via `/api/media/artwork/{id}` and `/api/media/logo/{id}`. |
+| **Logo integration** | Layout `title_display`: `auto` (logo if fetched, else the name), `logo`, or `text`. Smart resize, contrast, and Projectivy safe-zone padding. Demo Northlight ships an original clearlogo PNG; other demo titles use text. |
 | **Cron** | skip / replace / cleanup / ids / motion — generate while you sleep. |
 
 ---
@@ -213,9 +215,11 @@ Compatible with the older TV Background Suite plugin (`imageUrl`, `actionUrl`, `
 | `GET` | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
 | `GET` | `/api/dashboard` | Gallery size, last cron/generate, providers |
 | `GET` | `/api/gallery` | Catalog. `POST /api/gallery/{id}/flag` pins or hides |
+| `GET` | `/api/media` | Live provider preview (`source=jellyfin` / `demo` / `jellyseerr`) |
+| `GET` | `/api/media/artwork/{id}` | Same-origin Jellyfin backdrop/poster proxy for the editor |
 | `GET` | `/api/queues` | Smart-queue counts |
 | `GET` | `/api/options` | Pick modes, pools, motion, taste, queues, clients |
-| `POST` | `/api/generate` | Batch stills (+ optional VIDEO) |
+| `POST` | `/api/generate` | Batch stills from provider artwork (+ optional VIDEO) |
 | `GET`/`POST` | `/api/settings` | Providers, cron, motion, taste, overlays |
 
 `GET /api/wallpaper/status?layout=Netflix%20Hero&profile=tonight` is the call the plugin makes for **Tonight’s mix**.
@@ -267,7 +271,7 @@ Install both if you want cinematic backgrounds *and* home-screen rows. They do n
 | [Motion](docs/MOTION.md) | IMAGE vs VIDEO, parallax bake, intensity |
 | [Overlays](docs/OVERLAYS.md) | Clock / HA / news hooks |
 | [Projectivy plugin](docs/PROJECTIVY.md) | Pick modes, UUID, deep links |
-| [Changelog](CHANGELOG.md) | 1.1.0 · 1.0.0 |
+| [Changelog](CHANGELOG.md) | Unreleased · 1.1.0 · 1.0.0 |
 
 ---
 

@@ -20,6 +20,7 @@
   "overlays_enabled": false,
   "overlay_clock": true,
   "overlays": [],
+  "title_display": "auto",
   "jellyfin": {
     "url": "http://192.168.1.10:8096",
     "api_key": "YOUR_JELLYFIN_API_KEY",

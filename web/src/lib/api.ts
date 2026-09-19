@@ -27,7 +27,15 @@ export const api = {
   generateMotion: (layout: string) =>
     json(`/api/wallpaper/generate-motion?layout=${encodeURIComponent(layout)}`, { method: "POST" }),
   options: () => json<Record<string, unknown>>("/api/options"),
-  media: (source: string) => json<Array<Record<string, unknown>>>(`/api/media?source=${source}`),
+  media: (source: string, limit = 12) =>
+    json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),
+  mediaArtwork: (itemId: string, kind = "backdrop") =>
+    `/api/media/artwork/${encodeURIComponent(itemId)}?kind=${encodeURIComponent(kind)}`,
+  mediaLogo: (itemId: string, tmdbId?: string | null, mediaType = "movie") => {
+    const params = new URLSearchParams({ media_type: mediaType });
+    if (tmdbId) params.set("tmdb_id", tmdbId);
+    return `/api/media/logo/${encodeURIComponent(itemId)}?${params.toString()}`;
+  },
   testProvider: (name: string) => json(`/api/settings/test/${name}`, { method: "POST" }),
   wallpaperImage: (layout: string, filename: string) =>
     `/api/wallpaper/image/${encodeURIComponent(layout)}/${encodeURIComponent(filename)}`,
@@ -47,6 +55,13 @@ export const api = {
     }>(`/api/tonight?${params.toString()}`);
   },
   dashboard: () => json<Record<string, unknown>>("/api/dashboard"),
+  demoCatalog: () =>
+    json<{
+      ok: boolean;
+      count: number;
+      note: string;
+      items: Array<{ title: string; license: string; artist: string; artwork_url: string }>;
+    }>("/api/demo/catalog"),
   queues: (layout?: string) =>
     json<Array<{ id: string; label: string; count: number; titles: string[] }>>(
       layout ? `/api/queues?layout=${encodeURIComponent(layout)}` : "/api/queues",

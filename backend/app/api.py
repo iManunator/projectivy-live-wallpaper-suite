@@ -6,11 +6,15 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from app import catalog as catalog_store
 from app.config import load_settings, public_base_url, save_settings
+from app.demo_art import public_catalog, still_bytes as demo_still_bytes
 from app.generate import collect_items, run_generate
+from app.images import image_media_type, looks_like_image
+from app.messages import enrich_provider_result
+from app.providers import HttpClient
 from app.jobs import reload_jobs
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
 from app import __version__
@@ -125,6 +129,8 @@ def suite_options() -> dict[str, Any]:
         "motion_styles": ["parallax", "kenburns", "drift"],
         "motion_qualities": ["light", "standard", "cinematic"],
         "motion_presets": ["subtle", "cinematic", "bold"],
+        "gradient_types": ["linear", "radial"],
+        "title_displays": ["auto", "logo", "text"],
         "taste_profiles": list(TASTE_PRESETS.keys()),
         "queues": [{"id": qid, "label": spec["label"]} for qid, spec in QUEUE_DEFS.items()],
         "pick_modes": [
@@ -416,7 +422,7 @@ def test_provider(provider: str) -> dict[str, Any]:
     else:
         raise HTTPException(404, "Unknown provider")
     record_event(f"test_{key}", {"ok": bool(result.get("ok")), "provider": key})
-    return result
+    return enrich_provider_result(key, result)
 
 
 @router.get("/api/media")
@@ -424,17 +430,95 @@ def media_preview(source: str = "demo", limit: int = 12) -> list[dict[str, Any]]
     return [item.model_dump() for item in collect_items(source, limit)]
 
 
+@router.get("/api/demo/catalog")
+def demo_catalog() -> dict[str, Any]:
+    return public_catalog()
+
+
+@router.get("/api/demo/attribution")
+def demo_attribution():
+    from pathlib import Path as AttrPath
+
+    path = AttrPath(__file__).resolve().parent / "demo_stills" / "ATTRIBUTION.md"
+    if not path.is_file():
+        raise HTTPException(404, "Attribution file missing")
+    return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
+
+
+@router.get("/api/media/logo/{item_id}")
+def media_logo(item_id: str, tmdb_id: str | None = None, media_type: str = "movie"):
+    """Clearlogo proxy: demo PNG, Jellyfin Logo, or TMDB logos. Rejects non-images."""
+    from app.generate import resolve_logo_bytes
+
+    data = resolve_logo_bytes(item_id, tmdb_id=tmdb_id, media_type=media_type)
+    if data and looks_like_image(data):
+        return Response(
+            content=data,
+            media_type=image_media_type(data),
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+    raise HTTPException(404, "No logo for this title")
+
+
+@router.get("/api/media/artwork/{item_id}")
+def media_artwork(item_id: str, kind: str = Query("backdrop")):
+    """Same-origin artwork for the editor: demo stills, then Jellyfin Backdrop/Primary."""
+    bundled = demo_still_bytes(item_id)
+    if bundled and looks_like_image(bundled):
+        return Response(
+            content=bundled,
+            media_type=image_media_type(bundled),
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    settings = load_settings()
+    jf = settings.jellyfin or {}
+    base = (jf.get("url") or "").rstrip("/")
+    key = jf.get("api_key") or ""
+    if not base or not key:
+        raise HTTPException(404, "Jellyfin is not configured")
+    headers = JellyfinProvider(url=base, api_key=key, user_id=jf.get("user_id") or "").auth_headers()
+    kinds = ["Primary", "Backdrop"] if kind == "poster" else ["Backdrop", "Primary"]
+    last_error = "No image"
+    for image_kind in kinds:
+        query = "maxWidth=1920" if image_kind == "Backdrop" else "maxHeight=1080"
+        url = f"{base}/Items/{item_id}/Images/{image_kind}?{query}"
+        try:
+            data = HttpClient(timeout=20.0).get_bytes(url, headers=headers)
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+        if data and looks_like_image(data):
+            return Response(
+                content=data,
+                media_type=image_media_type(data),
+                headers={"Cache-Control": "private, max-age=60"},
+            )
+        if data:
+            last_error = "Jellyfin did not return an image"
+    raise HTTPException(404, last_error)
+
+
 @router.post("/api/generate")
 def generate(request: GenerateRequest) -> dict[str, Any]:
     from app.ops import record_event
 
-    result = run_generate(request)
-    record_event("generate", {"layout": request.layout, "count": result.get("count"), "ok": True})
+    try:
+        result = run_generate(request)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        record_event("generate", {"ok": False, "error": str(exc)})
+        raise HTTPException(500, f"Generate failed: {exc}") from exc
+    record_event(
+        "generate",
+        {"layout": request.layout, "count": result.get("count"), "ok": True, "warnings": result.get("warnings")},
+    )
     return result
 
 
 @router.post("/api/wallpaper/generate-motion")
 def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
+    from app.generate import _fetch_logo
     from app.motion import generate_motion, profile_from_settings
     from app.render import render_chrome, render_plate, save_jpeg, save_png
     from app.layouts import load_layout
@@ -458,6 +542,9 @@ def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
             official_rating=rec.official_rating,
             watch_state=rec.watch_state,
             source=rec.source,
+            jellyfin_id=rec.jellyfin_id,
+            tmdb_id=rec.tmdb_id,
+            imdb_id=rec.imdb_id,
         )
         layout_obj = load_layout(rec.layout)
         plate = chrome = None
@@ -465,7 +552,7 @@ def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
             plate = jpg.with_name(jpg.stem + "_plate.jpg")
             chrome = jpg.with_name(jpg.stem + "_chrome.png")
             save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
-            save_png(render_chrome(item, layout_obj), chrome)
+            save_png(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), chrome)
         ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
         if plate:
             plate.unlink(missing_ok=True)

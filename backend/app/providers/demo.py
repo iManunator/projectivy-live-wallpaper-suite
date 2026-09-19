@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.demo_art import attach_demo_art
 from app.models import MediaItem
 
 DEMO_ITEMS = [
@@ -68,6 +69,7 @@ DEMO_ITEMS = [
         library_state="seerr_only",
         availability="requestable",
         source="jellyseerr",
+        jellyfin_id="demo-jf-4",
         tmdb_id="90004",
         action_url="https://seerr.example/tv/90004",
     ),
@@ -83,6 +85,7 @@ DEMO_ITEMS = [
         library_state="in_library",
         availability="available",
         source="plex",
+        jellyfin_id="demo-jf-5",
         imdb_id="tt9000005",
     ),
     MediaItem(
@@ -114,4 +117,4 @@ class DemoProvider:
         return {"ok": True, "server": "Demo catalog"}
 
     def list_items(self, limit: int = 40) -> list[MediaItem]:
-        return DEMO_ITEMS[:limit]
+        return [attach_demo_art(item) for item in DEMO_ITEMS[:limit]]
