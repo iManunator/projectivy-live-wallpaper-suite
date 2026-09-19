@@ -91,7 +91,8 @@ class SettingsFragment : GuidedStepSupportFragment() {
     }
 
     override fun onGuidedActionEditedAndProceed(action: GuidedAction): Long {
-        val text = action.description?.toString().orEmpty()
+        val text = action.editDescription?.toString()
+            ?: action.description?.toString().orEmpty()
         when (action.id) {
             ID_SERVER -> PreferencesManager.serverUrl = text
             ID_LAYOUT -> PreferencesManager.selectedLayout = text
@@ -162,6 +163,7 @@ class SettingsFragment : GuidedStepSupportFragment() {
             .title(copy.title)
             .description(value)
             .editTitle("${copy.title} — ${copy.hint}")
+            .editDescription(value)
             .descriptionEditable(true)
             .multilineDescription(true)
             .build()
