@@ -18,6 +18,7 @@ from app.logo import (
     title_layer,
 )
 from app.models import GradientStop, Layout, LayoutBackground, MediaItem
+from app.watch import watch_badge, watch_label
 
 CANVAS = (1920, 1080)
 
@@ -248,7 +249,7 @@ def slot_text(item: MediaItem, slot: str, max_items: int | None = None) -> str:
     if slot == "overview":
         return item.overview
     if slot in ("watch_status", "watch_state"):
-        return (item.watch_state or "").replace("_", " ").title()
+        return watch_label(item.watch_state) or (item.watch_state or "").replace("_", " ").title()
     if slot in ("source", "provider_source"):
         return (item.source or "").title()
     if slot == "age":
@@ -283,12 +284,36 @@ def _draw_text_layers(
         x, y = int(layer.x), int(layer.y)
         if y_delta and shift_after_y is not None and layer.y > shift_after_y:
             y += y_delta
+        if layer.slot in ("watch_status", "watch_state"):
+            _draw_watch_pill(draw, item, x, y, font, color)
+            continue
         max_width = int(layer.width or 0)
         if max_width and layer.slot == "overview":
             wrapped = _wrap(draw, text, font, max_width)
             text = "\n".join(wrapped[:4])
         draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 180))
         draw.text((x, y), text, font=font, fill=color)
+
+
+def _draw_watch_pill(
+    draw: ImageDraw.ImageDraw,
+    item: MediaItem,
+    x: int,
+    y: int,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    fallback_color: tuple[int, int, int, int],
+) -> None:
+    badge = watch_badge(item.watch_state)
+    if not badge:
+        return
+    text = badge["label"]
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    pad_x, pad_y = 14, 6
+    fill = _hex_color(badge["color"]) if badge.get("color") else fallback_color
+    box = [x, y, x + tw + pad_x * 2, y + th + pad_y * 2]
+    draw.rounded_rectangle(box, radius=14, fill=(8, 10, 14, 190), outline=fill, width=2)
+    draw.text((x + pad_x, y + pad_y - 1), text, font=font, fill=fill)
 
 
 def _draw_logo_layer(canvas: Image.Image, layout: Layout, logo_bytes: bytes | None) -> tuple[bool, int]:

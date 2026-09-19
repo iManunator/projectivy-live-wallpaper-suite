@@ -5,17 +5,17 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from app import catalog as catalog_store
 from app.config import load_settings, public_base_url, save_settings
 from app.demo_art import public_catalog, still_bytes as demo_still_bytes
-from app.generate import collect_items, run_generate
+from app.generate import bake_motion, collect_items, run_generate
 from app.images import image_media_type, looks_like_image
 from app.messages import enrich_provider_result
 from app.providers import HttpClient
-from app.jobs import reload_jobs
+from app.jobs import reload_jobs, run_now
 from app.layouts import delete_layout, list_layouts, load_layout, save_layout, seed_presets
 from app import __version__
 from app.models import AppSettings, GenerateRequest, Layout, WallpaperStatus
@@ -257,6 +257,7 @@ def _fill_status(request: Request, status: WallpaperStatus, selected, settings) 
     status.pinned = bool(selected.pinned)
     queues = queue_ids_for(selected)
     status.queue = queues[0] if queues else None
+    status.watchState = selected.watch_state or None
     mp4 = jpg.with_suffix(".mp4")
     has_clip = mp4.is_file() and mp4.stat().st_size > 1000
     if has_clip:
@@ -517,50 +518,22 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
 
 
 @router.post("/api/wallpaper/generate-motion")
-def generate_motion_batch(layout: str = "Netflix Hero") -> dict[str, Any]:
-    from app.generate import _fetch_logo
-    from app.motion import generate_motion, profile_from_settings
-    from app.render import render_chrome, render_plate, save_jpeg, save_png
-    from app.layouts import load_layout
-    from app.models import MediaItem
+def generate_motion_batch(layout: str = "Netflix Hero", path: str | None = None) -> dict[str, Any]:
+    from app.ops import record_event
 
-    settings = load_settings()
-    profile = profile_from_settings(settings)
-    done = []
-    for rec in catalog_store.load_catalog():
-        if rec.layout.lower() != layout.lower():
-            continue
-        jpg = catalog_store.wallpaper_file(rec.layout, rec.filename)
-        if not jpg:
-            continue
-        item = MediaItem(
-            title=rec.title,
-            year=rec.year,
-            overview=rec.overview,
-            rating=rec.rating,
-            genres=rec.genres,
-            official_rating=rec.official_rating,
-            watch_state=rec.watch_state,
-            source=rec.source,
-            jellyfin_id=rec.jellyfin_id,
-            tmdb_id=rec.tmdb_id,
-            imdb_id=rec.imdb_id,
-        )
-        layout_obj = load_layout(rec.layout)
-        plate = chrome = None
-        if layout_obj:
-            plate = jpg.with_name(jpg.stem + "_plate.jpg")
-            chrome = jpg.with_name(jpg.stem + "_chrome.png")
-            save_jpeg(render_plate(item, layout_obj, backdrop_bytes=jpg.read_bytes()), plate)
-            save_png(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), chrome)
-        ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
-        if plate:
-            plate.unlink(missing_ok=True)
-        if chrome:
-            chrome.unlink(missing_ok=True)
-        if ok:
-            rec.has_video = True
-            rec.parallax_style = profile.normalized_style()
-            catalog_store.upsert(rec)
-            done.append(rec.filename)
-    return {"status": "ok", "generated": done, "style": profile.normalized_style()}
+    result = bake_motion(layout, filename=path)
+    record_event(
+        "generate",
+        {"layout": layout, "count": result.get("count"), "ok": True, "motion": True, "path": path},
+    )
+    return result
+
+
+@router.post("/api/cron/run")
+def cron_run(body: dict[str, Any] | None = Body(default=None)) -> dict[str, Any]:
+    try:
+        return run_now(body or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, f"Cron run failed: {exc}") from exc

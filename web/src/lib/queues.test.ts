@@ -26,6 +26,17 @@ describe("queue badges", () => {
     ).toEqual(["Continue"]);
   });
 
+  it("labels watched titles", () => {
+    expect(
+      queueBadges({
+        watch_state: "played",
+        library_state: "in_library",
+        source: "jellyfin",
+        has_video: false,
+      }),
+    ).toEqual(["Watched"]);
+  });
+
   it("formats ops recency", () => {
     expect(formatOpsTime(undefined)).toBe("never");
     expect(formatOpsTime(Date.now() / 1000 - 10)).toBe("just now");

@@ -45,13 +45,14 @@ Response:
   "pool": "unwatched",
   "layout": "Netflix Hero",
   "parallaxStyle": "parallax",
-  "motionDuration": 6.0,
+  "motionDuration": 12.0,
   "queue": "unwatched",
-  "pinned": false
+  "pinned": false,
+  "watchState": "unwatched"
 }
 ```
 
-Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle`, `motionDuration`, `queue`, and `pinned` are **additive**. Hidden (`never-show`) titles are omitted from selection. The `pinned` pool does **not** fall back to the whole layout if empty. The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
+Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite. `mediaType` / `videoUrl` were already optional. `parallaxStyle`, `motionDuration`, `queue`, `pinned`, and `watchState` are **additive**. `videoUrl` is set only when a sibling MP4 exists on disk. Hidden (`never-show`) titles are omitted from selection. The `pinned` pool does **not** fall back to the whole layout if empty. The plugin decides IMAGE vs VIDEO; see [MOTION.md](MOTION.md).
 
 `GET /api/options` lists pick modes, pools, motion styles/presets, taste profiles, queues, and preferred clients.
 
@@ -72,7 +73,8 @@ Compatibility: `imageUrl`, `actionUrl`, and `path` are unchanged from tvbgsuite.
 | GET | `/api/tonight` | Taste pick + queues + motion snapshot for the Tonight UI |
 | GET | `/api/dashboard` | Health: gallery size, last cron/generate, provider config |
 | POST | `/api/generate` | Batch generate (`skip_existing`, `replace_existing`, `cleanup`, `motion`, `ids`, `skip_ids`) |
-| POST | `/api/wallpaper/generate-motion` | Re-bake parallax/Ken Burns MP4s for a layout |
+| POST | `/api/wallpaper/generate-motion` | Bake parallax/Ken Burns MP4s for a layout. Query `path=` (filename) to bake one title (tonight’s pick). |
+| POST | `/api/cron/run` | Run a cron-shaped generate immediately. Body is the job flags (layout, source, skip/replace/cleanup/ids/motion). Returns the same `{ message, created, skipped, … }` as `/api/generate`. |
 | GET/POST | `/api/settings` | Providers, cron, motion style/preset/intensity/duration/light-leak, taste profile, overlay flags, editor theme, default `title_display` |
 | POST | `/api/settings/test/{jellyfin\|jellyseerr\|tmdb}` | Connectivity |
 

@@ -69,3 +69,28 @@ def generate_message(layout: str, result: dict[str, Any]) -> str:
     if not msg.endswith("."):
         msg += "."
     return msg
+
+
+def motion_bake_message(layout: str, result: dict[str, Any]) -> str:
+    generated = list(result.get("generated") or [])
+    failed = list(result.get("failed") or [])
+    n = len(generated)
+    style = str(result.get("style") or "parallax")
+    preset = str(result.get("preset") or "cinematic")
+    duration = result.get("duration")
+    loop = f", {duration:g}s loop" if duration else ""
+    if n == 1:
+        head = f"Baked {style} VIDEO for {generated[0]} on {layout} ({preset}{loop})"
+    elif n:
+        head = f"Baked {style} VIDEO for {n} titles on {layout} ({preset}{loop})"
+    else:
+        head = f"No VIDEO clips baked for {layout}"
+        if failed:
+            head += f" — {len(failed)} failed"
+        else:
+            head += " (need stills and ffmpeg)"
+    if failed and n:
+        head += f" — {len(failed)} failed"
+    if not head.endswith("."):
+        head += "."
+    return head

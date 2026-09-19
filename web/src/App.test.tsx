@@ -65,6 +65,18 @@ vi.stubGlobal(
     if (url.includes("/api/generate")) {
       body = { count: 2, created: ["Northlight", "Harbor Season"], message: "Created 2 stills for Netflix Hero (Northlight, Harbor Season)." };
     }
+    if (url.includes("/api/wallpaper/generate-motion")) {
+      body = {
+        status: "ok",
+        generated: ["northlight.jpg"],
+        count: 1,
+        style: "parallax",
+        message: "Baked parallax VIDEO for northlight.jpg on Netflix Hero (cinematic).",
+      };
+    }
+    if (url.includes("/api/cron/run")) {
+      body = { count: 1, created: ["Northlight"], message: "Created 1 still for Netflix Hero (Northlight)." };
+    }
     if (url.includes("/api/layouts/list")) body = ["Netflix Hero", "Projectivy Dock"];
     if (url.includes("/api/layouts/load")) {
       body = {
@@ -112,6 +124,8 @@ vi.stubGlobal(
           mediaType: "image",
           queue: "unwatched",
           pinned: false,
+          path: "northlight.jpg",
+          watchState: "unwatched",
         },
         queues: [
           { id: "unwatched", label: "Unwatched", count: 2, titles: ["Northlight"] },
@@ -183,9 +197,12 @@ describe("App smoke", () => {
     expect(await screen.findByRole("heading", { name: /home screen/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Wallpaparr" })).toBeInTheDocument();
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /Bake motion for tonight/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
     expect(screen.getByText(/1 wallpapers/)).toBeInTheDocument();
+    expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
     expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
@@ -199,11 +216,16 @@ describe("App smoke", () => {
     expect(screen.queryByRole("img", { name: /Northlight logo/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Gradient type")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Motion on" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bake motion for this layout" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Status Focus" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
     expect(await screen.findByRole("heading", { name: "Generate" })).toBeInTheDocument();
+    expect(screen.getByText(/Skip leaves titles/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
     expect((await screen.findAllByText(/Created 2 stills/)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Bake motion for tonight’s pick" }));
+    expect((await screen.findAllByText(/Baked parallax VIDEO/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Health" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -212,6 +234,9 @@ describe("App smoke", () => {
     expect(screen.getByLabelText("Default title display")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Overlay widgets/i })).toBeInTheDocument();
     expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Cron layout")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect((await screen.findAllByText(/Created 1 still/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Test Jellyfin" }));
     expect((await screen.findAllByText(/Connected to Jellyfin/)).length).toBeGreaterThan(0);
   });

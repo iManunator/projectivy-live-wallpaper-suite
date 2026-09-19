@@ -31,3 +31,24 @@ def test_run_job_writes_cron_event(suite_dirs):
     assert ops["cron"]["ok"] is True
     assert ops["cron"]["layout"] == "Google TV Clean"
     assert ops["cron"]["count"] == 1
+    assert ops["cron"]["skipped"] == 0
+
+
+def test_run_now_uses_demo_defaults(suite_dirs):
+    from app.jobs import run_now
+
+    result = run_now(
+        {
+            "layout": "Netflix Hero",
+            "source": "demo",
+            "skip_existing": False,
+            "replace_existing": False,
+            "cleanup": False,
+            "motion": False,
+            "limit": 1,
+            "ids": ["demo-jf-2"],
+        }
+    )
+    assert result["count"] == 1
+    assert "Harbor Season" in result["created"]
+    assert result["message"]

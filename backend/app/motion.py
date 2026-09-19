@@ -19,10 +19,12 @@ from pathlib import Path
 
 STYLES = ("parallax", "kenburns", "drift")
 QUALITIES = ("light", "standard", "cinematic")
-INTENSITY_PRESETS = {"subtle": 0.28, "cinematic": 0.55, "bold": 0.88}
+# Distinct enough that Subtle / Cinematic / Bold change the baked loop at a glance.
+INTENSITY_PRESETS = {"subtle": 0.16, "cinematic": 0.55, "bold": 0.96}
 
 _BITRATE = {"light": "2200k", "standard": "3500k", "cinematic": "5000k"}
-_DEFAULT_DURATION = {"light": 6.0, "standard": 8.0, "cinematic": 10.0}
+_DEFAULT_DURATION = {"light": 8.0, "standard": 12.0, "cinematic": 16.0}
+_PRESET_DURATION = {"subtle": 16.0, "cinematic": 12.0, "bold": 10.0}
 
 
 def intensity_from_preset(name: str | None) -> float:
@@ -50,13 +52,13 @@ class MotionProfile:
 
     @property
     def bg_zoom_amp(self) -> float:
-        base = {"parallax": 0.07, "kenburns": 0.045, "drift": 0.02}.get(self.style, 0.05)
-        return round(base * (0.45 + self.intensity * 1.1), 4)
+        base = {"parallax": 0.08, "kenburns": 0.055, "drift": 0.025}.get(self.style, 0.05)
+        return round(base * (0.32 + self.intensity * 1.55), 4)
 
     @property
     def bg_pan(self) -> float:
-        base = {"parallax": 36.0, "kenburns": 18.0, "drift": 42.0}.get(self.style, 24.0)
-        return round(base * (0.4 + self.intensity), 2)
+        base = {"parallax": 44.0, "kenburns": 24.0, "drift": 56.0}.get(self.style, 24.0)
+        return round(base * (0.22 + self.intensity * 1.4), 2)
 
     @property
     def fg_pan(self) -> float:
@@ -86,8 +88,11 @@ def profile_from_settings(settings) -> MotionProfile:
             intensity = raw_f
     intensity = min(1.0, max(0.0, intensity))
     duration = getattr(settings, "motion_duration", None)
-    duration_f = float(duration) if duration else _DEFAULT_DURATION[quality]
-    duration_f = min(20.0, max(2.0, duration_f))
+    if duration:
+        duration_f = float(duration)
+    else:
+        duration_f = max(_DEFAULT_DURATION[quality], _PRESET_DURATION.get(preset, 12.0))
+    duration_f = min(24.0, max(2.0, duration_f))
     fps = int(getattr(settings, "motion_fps", None) or 24)
     fps = min(30, max(12, fps))
     style = str(getattr(settings, "motion_style", None) or "parallax")

@@ -1,18 +1,25 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
-Flagship editor, motion preview, connection toasts, and a license-safe cinematic demo catalog — on top of real Jellyfin artwork.
+Flagship editor, motion preview, connection toasts, license-safe cinematic demo catalog, watch-status pills, cron/batch polish, and more cinematic TV-facing motion bake.
 
-- **Generate** downloads backdrop (then poster) by default, with Jellyfin auth headers. HTML/non-image responses are rejected. Unconfigured Jellyfin/Seerr falls back to the demo catalog **with a warning**, instead of failing silently. Ids that sit past the first `limit` titles are still found.
+- **Generate** downloads backdrop (then poster) by default, with Jellyfin auth headers. HTML/non-image responses are rejected. Unconfigured Jellyfin/Seerr falls back to the demo catalog **with a warning**, instead of failing silently. Ids that sit past the first `limit` titles are still found (id batches pull up to 200).
 - Jellyfin items request `ImageTags`. Missing Backdrop uses Primary/Thumb so poster-only titles still render.
 - **Editor** is a 16:9 Projectivy stage: linear/radial multi-stop gradients, angle, opacity, vignette, overlay wash, four-edge fades, look DNA chips, draggable metadata, TV chrome / safe-zone guides. Demo or Jellyfin artwork. Save persists the layout JSON.
-- **Motion preview** (CSS Ken Burns / parallax / drift) on Tonight, Editor, Generate, and Settings — Subtle / Cinematic / Bold visible without a TV. Baked ffmpeg VIDEO is still what Projectivy plays.
-- **Toasts** for provider tests and generate: “Connected to Jellyfin (Living Room)” / failure reasons / “Created 6 stills for Netflix Hero”. Success and error notices work on mobile and desktop (44px close target, safe-area insets, Esc / tap-outside / close, contrast above the editor stage).
+- **Watch-status badges** (Unwatched / Continue / Watched) on gallery thumbs, lightbox, editor stage/strip, and Tonight when metadata exists. Demo fixtures already carry mixed states. Flagship layouts (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock) plus Status Focus / Jellyfin Dense paint a pill on the still itself.
+- **Streaming layout DNA** chips: Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock, Status Focus, Jellyfin Dense — on Tonight and in the editor.
+- **Motion preview** (CSS Ken Burns / parallax / drift) on Tonight, Editor, Generate, and Settings — Subtle / Cinematic / Bold now change zoom, pan, and loop length clearly, with a seamless (non-bounce) CSS loop. Baked ffmpeg VIDEO is still what Projectivy plays.
+- **Bake motion UX:** one-tap **Bake motion for tonight’s pick** or **this layout** from Tonight, Generate, and the editor. `POST /api/wallpaper/generate-motion?layout=&path=` bakes one still. `videoUrl` is set only when a real MP4 exists.
+- Longer TV loops: quality defaults 8 / 12 / 16s (up to 24s). Intensity presets Subtle `0.16` / Cinematic `0.55` / Bold `0.96` scale zoom and pan so the three looks are distinct on the TV.
+- **Toasts** for provider tests, generate, motion bake, and cron run-now: “Connected to Jellyfin (Living Room)” / failure reasons / “Created 6 stills for Netflix Hero” / bake summaries. Success and error notices work on mobile and desktop (44px close target, safe-area insets, Esc / tap-outside / close, contrast above the editor stage).
 - **Movie / series logos.** Layout DNA `title_display`: `auto` \| `logo` \| `text`. Jellyfin `Images/Logo` (MediaBrowser token), TMDB/Seerr `logos` (English/null iso, PNG). Smart resize (~1200×450, shorter cap for tall/square marks), luminance contrast, 25px gap before tags, Projectivy clock/dock safe zones. Editor toggles logo vs text live on the 16:9 stage. Stills and parallax chrome both composite the logo. `GET /api/media/logo/{id}` rejects non-images. Demo **Northlight** ships an original clearlogo PNG; other demo titles fall back to the name.
 - **Demo catalog** paints NASA / NARA / Library of Congress public-domain stills (plus one CC BY-SA Kew photograph) instead of synthetic-only gradients. Attribution: `backend/app/demo_stills/ATTRIBUTION.md`, `GET /api/demo/catalog`.
 - **Gallery** (and the generated strip under the editor) opens stills in a full-screen lightbox (arrows / Esc).
 - `GET /api/media/artwork/{item_id}` serves demo stills, then proxies Jellyfin Primary/Backdrop (image sniffing, correct content-type).
+- **Cron / batch polish:** layout dropdown, skip vs replace (replace wins), cleanup and id-field copy, **Run now** (`POST /api/cron/run`) with the same generate toast.
+- Additive status field `watchState` (`unwatched` / `partial` / `watched` aliases from Jellyfin). Existing `imageUrl` / `videoUrl` / `mediaType` / `path` contract is unchanged.
+- Plugin versionName **1.2.0** (`versionCode` 2). Image `ghcr.io/imanunator/wallpaparr:v1.2.0` / `:1.2.0` / `:latest` from the `v1.2.0` tag. Do not retag `v1.1.0`.
 
 ## 1.1.0
 

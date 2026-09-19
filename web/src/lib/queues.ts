@@ -1,4 +1,5 @@
 import type { WallpaperRecord } from "./layout";
+import { watchBadge } from "./watch";
 
 export const QUEUE_LABELS: Record<string, string> = {
   unwatched: "Unwatched",
@@ -18,9 +19,11 @@ export const TASTE_PRESETS: Record<string, Record<string, number>> = {
 
 export const LAYOUT_DNA = [
   { name: "Netflix Hero", blurb: "Left-stacked hero over a heavy fade — logo when available" },
-  { name: "Prime Cinematic", blurb: "Low title card, deep bottom gradient" },
-  { name: "Google TV Clean", blurb: "Minimal chrome, artwork breathing room" },
+  { name: "Prime Cinematic", blurb: "Low title card, deep bottom gradient, watch pill" },
+  { name: "Google TV Clean", blurb: "Minimal chrome, artwork breathing room, watch pill" },
   { name: "Projectivy Dock", blurb: "Safe zones below the clock, above the row dock" },
+  { name: "Status Focus", blurb: "Watch-state and library badges front and center" },
+  { name: "Jellyfin Dense", blurb: "Packed left chrome for library browsing wallpapers" },
 ];
 
 export function queueBadges(record: Pick<WallpaperRecord, "watch_state" | "library_state" | "source" | "pinned" | "hidden" | "has_video"> & { availability?: string }): string[] {
@@ -31,8 +34,8 @@ export function queueBadges(record: Pick<WallpaperRecord, "watch_state" | "libra
   const source = (record.source || "").toLowerCase();
   if (record.pinned) badges.push("Pinned");
   if (record.hidden) badges.push("Never show");
-  if (watch === "unwatched" || watch === "unplayed") badges.push("Unwatched");
-  if (["partial", "partially_watched", "inprogress", "in_progress"].includes(watch)) badges.push("Continue");
+  const watchPill = watchBadge(watch);
+  if (watchPill) badges.push(watchPill.label);
   if (availability === "requestable" || availability === "not_available" || library === "seerr_only") {
     badges.push("Requestable");
   }

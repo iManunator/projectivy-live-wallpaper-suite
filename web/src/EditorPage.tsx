@@ -9,9 +9,12 @@ import {
   type Layout,
   type WallpaperRecord,
 } from "./lib/layout";
-import { errorToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, type MotionStyle } from "./lib/motion";
+import { errorToast, motionToast } from "./lib/messages";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
+import { LAYOUT_DNA } from "./lib/queues";
+import { watchBadge } from "./lib/watch";
+import { WatchBadge } from "./WatchBadge";
 import { useToasts } from "./toasts";
 
 type MediaRow = {
@@ -32,7 +35,7 @@ type MediaRow = {
   media_type?: string | null;
 };
 
-type ViewerItem = { src: string; title: string; subtitle?: string };
+type ViewerItem = { src: string; title: string; subtitle?: string; watchState?: string };
 
 const SAMPLE: Record<string, string> = {
   title: "Northlight",
@@ -73,6 +76,7 @@ function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     src: api.wallpaperImage(item.layout, item.filename),
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
+    watchState: item.watch_state,
   };
 }
 
@@ -135,6 +139,7 @@ export function FullscreenViewer({
         <figcaption>
           <strong>{item.title}</strong>
           {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
+          <WatchBadge state={item.watchState} />
         </figcaption>
       </figure>
     </div>
@@ -163,6 +168,7 @@ export function EditorPage() {
   const [duration, setDuration] = useState(6);
   const [logoSrc, setLogoSrc] = useState("");
   const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
+  const [bakeBusy, setBakeBusy] = useState(false);
 
   useEffect(() => {
     api.layouts().then(async (list) => {
@@ -204,7 +210,8 @@ export function EditorPage() {
   const artSrc = api.mediaArtwork(artId);
   const createdSlides = created.map(wallpaperSlide);
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(0.55);
-  const motionVars = motionPreviewVars(motionStyle, intensity, duration);
+  const previewDuration = PRESET_DURATION[motionPreset] || duration;
+  const motionVars = motionPreviewVars(motionStyle, intensity, previewDuration);
   const showLogo = prefersLogo(layout.title_display) && Boolean(logoSrc);
   const titleLayer = layout.layers.find((row) => row.slot === "title");
   const logoBox = (() => {
@@ -329,6 +336,40 @@ export function EditorPage() {
             <button className="btn tiny" onClick={save}>
               Save layout
             </button>
+            <button
+              className="btn ghost tiny"
+              disabled={bakeBusy || created.length === 0}
+              onClick={async () => {
+                setBakeBusy(true);
+                try {
+                  const out = (await api.generateMotion(layout.name)) as { message?: string; count?: number; generated?: string[] };
+                  const toast = motionToast(out);
+                  notify(toast.kind, toast.text);
+                  setStatus(toast.text);
+                  setCreated(await api.gallery(layout.name));
+                } catch (err) {
+                  const toast = errorToast(err, "Motion bake failed");
+                  notify(toast.kind, toast.text);
+                } finally {
+                  setBakeBusy(false);
+                }
+              }}
+            >
+              Bake motion for this layout
+            </button>
+          </div>
+          <div className="chip-row">
+            {LAYOUT_DNA.map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                className={`chip ${layout.name === preset.name ? "active" : ""}`}
+                title={preset.blurb}
+                onClick={() => load(preset.name)}
+              >
+                {preset.name}
+              </button>
+            ))}
           </div>
           <div className="row" style={{ marginBottom: 12 }}>
             <label className="inline">
@@ -426,7 +467,7 @@ export function EditorPage() {
                   return (
                     <div
                       key={item.id}
-                      className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""}`}
+                      className={`layer-chip ${index === selected ? "selected" : ""} ${isLogoTitle ? "is-logo" : ""} ${item.slot === "watch_status" || item.slot === "watch_state" ? "is-watch" : ""}`}
                       onMouseDown={(event) => startDrag(event, index)}
                       style={{
                         left: `${(x / layout.canvas_width) * 100}%`,
@@ -441,6 +482,8 @@ export function EditorPage() {
                     >
                       {isLogoTitle ? (
                         <img className="stage-logo" src={logoSrc} alt={`${sample.title || "Title"} logo`} />
+                      ) : item.slot === "watch_status" || item.slot === "watch_state" ? (
+                        watchBadge(preview?.watch_state || sample.watch_status)?.label || sample.watch_status || item.slot
                       ) : (
                         sample[item.slot] || item.slot
                       )}
@@ -458,11 +501,12 @@ export function EditorPage() {
               </div>
             )}
             {motionOn && lightLeak && <div className="motion-leak" />}
+            <WatchBadge state={preview?.watch_state || sample.watch_status} className="thumb-watch" />
           </div>
           <p className="muted">
-            {describeMotion(motionStyle, intensity, duration)}
-            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} is a CSS preview — the TV still needs a baked
-            VIDEO for the real loop.
+            {describeMotion(motionStyle, intensity, previewDuration)}
+            {lightLeak ? " · light leak" : ""}. Intensity {motionPreset} is a CSS preview — bake VIDEO for this layout
+            so Projectivy can play a real MP4 (<code>videoUrl</code> is set only when the file exists).
           </p>
           {created.length > 0 && (
             <div className="created-strip">
@@ -480,6 +524,7 @@ export function EditorPage() {
                     aria-label={`View ${item.title} full screen`}
                   >
                     <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
+                    <WatchBadge state={item.watch_state} />
                   </button>
                 ))}
               </div>

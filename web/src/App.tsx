@@ -3,21 +3,25 @@ import { EditorPage, FullscreenViewer } from "./EditorPage";
 import { api } from "./lib/api";
 import { type AppSettings, type CronJob } from "./lib/layout";
 import type { WallpaperRecord } from "./lib/layout";
-import { errorToast, generateToast, providerToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, type MotionStyle } from "./lib/motion";
+import { describeBatchFlags } from "./lib/batch";
+import { errorToast, generateToast, motionToast, providerToast } from "./lib/messages";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
+import { badgeClass } from "./lib/watch";
+import { WatchBadge } from "./WatchBadge";
 import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
 
 type Page = "tonight" | "gallery" | "editor" | "generate" | "dashboard" | "settings";
 
-type ViewerItem = { src: string; title: string; subtitle?: string };
+type ViewerItem = { src: string; title: string; subtitle?: string; watchState?: string };
 
 function wallpaperSlide(item: WallpaperRecord): ViewerItem {
   return {
     src: api.wallpaperImage(item.layout, item.filename),
     title: item.title,
     subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
+    watchState: item.watch_state,
   };
 }
 
@@ -98,6 +102,7 @@ type TonightPayload = {
     pinned?: boolean;
     layout?: string | null;
     path?: string | null;
+    watchState?: string | null;
   };
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
@@ -111,6 +116,7 @@ function TonightPage() {
   const [payload, setPayload] = useState<TonightPayload | null>(null);
   const [error, setError] = useState("");
   const [previewPreset, setPreviewPreset] = useState("");
+  const [bakeBusy, setBakeBusy] = useState(false);
   async function load(nextLayout = layout) {
     try {
       const data = (await api.tonight(nextLayout)) as TonightPayload;
@@ -134,8 +140,27 @@ function TonightPage() {
   const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
   const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(payload?.motion?.intensity ?? 0.55);
-  const duration = defaultDuration("light");
+  const duration = PRESET_DURATION[motionPreset] || defaultDuration("light");
   const motionVars = motionPreviewVars(motionStyle, intensity, duration);
+  const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
+  async function bakeTonight(wholeLayout = false) {
+    setBakeBusy(true);
+    try {
+      const out = (await api.generateMotion(layout, wholeLayout ? undefined : tonightPath || undefined)) as {
+        message?: string;
+        count?: number;
+        generated?: string[];
+      };
+      const toast = motionToast(out);
+      notify(toast.kind, toast.text);
+      await load(layout);
+    } catch (err) {
+      const toast = errorToast(err, "Motion bake failed");
+      notify(toast.kind, toast.text);
+    } finally {
+      setBakeBusy(false);
+    }
+  }
   return (
     <section>
       <h1>Tonight’s home screen</h1>
@@ -163,6 +188,12 @@ function TonightPage() {
           ))}
         <button className="btn tiny" onClick={() => load(layout)}>
           Shuffle tonight
+        </button>
+        <button className="btn tiny" disabled={bakeBusy || !tonightPath} onClick={() => bakeTonight(false)}>
+          Bake motion for tonight’s pick
+        </button>
+        <button className="btn ghost tiny" disabled={bakeBusy} onClick={() => bakeTonight(true)}>
+          Bake motion for this layout
         </button>
       </div>
       <div className="chip-row">
@@ -201,8 +232,9 @@ function TonightPage() {
             </div>
             <div className="tv-hero-meta">
               <span className="badge">{queueLabel}</span>
+              <WatchBadge state={payload?.status?.watchState} />
               {payload?.status?.pinned && <span className="badge">Pinned</span>}
-              {payload?.status?.mediaType === "video" && <span className="badge">VIDEO</span>}
+              {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
               <h2>{payload?.status?.title || "Waiting for a title"}</h2>
               <p>Behind the guide · {layout}</p>
             </div>
@@ -227,7 +259,7 @@ function TonightPage() {
           </ul>
           <p className="muted">
             Motion {motionPreset} · {motionStyle}
-            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}. CSS preview on the TV bezel; bake VIDEO in Generate for the real loop.
+            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}. CSS preview on the TV bezel; bake VIDEO for tonight’s pick or this layout so Projectivy can play a real MP4.
           </p>
         </div>
       </div>
@@ -282,6 +314,7 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
           <article className="thumb" key={item.id}>
             <button type="button" className="thumb-hit" onClick={() => setViewer(index)} aria-label={`View ${item.title} full screen`}>
               <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
+              <WatchBadge state={item.watch_state} className="thumb-watch" />
             </button>
             <div className="meta">
               <strong>{item.title}</strong>
@@ -291,7 +324,7 @@ function GalleryPage({ onEdit }: { onEdit: () => void }) {
               </div>
               <div>
                 {queueBadges(item).map((badge) => (
-                  <span className="badge" key={badge}>{badge}</span>
+                  <span className={badgeClass(badge)} key={badge}>{badge}</span>
                 ))}
               </div>
               <div className="row" style={{ marginTop: 8 }}>
@@ -392,11 +425,12 @@ function GeneratePage() {
           <input value={form.ids} onChange={(e) => setForm({ ...form, ids: e.target.value })} placeholder="demo-jf-1, 90001, tt123" />
           <label style={{ marginTop: 12 }}>Skip these media ids</label>
           <input value={form.skip_ids} onChange={(e) => setForm({ ...form, skip_ids: e.target.value })} placeholder="leave blank to skip none extra" />
-          <label style={{ marginTop: 12 }}><input type="checkbox" checked={form.skip_existing} onChange={(e) => setForm({ ...form, skip_existing: e.target.checked })} /> Skip titles already generated (IMDb / TMDB / Jellyfin id)</label>
-          <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked })} /> Replace / overwrite same show</label>
+          <label style={{ marginTop: 12 }}><input type="checkbox" checked={form.skip_existing} disabled={form.replace_existing} onChange={(e) => setForm({ ...form, skip_existing: e.target.checked })} /> Skip titles already generated (IMDb / TMDB / Jellyfin id)</label>
+          <label><input type="checkbox" checked={form.replace_existing} onChange={(e) => setForm({ ...form, replace_existing: e.target.checked, skip_existing: e.target.checked ? false : form.skip_existing })} /> Replace / overwrite same show</label>
           <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
           <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
-          <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; the plugin prefers VIDEO when this is enabled. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
+          <p className="muted flag-help">{describeBatchFlags({ skip_existing: form.skip_existing, replace_existing: form.replace_existing, cleanup: form.cleanup, ids: csvToIds(form.ids), skip_ids: csvToIds(form.skip_ids) })}</p>
+          <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; Projectivy only gets <code>videoUrl</code> when an MP4 exists. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
           <div className="row" style={{ marginTop: 16 }}>
             <button
               className="btn"
@@ -435,11 +469,15 @@ function GeneratePage() {
               onClick={async () => {
                 setBusy(true);
                 try {
-                  const out = (await api.generateMotion(form.layout)) as { generated?: string[]; style?: string };
-                  const n = (out.generated || []).length;
-                  const text = n ? `Baked motion VIDEO for ${n} title${n === 1 ? "" : "s"} (${out.style || style}).` : `No VIDEO clips baked for ${form.layout} (ffmpeg missing or no stills).`;
-                  notify(n ? "ok" : "info", text);
-                  setResult(text);
+                  const out = (await api.generateMotion(form.layout)) as {
+                    message?: string;
+                    generated?: string[];
+                    count?: number;
+                    style?: string;
+                  };
+                  const toast = motionToast(out);
+                  notify(toast.kind, toast.text);
+                  setResult(toast.text);
                 } catch (err) {
                   const toast = errorToast(err, "Motion bake failed");
                   notify(toast.kind, toast.text);
@@ -449,7 +487,39 @@ function GeneratePage() {
                 }
               }}
             >
-              Re-bake motion for layout
+              Bake motion for this layout
+            </button>
+            <button
+              className="btn ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const tonight = (await api.tonight(form.layout)) as { status?: { path?: string | null } };
+                  const path = tonight.status?.path || "";
+                  if (!path) {
+                    notify("info", `No tonight pick for ${form.layout} yet — generate stills first.`);
+                    setResult(`No tonight pick for ${form.layout}.`);
+                    return;
+                  }
+                  const out = (await api.generateMotion(form.layout, path)) as {
+                    message?: string;
+                    generated?: string[];
+                    count?: number;
+                  };
+                  const toast = motionToast(out);
+                  notify(toast.kind, toast.text);
+                  setResult(toast.text);
+                } catch (err) {
+                  const toast = errorToast(err, "Motion bake failed");
+                  notify(toast.kind, toast.text);
+                  setResult(toast.text);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Bake motion for tonight’s pick
             </button>
           </div>
           {result && <p className="status">{result}</p>}
@@ -536,8 +606,11 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   const notify = useToasts();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [msg, setMsg] = useState("");
+  const [layouts, setLayouts] = useState<string[]>([]);
+  const [cronBusy, setCronBusy] = useState(false);
   useEffect(() => {
     api.settings().then((loaded) => setSettings({ ...EMPTY_SETTINGS, ...loaded })).catch(() => setSettings(EMPTY_SETTINGS));
+    api.layouts().then(setLayouts).catch(() => undefined);
   }, []);
   if (!settings) return <p>Loading…</p>;
   function patch(section: "jellyfin" | "jellyseerr" | "tmdb", key: string, value: string) {
@@ -637,15 +710,15 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           </label>
           <label>Quality</label>
           <select value={settings.motion_quality} onChange={(e) => setSettings({ ...settings, motion_quality: e.target.value })}>
-            <option value="light">light (~6s, 2.2 Mbps)</option>
-            <option value="standard">standard (~8s, 3.5 Mbps)</option>
-            <option value="cinematic">cinematic (~10s, 5 Mbps)</option>
+            <option value="light">light (~8s, 2.2 Mbps)</option>
+            <option value="standard">standard (~12s, 3.5 Mbps)</option>
+            <option value="cinematic">cinematic (~16s, 5 Mbps)</option>
           </select>
-          <label>Loop duration seconds (blank = quality default)</label>
+          <label>Loop duration seconds (blank = longer quality / intensity default, 2–24s)</label>
           <input
             type="number"
             min={2}
-            max={20}
+            max={24}
             value={settings.motion_duration ?? ""}
             onChange={(e) =>
               setSettings({
@@ -786,6 +859,7 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
         </div>
         <div className="card">
           <h3>Cron / batch</h3>
+          <p className="muted">Scheduled generate uses the same skip / replace / cleanup / id rules as the Generate page. Save settings to persist the schedule, or run now for a toast with created / skipped / cleaned counts.</p>
           <label>
             <input
               type="checkbox"
@@ -797,7 +871,12 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <label>Cron (5-field expression)</label>
           <input value={String(cron.cron || "")} onChange={(e) => setCron({ ...cron, cron: e.target.value })} placeholder="0 4 * * *" />
           <label>Layout</label>
-          <input value={String(cron.layout || "")} onChange={(e) => setCron({ ...cron, layout: e.target.value })} />
+          <select value={String(cron.layout || "Netflix Hero")} onChange={(e) => setCron({ ...cron, layout: e.target.value })} aria-label="Cron layout">
+            {(layouts.includes(String(cron.layout || "")) || !cron.layout ? layouts : [String(cron.layout), ...layouts]).map((name) => (
+              <option key={name}>{name}</option>
+            ))}
+            {layouts.length === 0 && <option>Netflix Hero</option>}
+          </select>
           <label>Source</label>
           <select value={String(cron.source || "jellyfin")} onChange={(e) => setCron({ ...cron, source: e.target.value })}>
             <option value="demo">demo</option>
@@ -811,16 +890,74 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
           <input
             value={Array.isArray(cron.ids) ? cron.ids.join(",") : String(cron.ids || "")}
             onChange={(e) => setCron({ ...cron, ids: csvToIds(e.target.value) })}
+            placeholder="demo-jf-1, 90001"
           />
           <label>Skip ids (comma)</label>
           <input
             value={Array.isArray(cron.skip_ids) ? cron.skip_ids.join(",") : String(cron.skip_ids || "")}
             onChange={(e) => setCron({ ...cron, skip_ids: csvToIds(e.target.value) })}
+            placeholder="leave blank to skip none extra"
           />
-          <label><input type="checkbox" checked={Boolean(cron.skip_existing)} onChange={(e) => setCron({ ...cron, skip_existing: e.target.checked })} /> Skip existing by media id</label>
-          <label><input type="checkbox" checked={Boolean(cron.replace_existing)} onChange={(e) => setCron({ ...cron, replace_existing: e.target.checked })} /> Overwrite / replace</label>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(cron.skip_existing)}
+              disabled={Boolean(cron.replace_existing)}
+              onChange={(e) => setCron({ ...cron, skip_existing: e.target.checked })}
+            />{" "}
+            Skip existing by media id
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(cron.replace_existing)}
+              onChange={(e) => setCron({ ...cron, replace_existing: e.target.checked, skip_existing: e.target.checked ? false : cron.skip_existing })}
+            />{" "}
+            Overwrite / replace
+          </label>
           <label><input type="checkbox" checked={Boolean(cron.cleanup)} onChange={(e) => setCron({ ...cron, cleanup: e.target.checked })} /> Cleanup missing titles</label>
           <label><input type="checkbox" checked={Boolean(cron.motion)} onChange={(e) => setCron({ ...cron, motion: e.target.checked })} /> Bake parallax VIDEO</label>
+          <p className="muted flag-help">
+            {describeBatchFlags({
+              skip_existing: Boolean(cron.skip_existing),
+              replace_existing: Boolean(cron.replace_existing),
+              cleanup: Boolean(cron.cleanup),
+              ids: Array.isArray(cron.ids) ? cron.ids : csvToIds(String(cron.ids || "")),
+              skip_ids: Array.isArray(cron.skip_ids) ? cron.skip_ids : csvToIds(String(cron.skip_ids || "")),
+            })}
+          </p>
+          <button
+            className="btn tiny"
+            style={{ marginTop: 12 }}
+            disabled={cronBusy}
+            onClick={async () => {
+              setCronBusy(true);
+              try {
+                const out = (await api.runCron({
+                  layout: cron.layout,
+                  source: cron.source,
+                  limit: cron.limit,
+                  skip_existing: cron.skip_existing,
+                  replace_existing: cron.replace_existing,
+                  cleanup: cron.cleanup,
+                  motion: cron.motion,
+                  ids: Array.isArray(cron.ids) ? cron.ids : csvToIds(String(cron.ids || "")),
+                  skip_ids: Array.isArray(cron.skip_ids) ? cron.skip_ids : csvToIds(String(cron.skip_ids || "")),
+                })) as { message?: string; count?: number; warnings?: string[] };
+                const toast = generateToast(out);
+                notify(toast.kind, toast.text);
+                setMsg(toast.text);
+              } catch (err) {
+                const toast = errorToast(err, "Cron run failed");
+                notify(toast.kind, toast.text);
+                setMsg(toast.text);
+              } finally {
+                setCronBusy(false);
+              }
+            }}
+          >
+            Run now
+          </button>
         </div>
       </div>
       <button

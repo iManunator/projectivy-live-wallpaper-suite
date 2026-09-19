@@ -132,6 +132,7 @@ class WallpaperStatus(BaseModel):
     motionDuration: float | None = None
     queue: str | None = None
     pinned: bool = False
+    watchState: str | None = None
 
 
 class GenerateRequest(BaseModel):
