@@ -134,6 +134,12 @@ def test_netflix_hero_preset_has_title_display_auto():
     assert layout.logo_padding == 25
 
 
+def test_every_bundled_preset_keeps_logo_text_auto():
+    for name, layout in PRESETS.items():
+        assert layout.title_display == "auto", name
+        assert layout.logo_padding == PADDING, name
+
+
 def test_render_still_with_logo_keeps_full_hd():
     item = MediaItem(title="Northlight", year=2024, genres=["Sci-Fi"])
     image = render_still(item, PRESETS["Netflix Hero"], logo_bytes=_png())

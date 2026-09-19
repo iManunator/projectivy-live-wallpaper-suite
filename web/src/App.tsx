@@ -5,7 +5,7 @@ import { api } from "./lib/api";
 import { type AppSettings, type CronJob } from "./lib/layout";
 import { describeBatchFlags } from "./lib/batch";
 import { errorToast, providerToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, type MotionStyle } from "./lib/motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, motionSeedKey, nearestMotionPreset, type MotionStyle } from "./lib/motion";
 import { formatOpsTime, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
 import { TonightPage } from "./TonightPage";
@@ -28,6 +28,7 @@ const EMPTY_SETTINGS: AppSettings = {
   editor_theme: "cinema",
   motion_preset: "cinematic",
   light_leak: true,
+  motion_vary: true,
   taste_profile: "tonight",
   taste_weights: { unwatched: 50, newly_added: 30, requestable: 20 },
   overlays_enabled: false,
@@ -131,7 +132,21 @@ function GeneratePage() {
   const style = (settings?.motion_style || "parallax") as MotionStyle;
   const intensity = intensityFromPreset(settings?.motion_preset) || clampIntensity(settings?.motion_intensity ?? 0.55);
   const duration = settings?.motion_duration || defaultDuration(settings?.motion_quality || "light");
-  const motionVars = motionPreviewVars(style, intensity, Number(duration));
+  const motionVars = motionPreviewVars(style, intensity, Number(duration), {
+    vary: settings?.motion_vary !== false,
+    seed: motionSeedKey("demo-jf-4", "Signal Country"),
+    preset: settings?.motion_preset,
+  });
+  async function setMotionVary(checked: boolean) {
+    const current = settings || EMPTY_SETTINGS;
+    const next = { ...current, motion_vary: checked };
+    setSettings(next);
+    try {
+      await api.saveSettings(next);
+    } catch {
+      /* preview still updates locally */
+    }
+  }
   return (
     <section>
       <h1>Generate</h1>
@@ -168,7 +183,7 @@ function GeneratePage() {
           <label><input type="checkbox" checked={form.cleanup} onChange={(e) => setForm({ ...form, cleanup: e.target.checked })} /> Cleanup titles no longer in the source list</label>
           <label><input type="checkbox" checked={form.motion} onChange={(e) => setForm({ ...form, motion: e.target.checked })} /> Bake parallax / motion VIDEO (ffmpeg)</label>
           <p className="muted flag-help">{describeBatchFlags({ skip_existing: form.skip_existing, replace_existing: form.replace_existing, cleanup: form.cleanup, ids: csvToIds(form.ids), skip_ids: csvToIds(form.skip_ids) })}</p>
-          <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; Projectivy only gets <code>videoUrl</code> when an MP4 exists. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}.</p>
+          <p className="muted">{describeMotion(style, intensity, Number(duration))}. Stills always remain; Projectivy only gets <code>videoUrl</code> when an MP4 exists. Intensity preset: {settings?.motion_preset || "cinematic"}{settings?.light_leak ? " · light leak" : ""}{settings?.motion_vary !== false ? " · per-title variety" : ""}.</p>
           <div className="row" style={{ marginTop: 16 }}>
             <button
               className="btn"
@@ -236,6 +251,15 @@ function GeneratePage() {
         <div className="card">
           <h3>Motion preview</h3>
           <p className="muted">See {settings?.motion_preset || "cinematic"} {style} on demo art before you bake ffmpeg loops. Artwork moves; watch and Seerr chrome stay put.</p>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings?.motion_vary !== false}
+              onChange={(e) => void setMotionVary(e.target.checked)}
+            />{" "}
+            Vary motion slightly per wallpaper
+          </label>
+          <p className="muted">Mild seeded pan / intensity / phase drift so each title feels a bit different. Same title rebakes the same loop. Off is the exact CSS-matched path. Default on.</p>
           <WallpaperStage
             className="generate-preview"
             wrapClassName="canvas-wrap generate-preview"
@@ -295,7 +319,7 @@ function DashboardPage() {
         <article className="card">
           <h3>Motion</h3>
           <p className="dash-stat">{data.motion?.preset || "cinematic"}</p>
-          <p className="muted">{data.motion?.style} · {data.motion?.quality}{data.motion?.light_leak ? " · leak" : ""}</p>
+          <p className="muted">{data.motion?.style} · {data.motion?.quality}{data.motion?.light_leak ? " · leak" : ""}{data.motion?.vary !== false ? " · variety" : ""}</p>
         </article>
         <article className="card">
           <h3>Taste</h3>
@@ -357,7 +381,11 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
   const duration = Number(settings.motion_duration || defaultDuration(settings.motion_quality));
   const style = (settings.motion_style || "parallax") as MotionStyle;
   const weights = settings.taste_weights || TASTE_PRESETS[settings.taste_profile || "tonight"];
-  const motionVars = motionPreviewVars(style, intensity, duration);
+  const motionVars = motionPreviewVars(style, intensity, duration, {
+    vary: settings.motion_vary !== false,
+    seed: motionSeedKey("demo-jf-1", "Northlight"),
+    preset: settings.motion_preset,
+  });
   async function testConnection(name: "jellyfin" | "jellyseerr" | "tmdb") {
     try {
       const result = (await api.testProvider(name)) as { ok?: boolean; message?: string; error?: string };
@@ -425,6 +453,15 @@ function SettingsPage({ onTheme }: { onTheme: (theme: string) => void }) {
             />{" "}
             Light-leak layer on parallax VIDEO
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.motion_vary !== false}
+              onChange={(e) => setSettings({ ...settings, motion_vary: e.target.checked })}
+            />{" "}
+            Vary motion slightly per wallpaper
+          </label>
+          <p className="muted">Default on. Each bake/preview gets a mild seeded pan direction, intensity jitter, start phase, and style drift inside Subtle / Cinematic / Bold. Same title is stable. Off restores the exact CSS-matched ease/amplitude path.</p>
           <label>Quality</label>
           <select value={settings.motion_quality} onChange={(e) => setSettings({ ...settings, motion_quality: e.target.value })}>
             <option value="light">light (~8s, 2.8 Mbps, 30 fps)</option>

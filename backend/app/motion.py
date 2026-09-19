@@ -29,7 +29,7 @@ import math
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PIL import Image
@@ -40,6 +40,18 @@ STYLES = ("parallax", "kenburns", "drift")
 QUALITIES = ("light", "standard", "cinematic")
 # Distinct enough that Subtle / Cinematic / Bold change the baked loop at a glance.
 INTENSITY_PRESETS = {"subtle": 0.16, "cinematic": 0.55, "bold": 0.96}
+# Keep jitter inside the named family (Subtle / Cinematic / Bold), not across it.
+_PRESET_BAND = {
+    "subtle": (0.10, 0.28),
+    "cinematic": (0.40, 0.72),
+    "bold": (0.82, 1.00),
+}
+_INTENSITY_JITTER = 0.08  # ±8% relative
+_ZOOM_SCALE_SPAN = 0.06  # 0.94–1.06
+_PAN_SCALE_SPAN = 0.06
+_PAN_Y_RATIO_MIN = 0.10
+_PAN_Y_RATIO_MAX = 0.18
+_DEFAULT_PAN_Y_RATIO = 0.14  # CSS --motion-y / --motion-x
 
 _BITRATE = {"light": "2800k", "standard": "4000k", "cinematic": "5500k"}
 _DEFAULT_DURATION = {"light": 8.0, "standard": 12.0, "cinematic": 16.0}
@@ -67,6 +79,12 @@ class MotionProfile:
     width: int = 1920
     height: int = 1080
     light_leak: bool = True
+    pan_x_sign: int = 1
+    pan_y_sign: int = 1
+    pan_y_ratio: float = _DEFAULT_PAN_Y_RATIO
+    phase: float = 0.0
+    zoom_scale: float = 1.0
+    pan_scale: float = 1.0
 
     @property
     def frames(self) -> int:
@@ -95,13 +113,14 @@ class MotionProfile:
     @property
     def bg_zoom_amp(self) -> float:
         # Floor keeps Subtle parallax zooming *in* when CSS to < from.
-        return round(max(0.008, self.zoom_to - self.zoom_from), 4)
+        base = round(max(0.008, self.zoom_to - self.zoom_from), 4)
+        return round(max(0.008, base * float(self.zoom_scale)), 4)
 
     @property
     def bg_pan(self) -> float:
         """CSS ``--motion-x`` as output pixels (drift 7.4%, else 4.8%)."""
         pct = 7.4 if self.normalized_style() == "drift" else 4.8
-        return round(self.width * (pct / 100.0) * self.intensity, 2)
+        return round(self.width * (pct / 100.0) * self.intensity * float(self.pan_scale), 2)
 
     @property
     def fg_pan(self) -> float:
@@ -170,6 +189,166 @@ def profile_from_settings(settings) -> MotionProfile:
     )
 
 
+def motion_seed_key(*parts: object) -> str:
+    """Stable seed from title / path / id. First non-empty part wins (lowercased)."""
+    for part in parts:
+        text = str(part or "").strip()
+        if text:
+            return text.lower()
+    return "wallpaparr"
+
+
+def wallpaper_motion_seed(
+    *,
+    jellyfin_id: str | None = None,
+    tmdb_id: str | None = None,
+    imdb_id: str | None = None,
+    filename: str | None = None,
+    path: str | None = None,
+    title: str | None = None,
+) -> str:
+    """Same id chain for CSS preview and ffmpeg bake."""
+    return motion_seed_key(jellyfin_id, tmdb_id, imdb_id, filename or path, title)
+
+
+def fnv1a32(text: str) -> int:
+    h = 0x811C9DC5
+    for byte in (text or "").encode("utf-8"):
+        h ^= byte
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
+def _lcg32(seed: int):
+    """Numerical Recipes LCG — matched in ``web/src/lib/motion.ts``."""
+    state = seed & 0xFFFFFFFF
+
+    def rand() -> float:
+        nonlocal state
+        state = (1664525 * state + 1013904223) & 0xFFFFFFFF
+        return state / 4294967296.0
+
+    return rand
+
+
+def _lerp(lo: float, hi: float, t: float) -> float:
+    return lo + (hi - lo) * t
+
+
+def vary_motion_profile(
+    profile: MotionProfile,
+    *,
+    enabled: bool,
+    seed: str,
+    preset: str | None = None,
+) -> MotionProfile:
+    """Mild seeded drift. Off returns the CSS-matched profile unchanged.
+
+    Shared with ``varyMotionProfile`` in ``web/src/lib/motion.ts`` (same LCG draws).
+    """
+    if not enabled:
+        return profile
+    rng = _lcg32(fnv1a32(motion_seed_key(seed)))
+    jitter = _lerp(-_INTENSITY_JITTER, _INTENSITY_JITTER, rng())
+    intensity = min(1.0, max(0.0, float(profile.intensity) * (1.0 + jitter)))
+    name = (preset or "").strip().lower()
+    if name in _PRESET_BAND:
+        lo, hi = _PRESET_BAND[name]
+        intensity = min(hi, max(lo, intensity))
+    pan_x_sign = -1 if rng() < 0.5 else 1
+    pan_y_sign = -1 if rng() < 0.5 else 1
+    pan_y_ratio = round(_lerp(_PAN_Y_RATIO_MIN, _PAN_Y_RATIO_MAX, rng()), 4)
+    phase = round(rng(), 4)
+    zoom_scale = round(_lerp(1.0 - _ZOOM_SCALE_SPAN, 1.0 + _ZOOM_SCALE_SPAN, rng()), 4)
+    pan_scale = round(_lerp(1.0 - _PAN_SCALE_SPAN, 1.0 + _PAN_SCALE_SPAN, rng()), 4)
+    return replace(
+        profile,
+        intensity=round(intensity, 4),
+        pan_x_sign=pan_x_sign,
+        pan_y_sign=pan_y_sign,
+        pan_y_ratio=pan_y_ratio,
+        phase=phase,
+        zoom_scale=zoom_scale,
+        pan_scale=pan_scale,
+    )
+
+
+def profile_for_wallpaper(
+    settings,
+    *,
+    jellyfin_id: str | None = None,
+    tmdb_id: str | None = None,
+    imdb_id: str | None = None,
+    filename: str | None = None,
+    path: str | None = None,
+    title: str | None = None,
+    seed: str | None = None,
+) -> MotionProfile:
+    """Bake profile: ``profile_from_settings`` plus optional per-title variety."""
+    profile = profile_from_settings(settings)
+    enabled = bool(getattr(settings, "motion_vary", True))
+    key = seed or wallpaper_motion_seed(
+        jellyfin_id=jellyfin_id,
+        tmdb_id=tmdb_id,
+        imdb_id=imdb_id,
+        filename=filename,
+        path=path,
+        title=title,
+    )
+    preset = str(getattr(settings, "motion_preset", None) or "")
+    return vary_motion_profile(profile, enabled=enabled, seed=key, preset=preset)
+
+
+def motion_preview_vars(profile: MotionProfile) -> dict[str, str]:
+    """CSS variables matching ``motionPreviewVars`` in ``web/src/lib/motion.ts``.
+
+    Identity profiles (vary off) keep the historical zoom/pan strings. Varied
+    profiles apply signs, pan/zoom scale, axis ratio, and start phase.
+    """
+    style = profile.normalized_style()
+    i = float(profile.intensity)
+    if style == "kenburns":
+        zoom = 1 + i * 0.22
+    elif style == "drift":
+        zoom = 1 + i * 0.08
+    else:
+        zoom = 1 + i * 0.18
+    zoom_from = 1.04 if style == "parallax" else 1.015
+    identity = (
+        int(profile.pan_x_sign) == 1
+        and int(profile.pan_y_sign) == 1
+        and abs(float(profile.pan_scale) - 1.0) < 1e-9
+        and abs(float(profile.zoom_scale) - 1.0) < 1e-9
+        and abs(float(profile.pan_y_ratio) - _DEFAULT_PAN_Y_RATIO) < 1e-9
+        and abs(float(profile.phase)) < 1e-9
+    )
+    if identity:
+        pan_x = (7.4 if style == "drift" else 4.8) * i
+        pan_y = (2.6 if style == "drift" else 1.7) * i
+        signed_x = -pan_x
+        signed_y = pan_y * 0.4
+        zoom_to = zoom
+        delay = 0.0
+    else:
+        pan_x = (7.4 if style == "drift" else 4.8) * i * float(profile.pan_scale)
+        signed_x = -pan_x * int(profile.pan_x_sign)
+        signed_y = pan_x * float(profile.pan_y_ratio) * int(profile.pan_y_sign)
+        zoom_to = profile.zoom_from + profile.bg_zoom_amp
+        delay = -(float(profile.phase) * max(2.0, float(profile.duration)))
+    duration = max(2.0, float(profile.duration))
+    duration_s = str(int(duration)) if duration == int(duration) else str(duration)
+    vars_: dict[str, str] = {
+        "--motion-zoom-from": "1.04" if style == "parallax" else "1.015",
+        "--motion-zoom-to": str(zoom_to) if identity else str(float(f"{zoom_to:.4f}")),
+        "--motion-x": f"{signed_x:.2f}%",
+        "--motion-y": f"{signed_y:.2f}%",
+        "--motion-duration": f"{duration_s}s",
+    }
+    if not identity:
+        vars_["--motion-delay"] = f"{delay:.3f}s"
+    return vars_
+
+
 def pingpong_ease_t(t: float) -> float:
     """0 at loop ends, 1 at midpoint — CSS ease-in-out 0% / 50% / 100%.
 
@@ -187,12 +366,18 @@ def pingpong_ease(frames: int, clock: str = "n") -> str:
 def ken_burns_window(n: int, profile: MotionProfile, src_w: int, src_h: int) -> KenBurnsWindow:
     """Subpixel source window for frame ``n``. ``n == frames`` matches ``n == 0``."""
     frames = max(int(profile.frames), 2)
-    ease = pingpong_ease_t(n / frames)
+    ease = pingpong_ease_t((n / frames + float(profile.phase)) % 1.0)
     zoom = profile.zoom_from + profile.bg_zoom_amp * ease
     win_w = src_w / zoom
     win_h = src_h / zoom
-    pan_x = profile.bg_pan * (src_w / max(profile.width, 1)) * ease
-    pan_y = profile.bg_pan * 0.14 * (src_h / max(profile.height, 1)) * ease
+    pan_x = profile.bg_pan * int(profile.pan_x_sign) * (src_w / max(profile.width, 1)) * ease
+    pan_y = (
+        profile.bg_pan
+        * float(profile.pan_y_ratio)
+        * int(profile.pan_y_sign)
+        * (src_h / max(profile.height, 1))
+        * ease
+    )
     x0 = src_w / 2.0 + pan_x - win_w / 2.0
     y0 = src_h / 2.0 + pan_y - win_h / 2.0
     max_x = max(0.0, src_w - win_w)
@@ -227,8 +412,11 @@ def leak_offset(n: int, profile: MotionProfile) -> tuple[float, float]:
     pan_y = h * 0.04
     mx = max(w * 0.18, pan_x + 8)
     my = max(h * 0.18, pan_y + 8)
-    ease = pingpong_ease_t(n / max(frames, 2))
-    return -mx + pan_x * ease, -my + pan_y * ease
+    ease = pingpong_ease_t((n / max(frames, 2) + float(profile.phase)) % 1.0)
+    return (
+        -mx + pan_x * ease * int(profile.pan_x_sign),
+        -my + pan_y * ease * int(profile.pan_y_sign),
+    )
 
 
 def max_motion_frame(frames: int) -> int:

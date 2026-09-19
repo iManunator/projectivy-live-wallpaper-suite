@@ -31,6 +31,11 @@ describe("layout validation", () => {
     expect(layout.show_seerr_badge).toBe(true);
   });
 
+  it("normalizeLayout preserves dna_revision", () => {
+    const layout = normalizeLayout({ name: "Hero", dna_revision: 1 } as never);
+    expect(layout.dna_revision).toBe(1);
+  });
+
   it("normalizeLayout keeps watch badge off when explicitly disabled", () => {
     const layout = normalizeLayout({ name: "Hero", show_watch_badge: false } as never);
     expect(layout.show_watch_badge).toBe(false);

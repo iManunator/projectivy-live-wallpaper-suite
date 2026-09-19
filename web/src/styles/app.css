@@ -489,6 +489,7 @@ input, select, textarea {
   width: 120%;
   height: 120%;
   animation: wallpaparr-kenburns var(--motion-duration, 12s) ease-in-out infinite;
+  animation-delay: var(--motion-delay, 0s);
   transform-origin: center;
   will-change: transform;
 }

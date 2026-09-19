@@ -22,8 +22,8 @@ def test_all_presets_render():
 
 
 def test_flagship_presets_include_watch_status():
-    for name in ("Netflix Hero", "Prime Cinematic", "Google TV Clean", "Projectivy Dock"):
-        slots = {layer.slot for layer in PRESETS[name].layers}
+    for name, layout in PRESETS.items():
+        slots = {layer.slot for layer in layout.layers}
         assert "watch_status" in slots, name
 
 

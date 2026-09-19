@@ -314,7 +314,11 @@ def _draw_text_layers(
         max_width = int(layer.width or 0)
         if max_width and layer.slot == "overview":
             wrapped = _wrap(draw, text, font, max_width)
-            text = "\n".join(wrapped[:4])
+            line_h = max(int(layer.font_size * 1.25), 1)
+            max_lines = 4
+            if layer.height:
+                max_lines = max(1, min(4, int(layer.height) // line_h))
+            text = "\n".join(wrapped[:max_lines])
         draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 180))
         draw.text((x, y), text, font=font, fill=color)
 
