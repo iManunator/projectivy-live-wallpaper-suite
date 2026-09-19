@@ -4,6 +4,7 @@
 
 - **Docker gallery bind-mount (EXDEV).** Motion bake no longer fails with `[Errno 18] Invalid cross-device link` when promoting `/tmp` MP4 output onto `/data/gallery` (bind-mounted volume). Shared `promote_temp` uses `shutil.move` (rename, or copy2 + unlink across devices).
 - **Gallery bulk delete.** Toolbar has Select all / Clear selection, a live selected count, **Delete selected**, and **Delete all**. Confirms spell out the count and that the action cannot be undone; success and failure toasts cover mobile and desktop. Delete all **skips pinned** stills by default (with a note) and offers **Delete all including pins** as an explicit danger option — pins are never wiped silently. Pin / never-show stay on each card and in the lightbox. Additive `POST /api/gallery/delete-all` (`include_pins`, optional `layout`); `POST /api/gallery/delete` also accepts `{ "all": true }`. Empty gallery and missing files return clear JSON, not crashes. Wallpaper `status` / list endpoints are unchanged.
+- **Gallery lightbox motion.** Opening a still plays the baked sibling MP4 when `has_video` (looping, muted). If there is no clip, the lightbox uses the same layered CSS preview as the editor (artwork plate pans; logo/title/badges stay locked) — not Ken Burns of the flat JPEG. Grid thumbs stay static. Video load failure toasts and falls back to the CSS preview.
 
 Layered parallax: the 16:9 editor stage always fits its panel, CSS/ffmpeg motion pans **artwork only**, and logo/title/badges stay pinned.
 

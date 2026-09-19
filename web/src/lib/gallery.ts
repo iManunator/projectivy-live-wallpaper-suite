@@ -92,6 +92,48 @@ export function deleteAllCopy(items: GalleryFlags[]): ConfirmCopy {
   };
 }
 
+export function filenameStem(filename: string): string {
+  const trimmed = filename.trim();
+  const dot = trimmed.lastIndexOf(".");
+  return dot > 0 ? trimmed.slice(0, dot) : trimmed || "untitled";
+}
+
+export type GalleryPreviewSources = {
+  stillSrc: string;
+  videoSrc: string | null;
+  plateSrc: string;
+  artworkSrc: string | null;
+  chromeSrc: string;
+  logoSrc: string | null;
+  artCandidates: string[];
+};
+
+export function galleryPreviewSources(
+  item: {
+    layout: string;
+    filename: string;
+    has_video?: boolean;
+    jellyfin_id?: string | null;
+    tmdb_id?: string | null;
+  },
+  urls: {
+    wallpaperImage: (layout: string, filename: string) => string;
+    mediaArtwork: (itemId: string) => string;
+    mediaLogo: (itemId: string, tmdbId?: string | null) => string;
+  },
+): GalleryPreviewSources {
+  const stem = filenameStem(item.filename);
+  const stillSrc = urls.wallpaperImage(item.layout, item.filename);
+  const plateSrc = urls.wallpaperImage(item.layout, `${stem}_plate.jpg`);
+  const chromeSrc = urls.wallpaperImage(item.layout, `${stem}_chrome.png`);
+  const videoSrc = item.has_video ? urls.wallpaperImage(item.layout, `${stem}.mp4`) : null;
+  const mediaId = item.jellyfin_id || item.tmdb_id || "";
+  const artworkSrc = mediaId ? urls.mediaArtwork(mediaId) : null;
+  const logoSrc = mediaId ? urls.mediaLogo(mediaId, item.tmdb_id) : null;
+  const artCandidates = [artworkSrc, plateSrc, stillSrc].filter((src, index, list): src is string => Boolean(src) && list.indexOf(src) === index);
+  return { stillSrc, videoSrc, plateSrc, artworkSrc, chromeSrc, logoSrc, artCandidates };
+}
+
 export function formatDeleteToast(result: GalleryDeleteResult | null | undefined, fallback: string): string {
   const text = result?.message?.trim();
   if (text) return text;

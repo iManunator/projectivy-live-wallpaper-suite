@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteAllCopy, deleteSelectedCopy, formatDeleteToast } from "./gallery";
+import { deleteAllCopy, deleteSelectedCopy, formatDeleteToast, galleryPreviewSources } from "./gallery";
 
 describe("gallery delete copy", () => {
   it("builds a selected-delete confirm with count and irreversible wording", () => {
@@ -54,5 +54,26 @@ describe("gallery delete copy", () => {
       "Deleted 4 wallpapers. Kept 1 pinned wallpaper.",
     );
     expect(formatDeleteToast({ count: 0, pinned_kept: 2 }, "Could not delete")).toMatch(/Kept 2 pinned/);
+  });
+
+  it("builds VIDEO and layered-preview sources without Ken-Burning the composite by default", () => {
+    const urls = {
+      wallpaperImage: (layout: string, filename: string) => `/${layout}/${filename}`,
+      mediaArtwork: (id: string) => `/art/${id}`,
+      mediaLogo: (id: string) => `/logo/${id}`,
+    };
+    const still = galleryPreviewSources(
+      { layout: "Netflix Hero", filename: "from.jpg", jellyfin_id: "demo-jf-1" },
+      urls,
+    );
+    expect(still.videoSrc).toBeNull();
+    expect(still.artCandidates[0]).toBe("/art/demo-jf-1");
+    expect(still.artCandidates[0]).not.toBe("/Netflix Hero/from.jpg");
+    const video = galleryPreviewSources(
+      { layout: "Netflix Hero", filename: "relay.jpg", has_video: true, jellyfin_id: "demo-jf-6" },
+      urls,
+    );
+    expect(video.videoSrc).toBe("/Netflix Hero/relay.mp4");
+    expect(video.plateSrc).toBe("/Netflix Hero/relay_plate.jpg");
   });
 });

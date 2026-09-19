@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { FullscreenViewer } from "./EditorPage";
+import { FullscreenViewer, wallpaperSlide } from "./FullscreenViewer";
 import { api } from "./lib/api";
 import { deleteAllCopy, deleteSelectedCopy, formatDeleteToast } from "./lib/gallery";
 import type { WallpaperRecord } from "./lib/layout";
@@ -9,28 +9,6 @@ import { queueBadges } from "./lib/queues";
 import { badgeClass } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
 import { useToasts } from "./toasts";
-
-type ViewerItem = {
-  src: string;
-  title: string;
-  subtitle?: string;
-  watchState?: string;
-  id?: string;
-  pinned?: boolean;
-  hidden?: boolean;
-};
-
-function wallpaperSlide(item: WallpaperRecord): ViewerItem {
-  return {
-    src: api.wallpaperImage(item.layout, item.filename),
-    title: item.title,
-    subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
-    watchState: item.watch_state,
-    id: item.id,
-    pinned: item.pinned,
-    hidden: item.hidden,
-  };
-}
 
 type ConfirmState =
   | { kind: "selected"; ids: string[]; titles: string[]; items: WallpaperRecord[] }
@@ -170,7 +148,8 @@ export function GalleryPage({ onEdit }: { onEdit: () => void }) {
       <p className="lede">
         Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation,
         mark never-show so it drops out of every queue, or delete a still (and its companion MP4) from disk. Delete all
-        skips pins unless you choose the explicit danger option. Click a still for a full-screen view.
+        skips pins unless you choose the explicit danger option. Click a still for a full-screen motion preview (baked
+        VIDEO when present, otherwise layered CSS: artwork pans, title and badges stay locked). Grid thumbs stay still.
       </p>
       <div className="gallery-toolbar">
         <button className="btn" onClick={onEdit}>

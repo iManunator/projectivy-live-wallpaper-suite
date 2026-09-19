@@ -66,6 +66,8 @@ export type WallpaperRecord = {
   library_state: string;
   availability?: string;
   source: string;
+  jellyfin_id?: string | null;
+  tmdb_id?: string | null;
   has_video: boolean;
   parallax_style?: string | null;
   action_url?: string | null;

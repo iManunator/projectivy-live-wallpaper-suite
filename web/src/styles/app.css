@@ -142,6 +142,19 @@ button, input, select, textarea {
   max-width: 46%;
   color: #fff;
 }
+.sample-chrome .sample-logo {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+  max-width: 40%;
+  max-height: 18%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+.sample-chrome:has(.sample-logo) .sample-title { top: 28%; }
+.sample-chrome:has(.sample-logo) .sample-badge { top: 4%; }
 .tv-preview {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -529,28 +542,47 @@ input, select, textarea {
   margin: 0;
   max-width: min(96vw, 1600px);
   max-height: 92vh;
+  width: min(96vw, 1600px);
   display: grid;
   gap: 10px;
 }
-.lightbox-frame img {
-  max-width: 96vw;
-  max-height: 84vh;
-  width: auto;
+.lightbox-stage {
+  width: 100%;
+  max-width: 100%;
+}
+.lightbox-stage > .tv-preview,
+.lightbox-stage > .canvas-wrap {
+  --stage-chrome: 7rem;
+  --stage-max-height: min(72dvh, 84vh);
+  width: min(100%, calc(var(--stage-max-height) * 16 / 9));
+  max-width: 100%;
+}
+.lightbox-frame .canvas-art,
+.lightbox-frame .tv-art,
+.lightbox-frame .stage-logo {
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+}
+.lightbox-frame .stage-logo {
   height: auto;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  max-height: 22%;
+  width: auto;
+  max-width: 46%;
 }
 .lightbox-frame figcaption {
   display: flex;
   gap: 10px;
   align-items: baseline;
+  flex-wrap: wrap;
   color: var(--text);
 }
 .lightbox-close {
   position: absolute;
   top: 16px;
   right: 16px;
+  min-height: 44px;
 }
 .lightbox-nav {
   position: absolute;
@@ -681,7 +713,12 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
   }
   .toast { font-size: 16px; }
   .gallery-toolbar .btn,
-  .confirm-actions .btn {
+  .confirm-actions .btn,
+  .lightbox-close,
+  .lightbox-actions .btn {
     min-height: 44px;
+  }
+  .lightbox {
+    padding: 64px 12px 24px;
   }
 }

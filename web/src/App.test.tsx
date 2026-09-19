@@ -14,6 +14,7 @@ type GalleryFixture = {
   watch_state: string;
   library_state: string;
   source: string;
+  jellyfin_id?: string;
   has_video: boolean;
   pinned: boolean;
   hidden: boolean;
@@ -31,6 +32,7 @@ const fromItem: GalleryFixture = {
   watch_state: "unwatched",
   library_state: "in_library",
   source: "jellyfin",
+  jellyfin_id: "demo-jf-1",
   has_video: false,
   pinned: false,
   hidden: false,
@@ -438,6 +440,11 @@ describe("App smoke", () => {
     expect(screen.getByLabelText("Select From")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
     expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
+    const lightboxArt = screen.getByRole("img", { name: /From artwork/i });
+    expect(lightboxArt.className).toMatch(/motion-art/);
+    expect(lightboxArt.closest(".stage-bg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.getByText("Motion preview")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Delete" }).length).toBeGreaterThan(1);
     fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));

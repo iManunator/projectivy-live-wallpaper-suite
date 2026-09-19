@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { FullscreenViewer, wallpaperSlide } from "./FullscreenViewer";
 import { api } from "./lib/api";
 import { applyLook, LOOK_PRESETS, stageOverlayStyle } from "./lib/gradient";
 import {
@@ -37,16 +38,6 @@ type MediaRow = {
   media_type?: string | null;
 };
 
-type ViewerItem = {
-  src: string;
-  title: string;
-  subtitle?: string;
-  watchState?: string;
-  id?: string;
-  pinned?: boolean;
-  hidden?: boolean;
-};
-
 const SAMPLE: Record<string, string> = {
   title: "Northlight",
   year: "2024",
@@ -79,109 +70,6 @@ function sampleFromMedia(item: MediaRow): Record<string, string> {
 
 function mediaKey(item: MediaRow): string {
   return String(item.jellyfin_id || item.tmdb_id || item.title || "");
-}
-
-function wallpaperSlide(item: WallpaperRecord): ViewerItem {
-  return {
-    src: api.wallpaperImage(item.layout, item.filename),
-    title: item.title,
-    subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
-    watchState: item.watch_state,
-    id: item.id,
-    pinned: item.pinned,
-    hidden: item.hidden,
-  };
-}
-
-export function FullscreenViewer({
-  items,
-  index,
-  onClose,
-  onIndex,
-  onPin,
-  onHide,
-  onDelete,
-}: {
-  items: ViewerItem[];
-  index: number;
-  onClose: () => void;
-  onIndex: (next: number) => void;
-  onPin?: (item: ViewerItem) => void;
-  onHide?: (item: ViewerItem) => void;
-  onDelete?: (item: ViewerItem) => void;
-}) {
-  const item = items[index];
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (!items.length) return;
-      if (event.key === "ArrowRight") onIndex((index + 1) % items.length);
-      if (event.key === "ArrowLeft") onIndex((index - 1 + items.length) % items.length);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [index, items, onClose, onIndex]);
-  if (!item) return null;
-  return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label={`${item.title} full screen`} onClick={onClose}>
-      <button type="button" className="lightbox-close btn ghost tiny" onClick={onClose} aria-label="Close full screen">
-        Close
-      </button>
-      {items.length > 1 && (
-        <>
-          <button
-            type="button"
-            className="lightbox-nav prev btn ghost"
-            aria-label="Previous wallpaper"
-            onClick={(event) => {
-              event.stopPropagation();
-              onIndex((index - 1 + items.length) % items.length);
-            }}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            className="lightbox-nav next btn ghost"
-            aria-label="Next wallpaper"
-            onClick={(event) => {
-              event.stopPropagation();
-              onIndex((index + 1) % items.length);
-            }}
-          >
-            ›
-          </button>
-        </>
-      )}
-      <figure className="lightbox-frame" onClick={(event) => event.stopPropagation()}>
-        <img src={item.src} alt={item.title} />
-        <figcaption>
-          <strong>{item.title}</strong>
-          {item.subtitle ? <span className="muted">{item.subtitle}</span> : null}
-          <WatchBadge state={item.watchState} />
-        </figcaption>
-        {(onPin || onHide || onDelete) && (
-          <div className="lightbox-actions" onClick={(event) => event.stopPropagation()}>
-            {onPin && (
-              <button type="button" className="btn ghost tiny" onClick={() => onPin(item)}>
-                {item.pinned ? "Unpin" : "Pin"}
-              </button>
-            )}
-            {onHide && (
-              <button type="button" className="btn ghost tiny" onClick={() => onHide(item)}>
-                {item.hidden ? "Allow again" : "Never show"}
-              </button>
-            )}
-            {onDelete && (
-              <button type="button" className="btn danger tiny" onClick={() => onDelete(item)}>
-                Delete
-              </button>
-            )}
-          </div>
-        )}
-      </figure>
-    </div>
-  );
 }
 
 export function EditorPage() {
