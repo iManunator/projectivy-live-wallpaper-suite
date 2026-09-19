@@ -1,3 +1,4 @@
+import type { GalleryDeleteResult } from "./gallery";
 import type { AppSettings, GenerateRequest, Layout, WallpaperRecord } from "./layout";
 
 export type JobSnapshot = {
@@ -52,15 +53,20 @@ export const api = {
   startJob: (body: Record<string, unknown>) =>
     json<JobSnapshot>("/api/jobs", { method: "POST", body: JSON.stringify(body) }),
   deleteGallery: (id: string) =>
-    json<{ status: string; message: string; deleted: string[]; titles: string[]; count: number }>(
-      `/api/gallery/${encodeURIComponent(id)}`,
-      { method: "DELETE" },
-    ),
+    json<GalleryDeleteResult>(`/api/gallery/${encodeURIComponent(id)}`, { method: "DELETE" }),
   deleteGalleryMany: (ids: string[]) =>
-    json<{ status: string; message: string; deleted: string[]; titles: string[]; missing: string[]; count: number }>(
-      "/api/gallery/delete",
-      { method: "POST", body: JSON.stringify({ ids }) },
-    ),
+    json<GalleryDeleteResult>("/api/gallery/delete", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  deleteGalleryAll: (opts?: { includePins?: boolean; layout?: string }) =>
+    json<GalleryDeleteResult>("/api/gallery/delete-all", {
+      method: "POST",
+      body: JSON.stringify({
+        include_pins: Boolean(opts?.includePins),
+        layout: opts?.layout || undefined,
+      }),
+    }),
   options: () => json<Record<string, unknown>>("/api/options"),
   media: (source: string, limit = 12) =>
     json<Array<Record<string, unknown>>>(`/api/media?source=${encodeURIComponent(source)}&limit=${limit}`),

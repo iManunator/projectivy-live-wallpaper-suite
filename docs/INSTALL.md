@@ -115,7 +115,7 @@ UUID: `dba9a12f-6252-4172-b5a3-8668d0523afb`
 In the web UI: **Generate** → Demo (or Jellyfin / Seerr) → optional *Bake parallax / motion VIDEO*.  
 Jellyfin batches download **Backdrop**, then **Primary**, so titles get real library art instead of a gradient with metadata only. Use **Replace existing** to rebuild stills that were generated before that fetch existed.
 
-**Editor** stays an in-page 16:9 stage. With Jellyfin connected, pick a title under **Jellyfin preview** to place layers on the real backdrop. Click a generated still in **Gallery** (or the strip under the editor) for a full-screen view — pin, never-show, or delete from the card or lightbox. Generate shows a live `3/12` progress bar (current title + toast when the batch finishes).
+**Editor** stays an in-page 16:9 stage. With Jellyfin connected, pick a title under **Jellyfin preview** to place layers on the real backdrop. Click a generated still in **Gallery** (or the strip under the editor) for a full-screen view — pin, never-show, or delete from the card or lightbox. The gallery toolbar can **Select all**, **Delete selected**, or **Delete all** (skips pins unless you choose the explicit including-pins option; both paths confirm with a count). Generate shows a live `3/12` progress bar (current title + toast when the batch finishes).
 
 Cron lives under **Settings**. Skip/replace matches Jellyfin, TMDB, and IMDb ids.
 

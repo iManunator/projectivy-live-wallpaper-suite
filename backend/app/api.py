@@ -290,6 +290,31 @@ def gallery(layout: str | None = None) -> list[dict[str, Any]]:
     return [r.model_dump() for r in records]
 
 
+@router.post("/api/gallery/delete-all")
+def gallery_delete_all(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    include_pins = _truthy(body.get("include_pins", body.get("includePins")))
+    layout = body.get("layout")
+    layout_name = str(layout).strip() if layout else None
+    out = catalog_store.delete_all(include_pins=include_pins, layout=layout_name)
+    return _gallery_delete_result(out, include_pins=include_pins, all_mode=True)
+
+
+@router.post("/api/gallery/delete")
+def gallery_delete_bulk(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    if body.get("all") is True or str(body.get("all") or "").lower() in {"1", "true", "yes"}:
+        return gallery_delete_all(body)
+    ids = body.get("ids") or body.get("id") or []
+    if isinstance(ids, str):
+        ids = [ids]
+    wanted = {str(item) for item in ids if item}
+    if not wanted:
+        raise HTTPException(400, "Pass ids to delete")
+    out = catalog_store.delete_records(wanted)
+    if not out["deleted"]:
+        raise HTTPException(404, "Not found")
+    return _gallery_delete_result(out)
+
+
 @router.post("/api/gallery/delete/{record_id}")
 def gallery_delete(record_id: str) -> dict[str, Any]:
     return _gallery_delete_one(record_id)
@@ -300,40 +325,45 @@ def gallery_delete_rest(record_id: str) -> dict[str, Any]:
     return _gallery_delete_one(record_id)
 
 
-@router.post("/api/gallery/delete")
-def gallery_delete_bulk(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
-    ids = body.get("ids") or body.get("id") or []
-    if isinstance(ids, str):
-        ids = [ids]
-    wanted = {str(item) for item in ids if item}
-    if not wanted:
-        raise HTTPException(400, "Pass ids to delete")
-    out = catalog_store.delete_records(wanted)
-    if not out["deleted"]:
-        raise HTTPException(404, "Not found")
-    return {
-        "status": "ok",
-        "deleted": out["deleted"],
-        "files": out["files"],
-        "titles": out["titles"],
-        "missing": out["missing"],
-        "count": len(out["deleted"]),
-        "message": _delete_message(out["titles"]),
-    }
-
-
 def _gallery_delete_one(record_id: str) -> dict[str, Any]:
     out = catalog_store.delete_records({record_id})
     if not out["deleted"]:
         raise HTTPException(404, "Not found")
+    return _gallery_delete_result(out)
+
+
+def _gallery_delete_result(
+    out: dict[str, Any],
+    *,
+    include_pins: bool = False,
+    all_mode: bool = False,
+) -> dict[str, Any]:
+    skipped = list(out.get("skipped_pinned") or [])
+    titles = list(out.get("titles") or [])
     return {
         "status": "ok",
-        "deleted": out["deleted"],
-        "files": out["files"],
-        "titles": out["titles"],
-        "count": 1,
-        "message": _delete_message(out["titles"]),
+        "deleted": out.get("deleted") or [],
+        "files": out.get("files") or [],
+        "titles": titles,
+        "missing": out.get("missing") or [],
+        "errors": out.get("errors") or [],
+        "skipped_pinned": skipped,
+        "skipped_titles": out.get("skipped_titles") or [],
+        "count": len(out.get("deleted") or []),
+        "pinned_kept": len(skipped),
+        "include_pins": include_pins,
+        "message": (
+            _delete_all_message(titles, skipped, include_pins)
+            if all_mode
+            else _delete_message(titles)
+        ),
     }
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _delete_message(titles: list[str]) -> str:
@@ -342,6 +372,21 @@ def _delete_message(titles: list[str]) -> str:
     if len(titles) == 1:
         return f"Deleted “{titles[0]}”."
     return f"Deleted {len(titles)} wallpapers."
+
+
+def _delete_all_message(titles: list[str], skipped_pinned: list[str], include_pins: bool) -> str:
+    if not titles and not skipped_pinned:
+        return "Gallery is already empty."
+    if not titles and skipped_pinned:
+        n = len(skipped_pinned)
+        noun = "wallpaper" if n == 1 else "wallpapers"
+        return f"Kept {n} pinned {noun}. Nothing else to delete."
+    msg = _delete_message(titles)
+    if skipped_pinned and not include_pins:
+        n = len(skipped_pinned)
+        noun = "wallpaper" if n == 1 else "wallpapers"
+        msg += f" Kept {n} pinned {noun}."
+    return msg
 
 
 @router.post("/api/gallery/{record_id}/flag")

@@ -1,25 +1,85 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-const galleryItems = [
-  {
-    id: "1",
-    layout: "Netflix Hero",
-    filename: "from.jpg",
-    title: "From",
-    year: 2022,
-    rating: 8.5,
-    genres: ["Horror"],
-    official_rating: "TV-MA",
-    watch_state: "unwatched",
-    library_state: "in_library",
-    source: "jellyfin",
-    has_video: false,
-    pinned: false,
-    hidden: false,
-  },
-];
+type GalleryFixture = {
+  id: string;
+  layout: string;
+  filename: string;
+  title: string;
+  year: number;
+  rating: number;
+  genres: string[];
+  official_rating: string;
+  watch_state: string;
+  library_state: string;
+  source: string;
+  jellyfin_id?: string;
+  has_video: boolean;
+  pinned: boolean;
+  hidden: boolean;
+};
+
+const fromItem: GalleryFixture = {
+  id: "1",
+  layout: "Netflix Hero",
+  filename: "from.jpg",
+  title: "From",
+  year: 2022,
+  rating: 8.5,
+  genres: ["Horror"],
+  official_rating: "TV-MA",
+  watch_state: "unwatched",
+  library_state: "in_library",
+  source: "jellyfin",
+  jellyfin_id: "demo-jf-1",
+  has_video: false,
+  pinned: false,
+  hidden: false,
+};
+
+const harborItem: GalleryFixture = {
+  ...fromItem,
+  id: "2",
+  filename: "harbor.jpg",
+  title: "Harbor Season",
+  year: 2022,
+  watch_state: "partial",
+  pinned: true,
+  hidden: false,
+};
+
+const relayItem: GalleryFixture = {
+  ...fromItem,
+  id: "3",
+  filename: "relay.jpg",
+  title: "Night Relay",
+  year: 2021,
+  watch_state: "unwatched",
+  pinned: false,
+  hidden: true,
+};
+
+const galleryItems: GalleryFixture[] = [];
+
+function seedGallery(items: GalleryFixture[]) {
+  galleryItems.splice(0, galleryItems.length, ...items.map((item) => ({ ...item })));
+}
+
+function deleteMessage(deleted: GalleryFixture[], skipped: GalleryFixture[], includePins: boolean) {
+  if (!deleted.length && !skipped.length) return "Gallery is already empty.";
+  if (!deleted.length && skipped.length) {
+    return `Kept ${skipped.length} pinned wallpaper${skipped.length === 1 ? "" : "s"}. Nothing else to delete.`;
+  }
+  const msg =
+    deleted.length === 1 ? `Deleted “${deleted[0].title}”.` : `Deleted ${deleted.length} wallpapers.`;
+  if (skipped.length && !includePins) {
+    return `${msg} Kept ${skipped.length} pinned wallpaper${skipped.length === 1 ? "" : "s"}.`;
+  }
+  return msg;
+}
+
+seedGallery([fromItem]);
 
 vi.stubGlobal(
   "fetch",
@@ -105,10 +165,79 @@ vi.stubGlobal(
         };
       }
     } else if (url.includes("/api/gallery/") && url.includes("/flag") && method === "POST") {
-      body = { status: "ok", record: galleryItems[0] };
-    } else if ((url.includes("/api/gallery/") && method === "DELETE") || (url.includes("/api/gallery/delete") && method === "POST")) {
-      galleryItems.splice(0, galleryItems.length);
-      body = { status: "ok", message: "Deleted “From”.", deleted: ["1"], titles: ["From"], count: 1, missing: [] };
+      const id = decodeURIComponent(url.split("/api/gallery/")[1].split("/")[0]);
+      const payload = JSON.parse(String(init?.body || "{}")) as { pinned?: boolean; hidden?: boolean };
+      const rec = galleryItems.find((item) => item.id === id);
+      if (rec) {
+        if ("pinned" in payload) rec.pinned = Boolean(payload.pinned);
+        if ("hidden" in payload) rec.hidden = Boolean(payload.hidden);
+      }
+      body = { status: "ok", record: rec || galleryItems[0] };
+    } else if (url.includes("/api/gallery/delete-all") && method === "POST") {
+      const payload = JSON.parse(String(init?.body || "{}")) as { include_pins?: boolean };
+      const includePins = Boolean(payload.include_pins);
+      const skipped = includePins ? [] : galleryItems.filter((item) => item.pinned);
+      const deleted = includePins ? [...galleryItems] : galleryItems.filter((item) => !item.pinned);
+      seedGallery(skipped);
+      body = {
+        status: "ok",
+        message: deleteMessage(deleted, skipped, includePins),
+        deleted: deleted.map((item) => item.id),
+        titles: deleted.map((item) => item.title),
+        skipped_pinned: skipped.map((item) => item.id),
+        count: deleted.length,
+        pinned_kept: skipped.length,
+        include_pins: includePins,
+        missing: [],
+        errors: [],
+      };
+    } else if (url.includes("/api/gallery/delete") && method === "POST") {
+      const payload = JSON.parse(String(init?.body || "{}")) as { ids?: string[]; all?: boolean; include_pins?: boolean };
+      if (payload.all) {
+        const includePins = Boolean(payload.include_pins);
+        const skipped = includePins ? [] : galleryItems.filter((item) => item.pinned);
+        const deleted = includePins ? [...galleryItems] : galleryItems.filter((item) => !item.pinned);
+        seedGallery(skipped);
+        body = {
+          status: "ok",
+          message: deleteMessage(deleted, skipped, includePins),
+          deleted: deleted.map((item) => item.id),
+          titles: deleted.map((item) => item.title),
+          skipped_pinned: skipped.map((item) => item.id),
+          count: deleted.length,
+          pinned_kept: skipped.length,
+          include_pins: includePins,
+          missing: [],
+          errors: [],
+        };
+      } else {
+        const ids = new Set(payload.ids || []);
+        const deleted = galleryItems.filter((item) => ids.has(item.id));
+        const missing = [...ids].filter((id) => !galleryItems.some((item) => item.id === id));
+        seedGallery(galleryItems.filter((item) => !ids.has(item.id)));
+        body = {
+          status: "ok",
+          message: deleteMessage(deleted, [], true),
+          deleted: deleted.map((item) => item.id),
+          titles: deleted.map((item) => item.title),
+          missing,
+          count: deleted.length,
+          errors: [],
+        };
+      }
+    } else if (url.includes("/api/gallery/") && method === "DELETE") {
+      const id = decodeURIComponent(url.split("/api/gallery/")[1].split("?")[0]);
+      const found = galleryItems.find((item) => item.id === id);
+      seedGallery(galleryItems.filter((item) => item.id !== id));
+      body = {
+        status: "ok",
+        message: found ? `Deleted “${found.title}”.` : "Deleted 0 wallpapers.",
+        deleted: found ? [id] : [],
+        titles: found ? [found.title] : [],
+        count: found ? 1 : 0,
+        missing: found ? [] : [id],
+        errors: [],
+      };
     } else if (url.includes("/api/gallery")) {
       body = galleryItems;
     }
@@ -280,6 +409,10 @@ class ProbeImage {
 vi.stubGlobal("Image", ProbeImage);
 
 describe("App smoke", () => {
+  beforeEach(() => {
+    seedGallery([fromItem]);
+  });
+
   it("renders tonight preview and can open the gallery", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: /home screen/i })).toBeInTheDocument();
@@ -295,7 +428,11 @@ describe("App smoke", () => {
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
-    expect(screen.getByText(/1 wallpapers/)).toBeInTheDocument();
+    expect(screen.getByText(/1 wallpaper/)).toBeInTheDocument();
+    expect(screen.getByText(/0 selected/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select all" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete selected" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete all" })).toBeInTheDocument();
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Pin" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Never show" })).toBeInTheDocument();
@@ -303,13 +440,18 @@ describe("App smoke", () => {
     expect(screen.getByLabelText("Select From")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /View From full screen/i }));
     expect(screen.getByRole("dialog", { name: /From full screen/i })).toBeInTheDocument();
+    const lightboxArt = screen.getByRole("img", { name: /From artwork/i });
+    expect(lightboxArt.className).toMatch(/motion-art/);
+    expect(lightboxArt.closest(".stage-bg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.getByText("Motion preview")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Delete" }).length).toBeGreaterThan(1);
     fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(confirm).toHaveBeenCalled();
+    const confirm = screen.getByRole("dialog", { name: /Delete “From”/i });
+    expect(confirm).toHaveTextContent(/cannot be undone/i);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
     expect((await screen.findAllByText(/Deleted/)).length).toBeGreaterThan(0);
-    confirm.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: "Editor" }));
     expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
     expect(await screen.findByRole("img", { name: /Northlight artwork/i })).toBeInTheDocument();
@@ -351,3 +493,83 @@ describe("App smoke", () => {
     expect((await screen.findAllByText(/Connected to Jellyfin/)).length).toBeGreaterThan(0);
   });
 });
+
+async function openGallery() {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
+  expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
+}
+
+describe("gallery delete UX", () => {
+  beforeEach(() => {
+    seedGallery([fromItem, harborItem, relayItem]);
+  });
+
+  it("selects all visible stills, shows the count, and cancels delete selected", async () => {
+    await openGallery();
+    expect(screen.getByText(/2 wallpaper/)).toBeInTheDocument();
+    expect(screen.getByText(/0 selected/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    expect(screen.getByText(/2 selected/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete selected?" });
+    expect(dialog).toHaveTextContent(/Permanently delete 2 wallpapers/);
+    expect(dialog).toHaveTextContent(/cannot be undone/i);
+    expect(dialog).toHaveTextContent(/1 pinned wallpaper/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Delete selected?" })).not.toBeInTheDocument();
+    expect(screen.getByText("From")).toBeInTheDocument();
+    expect(screen.getByText("Harbor Season")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.getByText(/0 selected/)).toBeInTheDocument();
+  });
+
+  it("deletes the selection after confirm and toasts success", async () => {
+    await openGallery();
+    fireEvent.click(screen.getByLabelText("Select From"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: /Delete “From”/i })).getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/Deleted “From”/);
+    expect(screen.queryByText("From")).not.toBeInTheDocument();
+    expect(screen.getByText("Harbor Season")).toBeInTheDocument();
+  });
+
+  it("delete all skips pins by default and keeps pin / never-show actions nearby", async () => {
+    await openGallery();
+    expect(screen.getByRole("button", { name: "Pin" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unpin" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Never show" }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = screen.getByRole("dialog", { name: "Clear gallery?" });
+    expect(dialog).toHaveTextContent(/Permanently delete 2 wallpapers/);
+    expect(dialog).toHaveTextContent(/never-show/);
+    expect(dialog).toHaveTextContent(/cannot be undone/i);
+    expect(dialog).toHaveTextContent(/1 pinned wallpaper will be kept/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 unpinned" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/Kept 1 pinned wallpaper/);
+    expect(screen.queryByText("From")).not.toBeInTheDocument();
+    expect(screen.getByText("Harbor Season")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unpin" })).toBeInTheDocument();
+  });
+
+  it("offers an explicit delete-all including pins danger option", async () => {
+    await openGallery();
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = screen.getByRole("dialog", { name: "Clear gallery?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete all 3 including 1 pin" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/Deleted 3 wallpapers/);
+    expect(screen.getByText(/No wallpapers yet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete all" })).toBeDisabled();
+  });
+
+  it("shows an empty gallery and keeps delete all disabled", async () => {
+    seedGallery([]);
+    await openGallery();
+    expect(screen.getByText(/No wallpapers yet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete all" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Select all" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete selected" })).toBeDisabled();
+    expect(screen.getByText(/0 wallpaper/)).toBeInTheDocument();
+  });
+});
+

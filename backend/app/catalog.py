@@ -66,20 +66,65 @@ def delete_records(ids: set[str]) -> dict:
     deleted: list[str] = []
     files: list[str] = []
     titles: list[str] = []
+    errors: list[str] = []
     for rec in catalog:
         if rec.id not in wanted:
             keep.append(rec)
             continue
         jpg = layout_dir(rec.layout) / rec.filename
         for path in _companion_paths(jpg):
-            if path.is_file():
-                path.unlink()
-                files.append(path.name)
+            try:
+                if path.is_file():
+                    path.unlink()
+                    files.append(path.name)
+            except OSError as exc:
+                errors.append(f"{path.name}: {exc}")
         deleted.append(rec.id)
         titles.append(rec.title)
     save_catalog(keep)
     missing = sorted(wanted - set(deleted))
-    return {"kept": keep, "deleted": deleted, "files": files, "titles": titles, "missing": missing}
+    return {
+        "kept": keep,
+        "deleted": deleted,
+        "files": files,
+        "titles": titles,
+        "missing": missing,
+        "errors": errors,
+        "skipped_pinned": [],
+        "skipped_titles": [],
+    }
+
+
+def delete_all(*, include_pins: bool = False, layout: str | None = None) -> dict:
+    """Clear the gallery. Pinned rows are kept unless include_pins is true."""
+    catalog = load_catalog()
+    layout_key = (layout or "").strip().lower()
+    wanted: set[str] = set()
+    skipped: list[str] = []
+    skipped_titles: list[str] = []
+    for rec in catalog:
+        if layout_key and rec.layout.lower() != layout_key:
+            continue
+        if rec.pinned and not include_pins:
+            skipped.append(rec.id)
+            skipped_titles.append(rec.title)
+            continue
+        wanted.add(rec.id)
+    if not wanted:
+        return {
+            "kept": catalog,
+            "deleted": [],
+            "files": [],
+            "titles": [],
+            "missing": [],
+            "errors": [],
+            "skipped_pinned": skipped,
+            "skipped_titles": skipped_titles,
+        }
+    out = delete_records(wanted)
+    out["skipped_pinned"] = skipped
+    out["skipped_titles"] = skipped_titles
+    return out
 
 
 def layouts_with_images(catalog: list[WallpaperRecord] | None = None) -> list[str]:

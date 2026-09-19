@@ -1,13 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { EditorPage, FullscreenViewer } from "./EditorPage";
+import { EditorPage } from "./EditorPage";
+import { GalleryPage } from "./GalleryPage";
 import { api } from "./lib/api";
 import { type AppSettings, type CronJob } from "./lib/layout";
-import type { WallpaperRecord } from "./lib/layout";
 import { describeBatchFlags } from "./lib/batch";
 import { errorToast, providerToast } from "./lib/messages";
 import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, PRESET_DURATION, type MotionStyle } from "./lib/motion";
-import { formatOpsTime, LAYOUT_DNA, queueBadges, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
-import { badgeClass } from "./lib/watch";
+import { formatOpsTime, LAYOUT_DNA, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { WatchBadge } from "./WatchBadge";
 import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
 import { JobProgress, JobProvider, useJobs } from "./JobProgress";
@@ -15,28 +14,6 @@ import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
 
 type Page = "tonight" | "gallery" | "editor" | "generate" | "dashboard" | "settings";
-
-type ViewerItem = {
-  src: string;
-  title: string;
-  subtitle?: string;
-  watchState?: string;
-  id?: string;
-  pinned?: boolean;
-  hidden?: boolean;
-};
-
-function wallpaperSlide(item: WallpaperRecord): ViewerItem {
-  return {
-    src: api.wallpaperImage(item.layout, item.filename),
-    title: item.title,
-    subtitle: [item.year, item.layout].filter(Boolean).join(" · "),
-    watchState: item.watch_state,
-    id: item.id,
-    pinned: item.pinned,
-    hidden: item.hidden,
-  };
-}
 
 const EMPTY_SETTINGS: AppSettings = {
   public_base_url: "http://127.0.0.1:8787",
@@ -283,184 +260,6 @@ function TonightPage() {
           </article>
         ))}
       </div>
-    </section>
-  );
-}
-
-function GalleryPage({ onEdit }: { onEdit: () => void }) {
-  const notify = useToasts();
-  const [items, setItems] = useState<WallpaperRecord[]>([]);
-  const [error, setError] = useState("");
-  const [showHidden, setShowHidden] = useState(false);
-  const [viewer, setViewer] = useState<number | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busyId, setBusyId] = useState("");
-  async function refresh() {
-    try {
-      setItems(await api.gallery());
-      setError("");
-    } catch (err) {
-      const toast = errorToast(err, "Could not load gallery");
-      setError(toast.text);
-    }
-  }
-  useEffect(() => {
-    refresh();
-  }, []);
-  const visible = items.filter((item) => showHidden || !item.hidden);
-  const slides = visible.map(wallpaperSlide);
-
-  function toggleSelect(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function flagItem(item: WallpaperRecord, body: { pinned?: boolean; hidden?: boolean }) {
-    setBusyId(item.id);
-    try {
-      await api.flag(item.id, body);
-      await refresh();
-    } catch (err) {
-      const toast = errorToast(err, "Could not update gallery item");
-      notify(toast.kind, toast.text);
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  async function deleteIds(ids: string[], titles: string[]) {
-    if (!ids.length) return;
-    const label = titles.length === 1 ? `Delete “${titles[0]}”?` : `Delete ${ids.length} wallpapers?`;
-    if (!window.confirm(`${label} This cannot be undone.`)) return;
-    setBusyId(ids[0]);
-    try {
-      const out = ids.length === 1 ? await api.deleteGallery(ids[0]) : await api.deleteGalleryMany(ids);
-      notify("ok", out.message || `Deleted ${out.count} wallpaper${out.count === 1 ? "" : "s"}.`);
-      setSelected((current) => {
-        const next = new Set(current);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
-      if (viewer !== null) {
-        const remaining = visible.filter((item) => !ids.includes(item.id));
-        setViewer(remaining.length ? Math.min(viewer, remaining.length - 1) : null);
-      }
-      await refresh();
-    } catch (err) {
-      const toast = errorToast(err, "Could not delete");
-      notify(toast.kind, toast.text);
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  return (
-    <section>
-      <h1>Gallery</h1>
-      <p className="lede">
-        Generated stills and optional parallax VIDEO loops served to Projectivy. Pin a title to keep it in rotation,
-        mark never-show so it drops out of every queue, or delete a still (and its companion MP4) from disk. Click a
-        still for a full-screen view.
-      </p>
-      <div className="row" style={{ marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-        <button className="btn" onClick={onEdit}>Open editor</button>
-        <span className="muted">{visible.length} wallpapers</span>
-        <label className="inline">
-          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show never-show
-        </label>
-        {selected.size > 0 && (
-          <button
-            className="btn danger tiny"
-            disabled={Boolean(busyId)}
-            onClick={() => {
-              const chosen = visible.filter((item) => selected.has(item.id));
-              void deleteIds(
-                chosen.map((item) => item.id),
-                chosen.map((item) => item.title),
-              );
-            }}
-          >
-            Delete selected ({selected.size})
-          </button>
-        )}
-      </div>
-      {error && <p className="error">{error}</p>}
-      <div className="thumb-grid">
-        {visible.map((item, index) => (
-          <article className={`thumb ${selected.has(item.id) ? "selected" : ""}`} key={item.id}>
-            <label className="thumb-select inline">
-              <input
-                type="checkbox"
-                checked={selected.has(item.id)}
-                onChange={() => toggleSelect(item.id)}
-                aria-label={`Select ${item.title}`}
-              />
-            </label>
-            <button type="button" className="thumb-hit" onClick={() => setViewer(index)} aria-label={`View ${item.title} full screen`}>
-              <img src={api.wallpaperImage(item.layout, item.filename)} alt={item.title} />
-              <WatchBadge state={item.watch_state} className="thumb-watch" />
-            </button>
-            <div className="meta">
-              <strong>{item.title}</strong>
-              <div className="muted">
-                {item.year} · {item.layout}
-                {item.has_video ? ` · ${item.parallax_style || "motion"}` : ""}
-              </div>
-              <div>
-                {queueBadges(item).map((badge) => (
-                  <span className={badgeClass(badge)} key={badge}>{badge}</span>
-                ))}
-              </div>
-              <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-                <button
-                  className="btn ghost tiny"
-                  disabled={busyId === item.id}
-                  onClick={() => flagItem(item, { pinned: !item.pinned })}
-                >
-                  {item.pinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  className="btn ghost tiny"
-                  disabled={busyId === item.id}
-                  onClick={() => flagItem(item, { hidden: !item.hidden })}
-                >
-                  {item.hidden ? "Allow again" : "Never show"}
-                </button>
-                <button
-                  className="btn danger tiny"
-                  disabled={busyId === item.id}
-                  onClick={() => deleteIds([item.id], [item.title])}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-      {viewer !== null && (
-        <FullscreenViewer
-          items={slides}
-          index={viewer}
-          onClose={() => setViewer(null)}
-          onIndex={setViewer}
-          onPin={(slide) => {
-            const item = visible.find((row) => row.id === slide.id);
-            if (item) void flagItem(item, { pinned: !item.pinned });
-          }}
-          onHide={(slide) => {
-            const item = visible.find((row) => row.id === slide.id);
-            if (item) void flagItem(item, { hidden: !item.hidden });
-          }}
-          onDelete={(slide) => {
-            if (slide.id) void deleteIds([slide.id], [slide.title]);
-          }}
-        />
-      )}
     </section>
   );
 }

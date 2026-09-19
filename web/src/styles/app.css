@@ -142,6 +142,19 @@ button, input, select, textarea {
   max-width: 46%;
   color: #fff;
 }
+.sample-chrome .sample-logo {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+  max-width: 40%;
+  max-height: 18%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+.sample-chrome:has(.sample-logo) .sample-title { top: 28%; }
+.sample-chrome:has(.sample-logo) .sample-badge { top: 4%; }
 .tv-preview {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -243,6 +256,19 @@ input, select, textarea {
   color: var(--danger);
   border: 1px solid rgba(224, 112, 112, 0.45);
 }
+.btn.danger.fill {
+  background: var(--danger);
+  color: #1a0808;
+  border-color: transparent;
+}
+.btn.danger.fill.strong {
+  background: #c44545;
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .job-progress {
   margin: 0 0 16px;
@@ -276,6 +302,59 @@ input, select, textarea {
   z-index: 3;
   width: auto;
 }
+.gallery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.gallery-toolbar .btn { min-height: 44px; }
+.gallery-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.thumb-actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.62);
+  display: grid;
+  place-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+.confirm-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  max-width: 28rem;
+  width: min(100%, 28rem);
+  box-shadow: var(--shadow);
+}
+.confirm-dialog h2 {
+  font-family: "Fraunces", serif;
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+.confirm-dialog p {
+  margin: 0 0 10px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.confirm-note { color: var(--muted) !important; font-size: 13px; }
+.confirm-actions { margin-top: 16px; }
+.confirm-actions .btn { min-height: 44px; }
 .lightbox-actions {
   display: flex;
   gap: 8px;
@@ -463,28 +542,47 @@ input, select, textarea {
   margin: 0;
   max-width: min(96vw, 1600px);
   max-height: 92vh;
+  width: min(96vw, 1600px);
   display: grid;
   gap: 10px;
 }
-.lightbox-frame img {
-  max-width: 96vw;
-  max-height: 84vh;
-  width: auto;
+.lightbox-stage {
+  width: 100%;
+  max-width: 100%;
+}
+.lightbox-stage > .tv-preview,
+.lightbox-stage > .canvas-wrap {
+  --stage-chrome: 7rem;
+  --stage-max-height: min(72dvh, 84vh);
+  width: min(100%, calc(var(--stage-max-height) * 16 / 9));
+  max-width: 100%;
+}
+.lightbox-frame .canvas-art,
+.lightbox-frame .tv-art,
+.lightbox-frame .stage-logo {
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+}
+.lightbox-frame .stage-logo {
   height: auto;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  max-height: 22%;
+  width: auto;
+  max-width: 46%;
 }
 .lightbox-frame figcaption {
   display: flex;
   gap: 10px;
   align-items: baseline;
+  flex-wrap: wrap;
   color: var(--text);
 }
 .lightbox-close {
   position: absolute;
   top: 16px;
   right: 16px;
+  min-height: 44px;
 }
 .lightbox-nav {
   position: absolute;
@@ -614,4 +712,13 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
     max-width: none;
   }
   .toast { font-size: 16px; }
+  .gallery-toolbar .btn,
+  .confirm-actions .btn,
+  .lightbox-close,
+  .lightbox-actions .btn {
+    min-height: 44px;
+  }
+  .lightbox {
+    padding: 64px 12px 24px;
+  }
 }
