@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Docker gallery bind-mount (EXDEV).** Motion bake no longer fails with `[Errno 18] Invalid cross-device link` when promoting `/tmp` MP4 output onto `/data/gallery` (bind-mounted volume). Shared `promote_temp` uses `shutil.move` (rename, or copy2 + unlink across devices).
+
 Layered parallax: the 16:9 editor stage always fits its panel, CSS/ffmpeg motion pans **artwork only**, and logo/title/badges stay pinned.
 
 - **Editor preview size.** The 16:9 stage uses object-fit:contain sizing (`width: min(100%, calc(max-height * 16/9))`, max-height from remaining viewport). Centered; no page blowout or horizontal scroll from the stage on phone or desktop.
