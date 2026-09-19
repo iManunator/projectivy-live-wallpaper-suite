@@ -23,6 +23,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.fsutil import promote_temp
+
 STYLES = ("parallax", "kenburns", "drift")
 QUALITIES = ("light", "standard", "cinematic")
 # Distinct enough that Subtle / Cinematic / Bold change the baked loop at a glance.
@@ -235,7 +237,7 @@ def generate_motion(
         if result.returncode != 0 or not tmp_path.is_file() or tmp_path.stat().st_size < 1000:
             tail = (result.stderr or result.stdout or "ffmpeg failed").strip().splitlines()[-8:]
             return False, " | ".join(tail) or "ffmpeg failed"
-        tmp_path.replace(mp4)
+        promote_temp(tmp_path, mp4)
         return True, str(mp4)
     except subprocess.TimeoutExpired:
         return False, "ffmpeg timeout"

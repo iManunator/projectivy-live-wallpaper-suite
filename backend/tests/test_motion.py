@@ -259,3 +259,36 @@ def test_ffmpeg_keeps_chrome_pinned_on_kenburns(tmp_path: Path):
     assert min(p0) > 180, p0
     assert min(p6) > 180, p6
 
+@pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
+def test_generate_motion_survives_exdev_promote(tmp_path: Path, monkeypatch):
+    """Bake must promote /tmp → gallery even when os.rename raises EXDEV."""
+    import errno
+    import os
+
+    item = MediaItem(title="EXDEV", year=2024)
+    layout = PRESETS["Status Focus"]
+    jpg = tmp_path / "gallery" / "exdev.jpg"
+    plate = tmp_path / "gallery" / "exdev_plate.jpg"
+    chrome = tmp_path / "gallery" / "exdev_chrome.png"
+    jpg.parent.mkdir(parents=True)
+    save_jpeg(render_still(item, layout), jpg)
+    save_jpeg(render_plate(item, layout), plate)
+    save_png(render_chrome(item, layout), chrome)
+    profile = MotionProfile(
+        style="kenburns",
+        quality="light",
+        intensity=0.5,
+        duration=1.0,
+        fps=12,
+        width=320,
+        height=180,
+        light_leak=False,
+    )
+
+    def rename_exdev(a, b):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    monkeypatch.setattr(os, "rename", rename_exdev)
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    assert has_motion(jpg)
