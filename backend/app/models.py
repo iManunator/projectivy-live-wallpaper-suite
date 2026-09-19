@@ -86,6 +86,7 @@ class Layout(BaseModel):
     logo_padding: int = 25
     show_watch_badge: bool = True
     show_seerr_badge: bool = True
+    dna_revision: int = 0
 
 
 class WallpaperRecord(BaseModel):

@@ -147,7 +147,7 @@ Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523af
 | Feature | What you get |
 | --- | --- |
 | **Tonight preview** | See tonight’s pick inside Projectivy chrome before it hits the TV. Bake this pick, open the editor, or refresh the mix. |
-| **Layout DNA** | Netflix Hero, Prime Cinematic, Google TV Clean, **Projectivy Dock**, Status Focus, Jellyfin Dense — watch pills on the flagship four, plus custom layouts. |
+| **Layout DNA** | Netflix Hero (gold), Prime Cinematic, Google TV Clean, **Projectivy Dock**, Status Focus, Jellyfin Dense — TV-safe chrome on all six (clock/dock margins, watch/Seerr on their own row, logo vs title). Custom layouts (`preset: false`) stay yours. |
 | **Smart queues** | Unwatched · Continue watching · Newly added · Seerr trending · Requestable · Pinned. Gallery badges match the queues, including **Watched**. |
 | **Parallax motion** | Optional H.264 loops: layered plate + locked chrome · parallax / Ken Burns / drift of the **artwork only** · Subtle / Cinematic / Bold (background zoom/pan) · JPEG still always kept. `videoUrl` only when an MP4 exists. |
 | **Taste profiles** | `tonight` · `unwatched_heavy` · `cinephile` · `discovery` — weighted mixes, editable, `profile=` / `pool=taste:<name>`. |

@@ -52,6 +52,7 @@ export type Layout = {
   logo_padding?: number;
   show_watch_badge?: boolean;
   show_seerr_badge?: boolean;
+  dna_revision?: number;
 };
 
 export type WallpaperRecord = {

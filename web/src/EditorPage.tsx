@@ -461,6 +461,8 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
                           color: item.color,
                           width: isLogoTitle && logoBox ? `${(logoBox.width / layout.canvas_width) * 100}%` : undefined,
                           maxWidth: item.width ? `${(item.width / layout.canvas_width) * 100}%` : undefined,
+                          maxHeight: item.height ? `${(item.height / layout.canvas_height) * 100}%` : undefined,
+                          overflow: item.slot === "overview" ? "hidden" : undefined,
                           whiteSpace: item.slot === "overview" ? "normal" : "nowrap",
                         }}
                       >

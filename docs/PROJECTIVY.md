@@ -19,6 +19,10 @@ CI also uploads ephemeral artifact **`wallpaparr-plugin-apk`** (same filenames) 
 
 The `:core` JVM module holds pick-mode mapping, Leanback settings copy, URL rewrite, IMAGE vs VIDEO choice, preload/double-buffer helpers, and deep-link builders so logic is tested without an emulator.
 
+## Home-screen safe zones
+
+Layout DNA chrome stays left of the clock and above the row dock (`SAFE_LEFT` / `SAFE_RIGHT` = 72, `SAFE_TOP` = 96 for logos, `SAFE_BOTTOM` = 220). **Netflix Hero** is the gold title stack (title at 80,70 with a dedicated watch/Seerr row). The other bundled presets follow that rhythm so pills, logos, and titles do not overlap on 16:9.
+
 ## IMAGE vs VIDEO
 
 Projectivy `WallpaperType.IMAGE` (0) plays `imageUrl` (JPEG). `WallpaperType.VIDEO` (4) loops `videoUrl` (H.264 MP4). Wallpaparr always keeps the still; motion is an optional sibling file. Plugin setting **Play baked motion (MP4)** picks VIDEO when `videoUrl` is present; **If no MP4, show the JPEG still** uses IMAGE otherwise (off = skip still-only titles and hold the previous wallpaper). Depth layers are baked into the MP4 (Projectivy is not a compositor): ffmpeg pans the artwork plate and overlays static logo/title chrome. Details: [MOTION.md](MOTION.md).
