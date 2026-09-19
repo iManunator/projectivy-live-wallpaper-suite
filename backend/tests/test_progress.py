@@ -7,6 +7,16 @@ from app.progress import reset_for_tests
 from app.render import render_chrome
 
 
+def _wait_job(client, job_id: str, *, ticks: int = 80) -> dict:
+    body = {}
+    for _ in range(ticks):
+        body = client.get(f"/api/jobs/{job_id}").json()
+        if body["status"] in {"done", "error"}:
+            return body
+        time.sleep(0.05)
+    return body
+
+
 def test_gallery_delete_removes_still_video_and_catalog(client, suite_dirs):
     catalog_mod = suite_dirs["catalog_mod"]
     gallery = suite_dirs["gallery"]
@@ -63,12 +73,7 @@ def test_jobs_generate_reports_progress(client):
     assert job["id"]
     assert job["kind"] == "generate"
     assert job["status"] in {"queued", "running", "done"}
-    body = job
-    for _ in range(200):
-        body = client.get(f"/api/jobs/{job['id']}").json()
-        if body["status"] in {"done", "error"}:
-            break
-        time.sleep(0.05)
+    body = _wait_job(client, job["id"], ticks=200)
     assert body["status"] == "done", body
     assert body["percent"] == 100
     assert body["total"] >= 1
@@ -94,23 +99,38 @@ def test_jobs_conflict_when_running(client, monkeypatch):
     assert res.status_code == 409
 
 
-def test_jobs_motion_kind(client):
+def test_jobs_motion_kind(client, monkeypatch):
     reset_for_tests()
+
+    def fake_bake(layout, filename=None, job_id=None):
+        from app.progress import report
+
+        report(job_id, total=1, done=0, current="Night Relay", message="Baking motion…")
+        report(job_id, done=1, created=["relay.jpg"], current="Night Relay")
+        return {
+            "status": "ok",
+            "generated": ["relay.jpg"],
+            "count": 1,
+            "total": 1,
+            "done": 1,
+            "layered": True,
+            "chrome_locked": True,
+            "message": "Baked parallax VIDEO for relay.jpg.",
+        }
+
+    monkeypatch.setattr("app.api.bake_motion", fake_bake)
     start = client.post(
         "/api/jobs",
         json={"kind": "motion", "layout": "Prime Cinematic", "path": "relay.jpg"},
     )
     assert start.status_code == 200
     job = start.json()
-    body = job
-    for _ in range(200):
-        body = client.get(f"/api/jobs/{job['id']}").json()
-        if body["status"] in {"done", "error"}:
-            break
-        time.sleep(0.05)
+    body = _wait_job(client, job["id"])
     assert body["status"] == "done", body
+    assert body["current"] in (None, "Night Relay")
     assert body["result"]["layered"] is True
     assert body["result"]["chrome_locked"] is True
+    assert body["percent"] == 100
 
 
 def test_watch_badge_injected_and_hideable():
