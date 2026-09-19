@@ -17,6 +17,8 @@ from app.motion import (
     intensity_from_preset,
     leak_geometry,
     max_motion_frame,
+    pingpong_ease,
+    plate_kenburns_filters,
     profile_from_settings,
     zoompan_expr,
 )
@@ -59,8 +61,8 @@ def test_leak_geometry_pads_beyond_pan():
 
 
 def test_max_motion_frame_is_peak_sine():
-    assert max_motion_frame(12) == 3
-    assert max_motion_frame(24) == 6
+    assert max_motion_frame(12) == 6
+    assert max_motion_frame(24) == 12
 
 
 def test_choose_delivery_prefers_video_when_asked():
@@ -138,9 +140,14 @@ def test_parallax_filtergraph_has_two_layers():
     assert "[2:v]" not in graph
     assert "overlay=x=0:y=0" in graph
     assert "zoompan=" in graph
+    assert "flags=lanczos" in graph
+    assert "eval=frame" not in graph
     assert "[mid],format" not in graph
     assert "overlay=x='" not in graph
-    assert "," not in zoompan_expr(0.05, 20, 48, 1920, 1080, 24).split("z=")[1].split(":")[0]
+    z_expr = zoompan_expr(0.05, 20, 48, 1920, 1080, 30).split("z=")[1].split(":")[0]
+    assert "," not in z_expr
+    assert "sin(2*PI" not in z_expr
+    assert "sin(PI*on/" in z_expr
 
 
 def test_kenburns_and_drift_lock_chrome_when_layered():
@@ -152,6 +159,7 @@ def test_kenburns_and_drift_lock_chrome_when_layered():
         assert "[1:v]" in graph
         assert "overlay=x=0:y=0" in graph
         assert "zoompan=" in graph
+        assert "sin(2*PI" not in graph
 
 
 def test_parallax_light_leak_sits_under_locked_chrome():
@@ -193,6 +201,52 @@ def test_kenburns_without_chrome_is_single_layer():
     assert "[0:v]" not in graph
     assert "overlay=" not in graph
     assert "zoompan=" in graph
+    assert "flags=lanczos" in graph
+
+
+def test_kenburns_path_matches_css_pingpong():
+    """Bake must zoom *in* and rest at the loop join — not a bipolar sine zoom-out."""
+    profile = MotionProfile(style="parallax", intensity=0.55, duration=12, fps=30)
+    graph = plate_kenburns_filters(profile)
+    assert "zoompan=" in graph
+    assert "flags=lanczos" in graph
+    assert pingpong_ease(profile.frames, "on") in graph
+    assert "sin(2*PI" not in graph
+    assert profile.zoom_from >= 1.0
+    assert f"z='{profile.zoom_from}+" in graph
+    sw, sh = profile.width * 2, profile.height * 2
+    assert f"scale={sw}:{sh}:flags=lanczos" in graph
+    # zoompan is nearest-neighbour: Ken Burns at 2× then lanczos down.
+    assert f"s={sw}x{sh}" in graph
+    after_zp = graph.split("zoompan=", 1)[1]
+    assert f"scale={profile.width}:{profile.height}:flags=lanczos" in after_zp
+
+
+def test_bake_amplitude_tracks_css_preview():
+    """web/src/lib/motion.ts --motion-zoom-* / --motion-x (cinematic 0.55)."""
+    p = MotionProfile(style="parallax", intensity=0.55, width=1920, height=1080)
+    assert p.zoom_from == 1.04
+    assert abs(p.zoom_from + p.bg_zoom_amp - (1 + 0.55 * 0.18)) < 0.002
+    assert abs(p.bg_pan - 1920 * 0.048 * 0.55) < 0.05
+    k = MotionProfile(style="kenburns", intensity=0.55, width=1920, height=1080)
+    assert k.zoom_from == 1.015
+    assert abs(k.zoom_from + k.bg_zoom_amp - (1 + 0.55 * 0.22)) < 0.002
+    d = MotionProfile(style="drift", intensity=0.55, width=1920, height=1080)
+    assert d.zoom_from == 1.015
+    assert abs(d.bg_pan - 1920 * 0.074 * 0.55) < 0.05
+
+
+def test_profile_defaults_are_tv_smooth():
+    profile = profile_from_settings(AppSettings())
+    assert profile.fps == 30
+    assert profile.x264_preset == "fast"
+    assert profile.bitrate == "2800k"
+    cinematic = profile_from_settings(AppSettings(motion_quality="cinematic"))
+    assert cinematic.fps == 30
+    assert cinematic.x264_preset == "slow"
+    assert cinematic.duration >= 12.0
+    assert cinematic.bitrate == "5500k"
+    assert MotionProfile(quality="standard").x264_preset == "medium"
 
 
 def test_chrome_is_transparent_rgba():
@@ -403,6 +457,50 @@ def test_ffmpeg_uniform_plate_vignette_does_not_zoom(tmp_path: Path):
     moved = _grab_frame(jpg.with_suffix(".mp4"), peak, tmp_path / "vig_peak.png")
     for sample in ((2, 2), (8, 8), (20, 16), (width - 3, 2), (width // 2, 4)):
         assert _channel_delta(first.getpixel(sample), moved.getpixel(sample)) <= 4, sample
+
+
+@pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
+def test_ffmpeg_kenburns_is_temporally_smooth(tmp_path: Path):
+    """Adjacent frames move less than the 0→peak travel (CSS-like ping-pong, not choppy jumps)."""
+    width, height = 320, 180
+    plate_img = Image.new("RGB", (width, height))
+    px = plate_img.load()
+    for y in range(height):
+        for x in range(width):
+            px[x, y] = (int(255 * x / (width - 1)), int(255 * y / (height - 1)), 40)
+    jpg = tmp_path / "smooth.jpg"
+    plate = tmp_path / "smooth_plate.jpg"
+    chrome = tmp_path / "smooth_chrome.png"
+    save_jpeg(plate_img, jpg)
+    save_jpeg(plate_img, plate)
+    save_png(Image.new("RGBA", (width, height), (0, 0, 0, 0)), chrome)
+    profile = MotionProfile(
+        style="kenburns",
+        quality="light",
+        intensity=0.96,
+        duration=1.0,
+        fps=12,
+        width=width,
+        height=height,
+        light_leak=False,
+    )
+    ok, msg = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
+    assert ok, msg
+    mp4 = jpg.with_suffix(".mp4")
+    grabbed = [_grab_frame(mp4, n, tmp_path / f"sm{n}.png") for n in range(profile.frames)]
+    sample = (width // 2, height // 2)
+    peak = max_motion_frame(profile.frames)
+    span = _channel_delta(grabbed[0].getpixel(sample), grabbed[peak].getpixel(sample))
+    assert span >= 8, span
+    adjacent = [
+        _channel_delta(grabbed[i].getpixel(sample), grabbed[i + 1].getpixel(sample))
+        for i in range(len(grabbed) - 1)
+    ]
+    assert max(adjacent) < span
+    assert sum(adjacent) / len(adjacent) <= span * 0.55
+    # Seamless loop: last frame is closer to the start than to peak travel.
+    join = _channel_delta(grabbed[0].getpixel(sample), grabbed[-1].getpixel(sample))
+    assert join < span
 
 @pytest.mark.skipif(ffmpeg_bin() is None, reason="ffmpeg not installed")
 def test_generate_motion_survives_exdev_promote(tmp_path: Path, monkeypatch):

@@ -161,7 +161,7 @@ class AppSettings(BaseModel):
     motion_style: str = "parallax"
     motion_intensity: float = 0.55
     motion_duration: float | None = None
-    motion_fps: int = 24
+    motion_fps: int = 30
     overwrite_existing: bool = False
     editor_theme: str = "cinema"
     motion_preset: str = "cinematic"

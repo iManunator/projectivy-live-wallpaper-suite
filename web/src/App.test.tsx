@@ -401,7 +401,7 @@ vi.stubGlobal(
         motion_style: "parallax",
         motion_intensity: 0.55,
         motion_duration: null,
-        motion_fps: 24,
+        motion_fps: 30,
         overwrite_existing: false,
         editor_theme: "cinema",
         motion_preset: "cinematic",
