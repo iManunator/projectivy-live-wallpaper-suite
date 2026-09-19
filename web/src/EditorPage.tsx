@@ -79,7 +79,7 @@ function mediaKey(item: MediaRow): string {
   return String(item.jellyfin_id || item.tmdb_id || item.title || "");
 }
 
-export function EditorPage() {
+export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
   const notify = useToasts();
   const { run, busy } = useJobs();
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -106,7 +106,12 @@ export function EditorPage() {
   useEffect(() => {
     api.layouts().then(async (list) => {
       setNames(list);
-      const preferred = list.includes("Netflix Hero") ? "Netflix Hero" : list[0];
+      const preferred =
+        initialLayout && list.includes(initialLayout)
+          ? initialLayout
+          : list.includes("Netflix Hero")
+            ? "Netflix Hero"
+            : list[0];
       if (preferred) setLayout(normalizeLayout(await api.layout(preferred)));
     });
     api
@@ -118,7 +123,7 @@ export function EditorPage() {
         setDuration(Number(settings.motion_duration || defaultDuration(settings.motion_quality || "light")));
       })
       .catch(() => undefined);
-  }, []);
+  }, [initialLayout]);
 
   useEffect(() => {
     api

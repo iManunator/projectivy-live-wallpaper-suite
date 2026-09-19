@@ -5,10 +5,10 @@ import { api } from "./lib/api";
 import { type AppSettings, type CronJob } from "./lib/layout";
 import { describeBatchFlags } from "./lib/batch";
 import { errorToast, providerToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, PRESET_DURATION, type MotionStyle } from "./lib/motion";
-import { formatOpsTime, LAYOUT_DNA, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
-import { ChromePills } from "./ChromePills";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, nearestMotionPreset, type MotionStyle } from "./lib/motion";
+import { formatOpsTime, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
 import { SampleLockedChrome, WallpaperStage } from "./WallpaperStage";
+import { TonightPage } from "./TonightPage";
 import { JobProgress, JobProvider, useJobs } from "./JobProgress";
 import { ToastProvider, useToasts } from "./toasts";
 import "./styles/app.css";
@@ -55,221 +55,44 @@ export function App() {
 function AppShell() {
   const [page, setPage] = useState<Page>("tonight");
   const [theme, setTheme] = useState("cinema");
+  const [editorLayout, setEditorLayout] = useState<string | undefined>();
   useEffect(() => {
     api
       .settings()
       .then((settings) => setTheme(settings.editor_theme || "cinema"))
       .catch(() => undefined);
   }, []);
+  function go(next: Page, layout?: string) {
+    setEditorLayout(next === "editor" ? layout : undefined);
+    setPage(next);
+  }
   return (
     <div className="app" data-theme={theme}>
       <nav className="nav">
         <h2 className="brand">Wallpaparr</h2>
         <div className="brand-sub">*arr live wallpapers for Projectivy</div>
         {PAGES.map((id) => (
-          <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>
+          <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
             {id === "tonight" ? "Tonight" : id[0].toUpperCase() + id.slice(1)}
           </button>
         ))}
       </nav>
       <main className="main">
         <JobProgress />
-        {page === "tonight" && <TonightPage />}
-        {page === "gallery" && <GalleryPage onEdit={() => setPage("editor")} />}
-        {page === "editor" && <EditorPage />}
+        {page === "tonight" && (
+          <TonightPage
+            onEdit={(layout) => go("editor", layout)}
+            onGenerate={() => go("generate")}
+            onSettings={() => go("settings")}
+          />
+        )}
+        {page === "gallery" && <GalleryPage onEdit={() => go("editor")} />}
+        {page === "editor" && <EditorPage initialLayout={editorLayout} />}
         {page === "generate" && <GeneratePage />}
         {page === "dashboard" && <DashboardPage />}
         {page === "settings" && <SettingsPage onTheme={setTheme} />}
       </main>
     </div>
-  );
-}
-
-type TonightPayload = {
-  status: {
-    imageUrl?: string | null;
-    title?: string | null;
-    mediaType?: string;
-    videoUrl?: string | null;
-    queue?: string | null;
-    pinned?: boolean;
-    layout?: string | null;
-    path?: string | null;
-    watchState?: string | null;
-    libraryState?: string | null;
-    availability?: string | null;
-    seerrStatus?: string | null;
-    source?: string | null;
-  };
-  queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
-  profile: string;
-  motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean };
-  preview?: { artworkUrl?: string | null; itemId?: string | null; layered?: boolean };
-};
-
-function TonightPage() {
-  const notify = useToasts();
-  const { run, busy } = useJobs();
-  const [layout, setLayout] = useState("Netflix Hero");
-  const [layouts, setLayouts] = useState<string[]>([]);
-  const [payload, setPayload] = useState<TonightPayload | null>(null);
-  const [error, setError] = useState("");
-  const [previewPreset, setPreviewPreset] = useState("");
-  async function load(nextLayout = layout) {
-    try {
-      const data = (await api.tonight(nextLayout)) as TonightPayload;
-      setPayload(data);
-      setError("");
-    } catch (err) {
-      const toast = errorToast(err, "Could not load tonight");
-      setError(toast.text);
-      notify(toast.kind, toast.text);
-    }
-  }
-  useEffect(() => {
-    api.layouts().then(setLayouts).catch(() => undefined);
-  }, []);
-  useEffect(() => {
-    void load(layout);
-  }, [layout]);
-  const image = payload?.status?.imageUrl;
-  const video = payload?.status?.videoUrl;
-  const artwork = payload?.preview?.artworkUrl;
-  const queueLabel = payload?.status?.queue ? QUEUE_LABELS[payload.status.queue] || payload.status.queue : "Tonight";
-  const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
-  const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
-  const intensity = intensityFromPreset(motionPreset) || clampIntensity(payload?.motion?.intensity ?? 0.55);
-  const duration = PRESET_DURATION[motionPreset] || defaultDuration("light");
-  const motionVars = motionPreviewVars(motionStyle, intensity, duration);
-  const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
-  const layeredArt = Boolean(!video && artwork);
-  async function bakeTonight(wholeLayout = false) {
-    try {
-      await run({
-        kind: "motion",
-        layout,
-        path: wholeLayout ? undefined : tonightPath || undefined,
-      });
-      await load(layout);
-    } catch {
-      /* toast from JobProvider */
-    }
-  }
-  return (
-    <section>
-      <h1>Tonight’s home screen</h1>
-      <p className="lede">
-        Preview how Wallpaparr will sit behind Projectivy chrome — clock, rows, and the dock. Artwork can drift; the title and TV chrome stay put.
-      </p>
-      <div className="chip-row">
-        {LAYOUT_DNA.map((preset) => (
-          <button
-            key={preset.name}
-            className={`chip ${layout === preset.name ? "active" : ""}`}
-            onClick={() => setLayout(preset.name)}
-            title={preset.blurb}
-          >
-            {preset.name}
-          </button>
-        ))}
-        {layouts
-          .filter((name) => !LAYOUT_DNA.some((preset) => preset.name === name))
-          .map((name) => (
-            <button key={name} className={`chip ${layout === name ? "active" : ""}`} onClick={() => setLayout(name)}>
-              {name}
-            </button>
-          ))}
-        <button className="btn tiny" onClick={() => load(layout)}>
-          Shuffle tonight
-        </button>
-        <button className="btn tiny" disabled={busy || !tonightPath} onClick={() => bakeTonight(false)}>
-          Bake motion for tonight’s pick
-        </button>
-        <button className="btn ghost tiny" disabled={busy} onClick={() => bakeTonight(true)}>
-          Bake motion for this layout
-        </button>
-      </div>
-      <div className="chip-row">
-        <span className="muted">Motion preview</span>
-        {(["subtle", "cinematic", "bold"] as const).map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            className={`chip ${motionPreset === preset ? "active" : ""}`}
-            onClick={() => setPreviewPreset(preset)}
-          >
-            {preset}
-          </button>
-        ))}
-      </div>
-      {error && <p className="error">{error}</p>}
-      <div className="tonight-grid">
-        <WallpaperStage
-          wrapClassName="tv-preview"
-          ariaLabel="Projectivy home screen preview"
-          artSrc={layeredArt ? artwork : image}
-          artAlt={payload?.status?.title || "Wallpaper"}
-          videoSrc={video}
-          motionOn={layeredArt}
-          motionVars={motionVars as CSSProperties}
-          lightLeak={Boolean(payload?.motion?.light_leak)}
-        >
-          <div className="tv-chrome">
-            <div className="tv-top">
-              <span className="tv-logo">projectivy</span>
-              <span className="tv-clock">9:41</span>
-            </div>
-            <div className="tv-hero-meta">
-              <span className="badge">{queueLabel}</span>
-              <ChromePills
-                watchState={payload?.status?.watchState}
-                libraryState={payload?.status?.libraryState}
-                availability={payload?.status?.availability}
-                source={payload?.status?.source}
-              />
-              {payload?.status?.pinned && <span className="badge">Pinned</span>}
-              {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
-              <h2>{payload?.status?.title || "Waiting for a title"}</h2>
-              <p>Behind the guide · {layout}</p>
-            </div>
-            <div className="tv-rows">
-              <div className="tv-row-label">Continue watching</div>
-              <div className="tv-posters">
-                <span /><span /><span /><span /><span />
-              </div>
-            </div>
-            <div className="tv-dock" />
-          </div>
-        </WallpaperStage>
-        <div className="card">
-          <h3>Taste · {payload?.profile || "tonight"}</h3>
-          <p className="muted">Weighted mix used by pick mode “Tonight’s mix” (`taste:tonight`).</p>
-          <ul className="taste-list">
-            {Object.entries(TASTE_PRESETS[payload?.profile || "tonight"] || TASTE_PRESETS.tonight).map(([id, weight]) => (
-              <li key={id}>
-                <strong>{weight}%</strong> {QUEUE_LABELS[id] || id}
-              </li>
-            ))}
-          </ul>
-          <p className="muted">
-            Motion {motionPreset} · {motionStyle}
-            {payload?.motion?.light_leak ? " · light leak" : ""} — {describeMotion(motionStyle, intensity, duration)}.
-            CSS preview pans the artwork only; title and TV chrome stay pinned. Bake VIDEO so Projectivy can play a real MP4.
-          </p>
-        </div>
-      </div>
-      <div className="queue-grid">
-        {(payload?.queues || []).map((queue) => (
-          <article className="card queue-card" key={queue.id}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <strong>{queue.label}</strong>
-              <span className="badge">{queue.count}</span>
-            </div>
-            <p className="muted">{queue.titles.join(" · ") || "Empty in this layout"}</p>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 

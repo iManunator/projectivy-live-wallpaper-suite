@@ -34,6 +34,7 @@ describe("16:9 stage contain", () => {
     expect(css).toMatch(/\.stage-fg\s*\{[^}]*transform:\s*none/);
     expect(css).toMatch(/\.stage-bg\s*\{[^}]*overflow:\s*hidden/);
     expect(css).toMatch(/\.motion-art\s*\{/);
+    expect(css).toMatch(/\.tonight-hero\s*\{[^}]*overflow:\s*hidden/);
     const fgBlock = css.match(/\.stage-fg\s*\{[^}]+\}/)?.[0] || "";
     expect(fgBlock).toMatch(/transform:\s*none/);
     expect(fgBlock).not.toMatch(/animation:\s*wallpaparr-kenburns/);

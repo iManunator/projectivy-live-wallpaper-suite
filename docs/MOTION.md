@@ -35,7 +35,7 @@ In-library titles skip the chip. Layout DNA `show_seerr_badge` defaults on; turn
 ## IMAGE vs VIDEO in this suite
 
 1. **Generate always writes a JPEG.** Stills remain first-class. The gallery, in-page editor preview, and `imageUrl` never go away. Jellyfin stills composite over downloaded Backdrop (then Primary) art.
-2. **Motion is optional.** Enable *Generate VIDEO loops* in Settings, check *Bake parallax / motion VIDEO* on a batch, tap **Bake motion for tonight’s pick** / **this layout** on Tonight, Generate, or the editor, or `POST /api/wallpaper/generate-motion` (`path=` = one filename).
+2. **Motion is optional.** Enable *Generate VIDEO loops* in Settings, check *Bake parallax / motion VIDEO* on a batch, tap **Bake motion for this pick** on Tonight (or **this layout** on Generate / the editor), or `POST /api/wallpaper/generate-motion` (`path=` = one filename).
 3. **`GET /api/wallpaper/status`** (tvbgsuite-compatible) always returns `imageUrl` + `actionUrl` + `path` when a title is selected. When a sibling MP4 exists:
    - `videoUrl` is set
    - `mediaType` is `"video"`

@@ -55,7 +55,7 @@ The GitHub repository is still named `projectivy-live-wallpaper-suite`. The prod
 
 | UI callout | What you are looking at |
 | --- | --- |
-| **Tonight** | Home page. Shuffle a taste pick, switch **layout DNA** (Netflix Hero, Prime Cinematic, Google TV Clean, Projectivy Dock, Status Focus, Jellyfin Dense), see the wallpaper *as the launcher will*. One-tap **bake motion** for tonight’s pick or the whole layout. |
+| **Tonight** | Home page. **Tonight’s pick** as Projectivy will show it — 16:9 layered preview (moving artwork, locked chrome). Bake motion for this pick, open it in the editor, or refresh the taste mix. Layout DNA and preview intensity sit below the hero; Generate and Settings keep the rest of the knobs. |
 | **Gallery** | Every generated still. Click a still for a full-screen view. Watch-status pills (unwatched / continue / watched) plus smart-queue and VIDEO badges. Pin a title. Hide it forever. |
 | **Editor** | Flagship 16:9 stage (fits the panel on phone and desktop) — linear/radial multi-stop gradients, vignette, overlays, edge fades, **title display** (logo / text / auto), watch pills, TV chrome, layered motion preview (artwork moves; logo/text stay), layout DNA chips. Demo or Jellyfin artwork. Drag metadata; save persists the layout. Bake VIDEO for this layout. |
 | **Generate** | Demo catalog (real public-domain cinematic stills) or live Jellyfin/Seerr. Jellyfin batches download backdrop (then poster) art. Skip / replace / cleanup / ids with toasts. Optional parallax VIDEO bake (ffmpeg). |
@@ -146,7 +146,7 @@ Package `com.imanunator.wallpaparr` · UUID `dba9a12f-6252-4172-b5a3-8668d0523af
 
 | Feature | What you get |
 | --- | --- |
-| **Tonight preview** | See the wallpaper inside Projectivy chrome before it hits the TV. Shuffle the taste mix. Switch layout DNA live. |
+| **Tonight preview** | See tonight’s pick inside Projectivy chrome before it hits the TV. Bake this pick, open the editor, or refresh the mix. |
 | **Layout DNA** | Netflix Hero, Prime Cinematic, Google TV Clean, **Projectivy Dock**, Status Focus, Jellyfin Dense — watch pills on the flagship four, plus custom layouts. |
 | **Smart queues** | Unwatched · Continue watching · Newly added · Seerr trending · Requestable · Pinned. Gallery badges match the queues, including **Watched**. |
 | **Parallax motion** | Optional H.264 loops: layered plate + locked chrome · parallax / Ken Burns / drift of the **artwork only** · Subtle / Cinematic / Bold (background zoom/pan) · JPEG still always kept. `videoUrl` only when an MP4 exists. |

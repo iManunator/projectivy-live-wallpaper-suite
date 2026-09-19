@@ -351,15 +351,19 @@ vi.stubGlobal(
       };
     }
     if (url.includes("/api/tonight")) {
+      const parsed = new URL(url, "http://localhost");
+      const shuffled = Boolean(parsed.searchParams.get("exclude"));
       body = {
         status: {
-          title: "Northlight",
-          imageUrl: "/api/wallpaper/image/Netflix%20Hero/northlight.jpg",
+          title: shuffled ? "Harbor Season" : "Northlight",
+          imageUrl: shuffled
+            ? "/api/wallpaper/image/Netflix%20Hero/harbor.jpg"
+            : "/api/wallpaper/image/Netflix%20Hero/northlight.jpg",
           mediaType: "image",
-          queue: "unwatched",
+          queue: shuffled ? "continue_watching" : "unwatched",
           pinned: false,
-          path: "northlight.jpg",
-          watchState: "unwatched",
+          path: shuffled ? "harbor.jpg" : "northlight.jpg",
+          watchState: shuffled ? "partial" : "unwatched",
           libraryState: "in_library",
           availability: "available",
           source: "jellyfin",
@@ -367,10 +371,15 @@ vi.stubGlobal(
         queues: [
           { id: "unwatched", label: "Unwatched", count: 2, titles: ["Northlight"] },
           { id: "continue_watching", label: "Continue watching", count: 1, titles: ["Harbor Season"] },
+          { id: "seerr_trending", label: "Seerr trending", count: 1, titles: ["Relay"] },
         ],
         profile: "tonight",
         motion: { style: "parallax", preset: "cinematic", intensity: 0.55, light_leak: true },
-        preview: { artworkUrl: "/api/media/artwork/demo-jf-1", itemId: "demo-jf-1", layered: true },
+        preview: {
+          artworkUrl: shuffled ? "/api/media/artwork/demo-jf-2" : "/api/media/artwork/demo-jf-1",
+          itemId: shuffled ? "demo-jf-2" : "demo-jf-1",
+          layered: true,
+        },
       };
     }
     if (url.includes("/api/dashboard")) {
@@ -429,6 +438,74 @@ class ProbeImage {
 }
 vi.stubGlobal("Image", ProbeImage);
 
+describe("Tonight page", () => {
+  it("tells a one-pick story with outcome-labeled primary actions", async () => {
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
+    expect(screen.getByText(/wallpaper Projectivy will show next/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/taste:tonight/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/one pick, not the gallery/i)).toBeInTheDocument();
+    expect(screen.getByText("What Projectivy shows next")).toBeInTheDocument();
+    expect((await screen.findAllByText("Northlight")).length).toBeGreaterThan(0);
+
+    const stage = screen.getByLabelText("Projectivy home screen preview");
+    const art = stage.querySelector("img");
+    expect(art?.className).toMatch(/motion-art/);
+    expect(art?.getAttribute("src") || "").toMatch(/artwork/);
+    expect(stage.querySelector(".tv-hero-meta")?.closest(".stage-fg")).toBeTruthy();
+    expect(art?.closest(".stage-bg")).toBeTruthy();
+    expect(document.querySelector(".tonight-hero")).toBeTruthy();
+    expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
+
+    const actions = screen.getByRole("group", { name: "Tonight actions" });
+    expect(within(actions).getByRole("button", { name: "Bake motion for this pick" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Refresh pick" })).toBeInTheDocument();
+    expect(within(actions).queryByRole("button", { name: "Netflix Hero" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bake motion for this layout" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Shuffle tonight" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Taste/ })).not.toBeInTheDocument();
+
+    expect(screen.getByRole("group", { name: "Launcher look" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Netflix Hero" })).toBeInTheDocument();
+    const intensity = screen.getByRole("group", { name: "Preview intensity" });
+    expect(within(intensity).getByRole("button", { name: "Cinematic" })).toBeInTheDocument();
+    expect(screen.getByText(/Changes this CSS preview only/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit mix in Settings" })).toBeInTheDocument();
+    expect(screen.getByText(/50% Unwatched/)).toBeInTheDocument();
+    expect(screen.getByText(/Seerr trending/)).toBeInTheDocument();
+  });
+
+  it("refreshes the pick, bakes this title, and opens the editor", async () => {
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Northlight")).length).toBeGreaterThan(0);
+    const stage = screen.getByLabelText("Projectivy home screen preview");
+    expect(stage.querySelector("img")?.style.getPropertyValue("--motion-duration")).toBe("12s");
+    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
+    expect(stage.querySelector("img")?.style.getPropertyValue("--motion-duration")).toBe("10s");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh pick" }));
+    expect(await screen.findAllByText("Harbor Season")).toBeTruthy();
+    expect(screen.getAllByText("Continue").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Bake motion for this pick" }));
+    expect((await screen.findAllByText(/Baked parallax VIDEO/)).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
+    expect(await screen.findByRole("heading", { name: "Layout editor" })).toBeInTheDocument();
+  });
+
+  it("sends mix editing to Settings without exposing generate knobs", async () => {
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit mix in Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByText(/Taste profile/i)).toBeInTheDocument();
+  });
+});
+
 describe("App smoke", () => {
   beforeEach(() => {
     seedGallery([fromItem]);
@@ -436,7 +513,7 @@ describe("App smoke", () => {
 
   it("renders tonight preview and can open the gallery", async () => {
     render(<App />);
-    expect(await screen.findByRole("heading", { name: /home screen/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Tonight" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Wallpaparr" })).toBeInTheDocument();
     expect(screen.getAllByText("Northlight").length).toBeGreaterThan(0);
     const tonightStage = screen.getByLabelText("Projectivy home screen preview");
@@ -445,7 +522,7 @@ describe("App smoke", () => {
     expect(tonightArt?.getAttribute("src") || "").toMatch(/artwork/);
     expect(tonightStage.querySelector(".tv-hero-meta")?.closest(".stage-fg")).toBeTruthy();
     expect(tonightArt?.closest(".stage-bg")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Bake motion for tonight/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bake motion for this pick" })).toBeInTheDocument();
     expect(screen.getAllByText("Unwatched").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
     expect(await screen.findByRole("heading", { name: "Gallery" })).toBeInTheDocument();
