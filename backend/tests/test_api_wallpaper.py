@@ -7,7 +7,7 @@ def test_health(client):
     body = response.json()
     assert body["ok"] is True
     assert body["service"] == "wallpaparr"
-    assert body["version"] == "1.2.1"
+    assert body["version"] == "1.2.2"
 
 
 def test_layouts_list_includes_presets(client):

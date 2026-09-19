@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.2.2 - 2026-09-19
+
+Ships the post-1.2.1 TV / Seerr polish that was already on `main`: status-aware cron refresh, cancelable generate jobs, SeerrTV/Moonfin intents, Balanced motion, and related provider/UI fixes.
+
+- **Refresh when watch / availability changes.** New Generate + cron checkbox. With skip-existing on, matching titles still re-bake when watch state or Seerr/library availability chrome changes (e.g. unwatched → watched, requestable → available). Replace still overwrites everything.
+- **Cancel generate / motion.** Progress bar has **Cancel**; jobs stop after the current title (`POST /api/jobs/{id}/cancel`).
+- **SeerrTV / Moonfin.** Wallpaper Seerr action opens SeerrTV with the Moonfin IR package/intent path.
+- **Balanced motion** preset between Subtle and Cinematic; runtime on layout DNA; watch pills as Unwatched / Partly watched / Watched; rating chrome shows ★; Seerr auth validates against `/api/v1/auth/me`; Jellyfin year/genre and logo/artwork fetch improvements; smoother still-to-still plugin hold.
+- Plugin versionName **1.2.2** (`versionCode` 4). Image `ghcr.io/imanunator/wallpaparr:v1.2.2` / `:1.2.2` / `:latest` from the `v1.2.2` tag. Do not retag earlier versions.
+
 ## 1.2.1 - 2026-09-19
 
 Post-1.2.0 TV polish: slight per-wallpaper motion variety, layout DNA preset audit, clearer plugin settings with next-clip preload, and a subpixel Ken Burns bake that stops MP4 stutter. Also folds the gallery, Tonight, Seerr chrome, and layered-parallax work that landed on `main` after 1.2.0.

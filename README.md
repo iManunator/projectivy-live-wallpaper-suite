@@ -14,7 +14,7 @@
   <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/iManunator/projectivy-live-wallpaper-suite?display_name=tag&sort=semver&label=release"></a>
   <a href="https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr"><img alt="GHCR" src="https://img.shields.io/badge/ghcr.io-imanunator%2Fwallpaparr-0ea5e9?logo=docker&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-e2b657"></a>
-  <img alt="Version 1.2.1" src="https://img.shields.io/badge/version-1.2.1-7ad0c4"/>
+  <img alt="Version 1.2.2" src="https://img.shields.io/badge/version-1.2.2-7ad0c4"/>
 </p>
 
 <p align="center">
@@ -72,7 +72,7 @@ Durable artifacts live on **GitHub Releases** and **GHCR**. Actions artifacts ex
 | --- | --- |
 | **Plugin APK (primary)** | [`wallpaparr-plugin-release.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-release.apk) on the [latest GitHub Release](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest) |
 | Debug APK | [`wallpaparr-plugin-debug.apk`](https://github.com/iManunator/projectivy-live-wallpaper-suite/releases/latest/download/wallpaparr-plugin-debug.apk) |
-| **Container** | [`ghcr.io/imanunator/wallpaparr:latest`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) · also [`:1.2.1`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) / [`:1.2.0`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) / [`:1.1.0`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) |
+| **Container** | [`ghcr.io/imanunator/wallpaparr:latest`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) · also [`:1.2.2`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) / [`:1.2.1`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) / [`:1.2.0`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) / [`:1.1.0`](https://github.com/iManunator/projectivy-live-wallpaper-suite/pkgs/container/wallpaparr) |
 | CI fallback | Green **CI** run → artifact `wallpaparr-plugin-apk` (same filenames; expires) |
 
 ```bash
@@ -82,7 +82,7 @@ adb install -r wallpaparr-plugin-release.apk
 
 How GHCR + Release publishing works (permissions, future tags): **[docs/RELEASE.md](docs/RELEASE.md)**.
 
-**v1.2.1** is the current ship — tag `v1.2.1` after this lands on `main` so Release + GHCR publish `wallpaparr-plugin-release.apk` and `ghcr.io/imanunator/wallpaparr:v1.2.1` / `:1.2.1` / `:latest`. **Do not retag `v1.1.0` or `v1.2.0`.**
+**v1.2.2** is the current ship — tag `v1.2.2` after this lands on `main` so Release + GHCR publish `wallpaparr-plugin-release.apk` and `ghcr.io/imanunator/wallpaparr:v1.2.2` / `:1.2.2` / `:latest`. **Do not retag earlier versions.**
 
 ---
 
@@ -115,7 +115,7 @@ docker compose up --build -d
 
 ```bash
 curl -sf http://127.0.0.1:8787/api/health
-# {"ok":true,"service":"wallpaparr","version":"1.2.1"}
+# {"ok":true,"service":"wallpaparr","version":"1.2.2"}
 
 curl -sf "http://127.0.0.1:8787/api/wallpaper/status?layout=Netflix%20Hero&profile=tonight"
 curl -sf "http://127.0.0.1:8787/api/tonight?layout=Projectivy%20Dock"
@@ -270,13 +270,13 @@ Install both if you want cinematic backgrounds *and* home-screen rows. They do n
 | Doc | Contents |
 | --- | --- |
 | [Install](docs/INSTALL.md) | Server, plugin, LAN URL, migration from tvbgsuite |
-| [Release / GHCR / APK](docs/RELEASE.md) | How `:latest` publishes, how to tag `v1.2.1`, permissions |
+| [Release / GHCR / APK](docs/RELEASE.md) | How `:latest` publishes, how to tag `v1.2.2`, permissions |
 | [Verify](docs/VERIFY.md) | Demo mode, no Jellyfin, no GHCR |
 | [API](docs/API.md) | Status contract + editor/ops endpoints |
 | [Motion](docs/MOTION.md) | IMAGE vs VIDEO, parallax bake, intensity |
 | [Overlays](docs/OVERLAYS.md) | Clock / HA / news hooks |
 | [Projectivy plugin](docs/PROJECTIVY.md) | Pick modes, UUID, deep links |
-| [Changelog](CHANGELOG.md) | 1.2.1 · 1.2.0 · 1.1.0 · 1.0.0 |
+| [Changelog](CHANGELOG.md) | 1.2.2 · 1.2.1 · 1.2.0 · 1.1.0 · 1.0.0 |
 
 ---
 
