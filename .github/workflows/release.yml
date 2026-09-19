@@ -1,6 +1,6 @@
 # Wallpaparr Release
 #
-# Trigger: git tag matching v* (preferred: v1.2.0) or workflow_dispatch.
+# Trigger: git tag matching v* (preferred: v1.2.1) or workflow_dispatch.
 #
 # A v* tag push:
 #   1. Builds and pushes ghcr.io/imanunator/wallpaparr
@@ -13,7 +13,7 @@
 #      GITHUB_TOKEN needs contents: write for the Release.
 #
 # Exact ship command (from main, after this workflow is on the default branch):
-#   git tag v1.2.0 && git push origin v1.2.0
+#   git tag v1.2.1 && git push origin v1.2.1
 name: Release
 
 on:
