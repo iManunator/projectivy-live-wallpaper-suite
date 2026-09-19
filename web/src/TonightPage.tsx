@@ -10,6 +10,7 @@ import {
   type MotionStyle,
 } from "./lib/motion";
 import { LAYOUT_DNA, QUEUE_LABELS, TASTE_PRESETS } from "./lib/queues";
+import { watchBadge } from "./lib/watch";
 import { WatchBadge } from "./WatchBadge";
 import { WallpaperStage } from "./WallpaperStage";
 import { useJobs } from "./JobProgress";
@@ -80,6 +81,11 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
   const artwork = payload?.preview?.artworkUrl;
   const queueId = payload?.status?.queue || "";
   const queueLabel = queueId ? QUEUE_LABELS[queueId] || queueId : "Tonight’s mix";
+  const watch = watchBadge(payload?.status?.watchState);
+  const queueDuplicatesWatch =
+    (queueId === "unwatched" && watch?.id === "unwatched") ||
+    (queueId === "continue_watching" && watch?.id === "partial");
+  const showQueueBadge = Boolean(queueLabel) && !queueDuplicatesWatch;
   const motionStyle = (payload?.motion?.style || "parallax") as MotionStyle;
   const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(payload?.motion?.intensity ?? 0.55);
@@ -143,7 +149,7 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
               <span className="tv-clock">9:41</span>
             </div>
             <div className="tv-hero-meta">
-              <span className="badge">{queueLabel}</span>
+              {showQueueBadge && <span className="badge">{queueLabel}</span>}
               <WatchBadge state={payload?.status?.watchState} />
               {isSeerrQueue(queueId) && <span className="badge">Seerr</span>}
               {payload?.status?.pinned && <span className="badge">Pinned</span>}
@@ -168,7 +174,7 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
           <p className="tonight-kicker">What Projectivy shows next</p>
           <div className="tonight-pick-title">
             <strong>{title || "No pick yet"}</strong>
-            <span className="badge">{queueLabel}</span>
+            {showQueueBadge && <span className="badge">{queueLabel}</span>}
             <WatchBadge state={payload?.status?.watchState} />
             {isSeerrQueue(queueId) && <span className="badge">Seerr</span>}
             {payload?.status?.mediaType === "video" && <span className="badge badge-video">VIDEO</span>}
