@@ -457,8 +457,9 @@ label input[type="checkbox"] { width: auto; margin-right: 8px; }
 
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
-  .nav { display: flex; gap: 8px; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav { display: flex; flex-wrap: wrap; gap: 8px; overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); }
   .nav button { width: auto; min-height: 44px; }
+  .brand-sub { display: none; }
   .grid.two, .grid.three, .tonight-grid, .dash-grid, .generate-grid { grid-template-columns: 1fr; }
   .toasts {
     left: max(12px, env(safe-area-inset-left));
