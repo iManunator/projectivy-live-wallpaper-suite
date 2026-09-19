@@ -34,7 +34,7 @@ export type TonightPayload = {
   };
   queues: Array<{ id: string; label: string; count: number; titles: string[] }>;
   profile: string;
-  motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean };
+  motion: { style?: string; preset?: string; intensity?: number; light_leak?: boolean; vary?: boolean; seed?: string };
   preview?: { artworkUrl?: string | null; itemId?: string | null; layered?: boolean };
 };
 
@@ -89,7 +89,11 @@ export function TonightPage({ onEdit, onGenerate, onSettings }: TonightPageProps
   const motionPreset = previewPreset || payload?.motion?.preset || "cinematic";
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(payload?.motion?.intensity ?? 0.55);
   const duration = PRESET_DURATION[motionPreset] || 12;
-  const motionVars = motionPreviewVars(motionStyle, intensity, duration);
+  const motionVars = motionPreviewVars(motionStyle, intensity, duration, {
+    vary: payload?.motion?.vary !== false,
+    seed: payload?.motion?.seed,
+    preset: motionPreset,
+  });
   const tonightPath = typeof payload?.status?.path === "string" ? payload.status.path : "";
   const layeredArt = Boolean(!video && artwork);
   const hasPick = Boolean(image || artwork || tonightPath);

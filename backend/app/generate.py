@@ -13,7 +13,7 @@ from app.images import looks_like_image
 from app.layouts import load_layout
 from app.messages import generate_message, motion_bake_message
 from app.models import GenerateRequest, MediaItem, WallpaperRecord
-from app.motion import generate_motion, has_motion, profile_from_settings
+from app.motion import generate_motion, has_motion, profile_for_wallpaper, profile_from_settings
 from app.providers import HttpClient
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
@@ -306,7 +306,14 @@ def generate_one(
     video = False
     style = None
     if want_motion:
-        profile = profile_from_settings(settings)
+        profile = profile_for_wallpaper(
+            settings,
+            jellyfin_id=item.jellyfin_id,
+            tmdb_id=item.tmdb_id,
+            imdb_id=item.imdb_id,
+            filename=filename,
+            title=item.title,
+        )
         plate_path = dest.with_name(dest.stem + "_plate.jpg")
         chrome_path = dest.with_name(dest.stem + "_chrome.png")
         save_jpeg(render_plate(item, layout, backdrop_bytes=backdrop_bytes), plate_path)
@@ -433,7 +440,7 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
     from app.progress import report
 
     settings = load_settings()
-    profile = profile_from_settings(settings)
+    base_profile = profile_from_settings(settings)
     wanted = (filename or "").strip().lower()
     if wanted.endswith(".mp4"):
         wanted = Path(wanted).with_suffix(".jpg").name.lower()
@@ -472,6 +479,14 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
             # Artwork plate only — never the text-burned JPEG.
             save_jpeg(render_plate(item, layout_obj, backdrop_bytes=artwork), plate)
             save_png(apply_overlays(render_chrome(item, layout_obj, logo_bytes=_fetch_logo(item)), settings), chrome)
+        profile = profile_for_wallpaper(
+            settings,
+            jellyfin_id=rec.jellyfin_id,
+            tmdb_id=rec.tmdb_id,
+            imdb_id=rec.imdb_id,
+            filename=rec.filename,
+            title=rec.title,
+        )
         ok, _ = generate_motion(jpg, profile=profile, force=True, plate=plate, chrome=chrome)
         if plate:
             plate.unlink(missing_ok=True)
@@ -490,9 +505,10 @@ def bake_motion(layout: str, filename: str | None = None, job_id: str | None = N
         "generated": done,
         "failed": failed,
         "scanned": scanned,
-        "style": profile.normalized_style(),
+        "style": base_profile.normalized_style(),
         "preset": settings.motion_preset,
-        "duration": profile.duration,
+        "duration": base_profile.duration,
+        "vary": bool(getattr(settings, "motion_vary", True)),
         "count": len(done),
         "total": scanned,
         "done": scanned,

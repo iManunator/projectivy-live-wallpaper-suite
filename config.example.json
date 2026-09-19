@@ -11,6 +11,7 @@
   "editor_theme": "cinema",
   "motion_preset": "cinematic",
   "light_leak": true,
+  "motion_vary": true,
   "taste_profile": "tonight",
   "taste_weights": {
     "unwatched": 50,

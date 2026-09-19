@@ -299,3 +299,75 @@ def test_bake_motion_one_tap_locks_atmosphere_on_chrome(suite_dirs, monkeypatch)
     assert captured["chrome"].getpixel((4, 4))[3] == 255
     assert captured["plate"].getpixel((4, 4))[0] > captured["chrome"].getpixel((4, 4))[0]
 
+
+def test_bake_motion_stable_when_vary_off(suite_dirs, monkeypatch):
+    from app import generate as generate_mod
+    from app.config import save_settings
+    from app.generate import bake_motion, generate_one
+    from app.models import AppSettings, MediaItem
+
+    save_settings(AppSettings(motion_vary=False, motion_preset="cinematic", motion_duration=2))
+    profiles = []
+
+    def spy(jpg, **kwargs):
+        profiles.append(kwargs.get("profile"))
+        return True, "ok"
+
+    monkeypatch.setattr(generate_mod, "generate_motion", spy)
+    monkeypatch.setattr(generate_mod, "has_motion", lambda p: True)
+    first = generate_one(
+        MediaItem(title="Northlight", year=2024, jellyfin_id="demo-jf-1", source="demo"),
+        "Netflix Hero",
+        motion=False,
+    )
+    second = generate_one(
+        MediaItem(title="Harbor Season", year=2022, jellyfin_id="demo-jf-2", source="demo"),
+        "Netflix Hero",
+        motion=False,
+    )
+    bake_motion("Netflix Hero", first.filename)
+    bake_motion("Netflix Hero", second.filename)
+    assert len(profiles) == 2
+    assert profiles[0].intensity == profiles[1].intensity
+    assert profiles[0].pan_x_sign == profiles[1].pan_x_sign == 1
+    assert profiles[0].phase == profiles[1].phase == 0
+    assert profiles[0].zoom_scale == profiles[1].zoom_scale == 1
+
+
+def test_bake_motion_varies_per_title_when_enabled(suite_dirs, monkeypatch):
+    from app import generate as generate_mod
+    from app.config import save_settings
+    from app.generate import bake_motion, generate_one
+    from app.models import AppSettings, MediaItem
+
+    save_settings(AppSettings(motion_vary=True, motion_preset="cinematic", motion_duration=2))
+    profiles = []
+
+    def spy(jpg, **kwargs):
+        profiles.append(kwargs.get("profile"))
+        return True, "ok"
+
+    monkeypatch.setattr(generate_mod, "generate_motion", spy)
+    monkeypatch.setattr(generate_mod, "has_motion", lambda p: True)
+    first = generate_one(
+        MediaItem(title="Northlight", year=2024, jellyfin_id="demo-jf-1", source="demo"),
+        "Netflix Hero",
+        motion=False,
+    )
+    second = generate_one(
+        MediaItem(title="Harbor Season", year=2022, jellyfin_id="demo-jf-2", source="demo"),
+        "Netflix Hero",
+        motion=False,
+    )
+    out = bake_motion("Netflix Hero", first.filename)
+    bake_motion("Netflix Hero", first.filename)
+    bake_motion("Netflix Hero", second.filename)
+    assert out["vary"] is True
+    assert len(profiles) == 3
+    assert profiles[0] == profiles[1]
+    assert profiles[0] != profiles[2]
+    assert 0.40 <= profiles[0].intensity <= 0.72
+    assert 0.40 <= profiles[2].intensity <= 0.72
+    assert profiles[0].fg_pan == 0
+    assert profiles[2].fg_pan == 0
+

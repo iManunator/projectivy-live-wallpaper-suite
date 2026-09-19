@@ -11,7 +11,7 @@ import {
   type WallpaperRecord,
 } from "./lib/layout";
 import { errorToast } from "./lib/messages";
-import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
+import { clampIntensity, defaultDuration, describeMotion, intensityFromPreset, motionPreviewVars, motionSeedKey, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { prefersLogo, smartResizeLogo, clampLogoRect, tagShift } from "./lib/logo";
 import { keepWatchSlot } from "./lib/chrome";
 import { LAYOUT_DNA } from "./lib/queues";
@@ -99,6 +99,7 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
   const [motionStyle, setMotionStyle] = useState<MotionStyle>("parallax");
   const [motionPreset, setMotionPreset] = useState("cinematic");
   const [lightLeak, setLightLeak] = useState(true);
+  const [motionVary, setMotionVary] = useState(true);
   const [duration, setDuration] = useState(6);
   const [logoSrc, setLogoSrc] = useState("");
   const [logoNatural, setLogoNatural] = useState<{ w: number; h: number } | null>(null);
@@ -120,6 +121,7 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
         setMotionStyle((settings.motion_style || "parallax") as MotionStyle);
         setMotionPreset(settings.motion_preset || "cinematic");
         setLightLeak(Boolean(settings.light_leak));
+        setMotionVary(settings.motion_vary !== false);
         setDuration(Number(settings.motion_duration || defaultDuration(settings.motion_quality || "light")));
       })
       .catch(() => undefined);
@@ -171,7 +173,11 @@ export function EditorPage({ initialLayout }: { initialLayout?: string } = {}) {
   const createdSlides = created.map(wallpaperSlide);
   const intensity = intensityFromPreset(motionPreset) || clampIntensity(0.55);
   const previewDuration = PRESET_DURATION[motionPreset] || duration;
-  const motionVars = motionPreviewVars(motionStyle, intensity, previewDuration);
+  const motionVars = motionPreviewVars(motionStyle, intensity, previewDuration, {
+    vary: motionVary,
+    seed: motionSeedKey(preview?.jellyfin_id, preview?.tmdb_id, artId, preview?.title),
+    preset: motionPreset,
+  });
   const showLogo = prefersLogo(layout.title_display) && Boolean(logoSrc);
   const titleLayer = layout.layers.find((row) => row.slot === "title");
   const logoBox = (() => {

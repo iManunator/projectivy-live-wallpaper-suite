@@ -171,6 +171,7 @@ def test_gallery_and_settings_roundtrip(client):
     gallery = client.get("/api/gallery", params={"layout": "Netflix Hero"}).json()
     assert len(gallery) == 3
     settings = client.get("/api/settings").json()
+    assert settings["motion_vary"] is True
     settings["public_base_url"] = "http://tv.local:8787"
     saved = client.post("/api/settings", json=settings)
     assert saved.status_code == 200
@@ -239,6 +240,13 @@ def test_settings_roundtrip_motion_options(client):
     assert saved["light_leak"] is False
     assert saved["taste_profile"] == "cinephile"
     assert saved["overlays_enabled"] is False
+    settings["motion_vary"] = False
+    assert client.post("/api/settings", json=settings).status_code == 200
+    saved = client.get("/api/settings").json()
+    assert saved["motion_vary"] is False
+    settings["motion_vary"] = True
+    assert client.post("/api/settings", json=settings).status_code == 200
+    assert client.get("/api/settings").json()["motion_vary"] is True
     settings["title_display"] = "logo"
     assert client.post("/api/settings", json=settings).status_code == 200
     assert client.get("/api/settings").json()["title_display"] == "logo"
@@ -255,6 +263,8 @@ def test_dashboard_and_tonight(client):
     assert tonight["status"]["imageUrl"]
     assert tonight["status"]["title"]
     assert tonight["profile"]
+    assert tonight["motion"]["vary"] is True
+    assert tonight["motion"]["seed"]
     assert tonight["preview"]["layered"] is True
     assert tonight["preview"]["itemId"]
     assert tonight["preview"]["artworkUrl"]

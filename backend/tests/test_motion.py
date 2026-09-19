@@ -22,10 +22,15 @@ from app.motion import (
     leak_geometry,
     leak_offset,
     max_motion_frame,
+    motion_preview_vars,
+    motion_seed_key,
     pingpong_ease,
     pingpong_ease_t,
+    profile_for_wallpaper,
     profile_from_settings,
     render_motion_frame,
+    vary_motion_profile,
+    wallpaper_motion_seed,
 )
 from app.models import AppSettings, Layout, LayoutBackground, MediaItem
 from app.render import render_chrome, render_plate, render_still, save_jpeg, save_png
@@ -332,7 +337,91 @@ def test_profile_defaults_are_tv_smooth():
     assert MotionProfile(quality="standard").x264_preset == "medium"
 
 
-def test_chrome_is_transparent_rgba():
+def test_motion_preview_vars_match_css_when_vary_off():
+    p = MotionProfile(style="parallax", intensity=0.55, duration=12, width=1920, height=1080)
+    css = motion_preview_vars(p)
+    assert css["--motion-zoom-from"] == "1.04"
+    assert abs(float(css["--motion-zoom-to"]) - (1 + 0.55 * 0.18)) < 1e-6
+    assert css["--motion-x"] == "-2.64%"
+    assert css["--motion-duration"] == "12s"
+    assert "--motion-delay" not in css
+    k = MotionProfile(style="kenburns", intensity=0.55, duration=12)
+    assert motion_preview_vars(k)["--motion-zoom-from"] == "1.015"
+
+
+def test_vary_off_is_stable_identity():
+    base = profile_from_settings(AppSettings(motion_vary=False, motion_preset="cinematic"))
+    a = vary_motion_profile(base, enabled=False, seed="northlight")
+    b = vary_motion_profile(base, enabled=False, seed="harbor")
+    assert a == b == base
+    assert a.phase == 0.0
+    assert a.pan_x_sign == 1
+    assert a.zoom_scale == 1.0
+    assert motion_preview_vars(a)["--motion-x"] == "-2.64%"
+
+
+def test_vary_on_is_seeded_within_preset_band():
+    base = profile_from_settings(AppSettings(motion_vary=True, motion_preset="cinematic"))
+    a = vary_motion_profile(base, enabled=True, seed="demo-jf-1", preset="cinematic")
+    b = vary_motion_profile(base, enabled=True, seed="demo-jf-1", preset="cinematic")
+    c = vary_motion_profile(base, enabled=True, seed="demo-jf-2", preset="cinematic")
+    assert a == b
+    assert a != c
+    assert 0.40 <= a.intensity <= 0.72
+    assert 0.40 <= c.intensity <= 0.72
+    assert a.pan_x_sign in (-1, 1)
+    assert a.pan_y_sign in (-1, 1)
+    assert 0.10 <= a.pan_y_ratio <= 0.18
+    assert 0.0 <= a.phase < 1.0
+    assert 0.94 <= a.zoom_scale <= 1.06
+    assert 0.94 <= a.pan_scale <= 1.06
+    subtle = vary_motion_profile(
+        MotionProfile(intensity=0.16), enabled=True, seed="demo-jf-1", preset="subtle"
+    )
+    bold = vary_motion_profile(
+        MotionProfile(intensity=0.96), enabled=True, seed="demo-jf-1", preset="bold"
+    )
+    assert 0.10 <= subtle.intensity <= 0.28
+    assert 0.82 <= bold.intensity <= 1.0
+
+
+def test_preview_vars_and_bake_share_variation_helper():
+    base = MotionProfile(style="parallax", intensity=0.55, duration=12, width=1920, height=1080)
+    varied = vary_motion_profile(base, enabled=True, seed="demo-jf-1", preset="cinematic")
+    css = motion_preview_vars(varied)
+    start = ken_burns_window(0, varied, 1920, 1080)
+    assert start.ease == pytest.approx(pingpong_ease_t(varied.phase % 1.0))
+    peak_n = max(1, int(round(((0.5 - varied.phase) % 1.0) * varied.frames))) % varied.frames
+    peak = ken_burns_window(peak_n, varied, 1920, 1080)
+    assert peak.zoom == pytest.approx(varied.zoom_from + varied.bg_zoom_amp, rel=1e-3)
+    assert float(css["--motion-zoom-to"]) == pytest.approx(varied.zoom_from + varied.bg_zoom_amp, abs=0.002)
+    pan_pct = 4.8 * varied.intensity * varied.pan_scale
+    signed_x = -pan_pct * varied.pan_x_sign
+    assert css["--motion-x"] == f"{signed_x:.2f}%"
+    assert css["--motion-delay"] == f"{(-(varied.phase * 12)):.3f}s"
+    wrap = ken_burns_window(varied.frames, varied, 1920, 1080)
+    assert wrap.zoom == pytest.approx(start.zoom)
+    assert wrap.x0 == pytest.approx(start.x0)
+
+
+def test_profile_for_wallpaper_respects_toggle_and_seed_chain():
+    off = AppSettings(motion_vary=False, motion_preset="cinematic")
+    on = AppSettings(motion_vary=True, motion_preset="cinematic")
+    a = profile_for_wallpaper(on, jellyfin_id="demo-jf-1", title="Northlight")
+    b = profile_for_wallpaper(on, jellyfin_id="demo-jf-1", filename="other.jpg", title="Renamed")
+    c = profile_for_wallpaper(on, jellyfin_id="demo-jf-2", title="Harbor Season")
+    d = profile_for_wallpaper(off, jellyfin_id="demo-jf-1", title="Northlight")
+    e = profile_for_wallpaper(off, jellyfin_id="demo-jf-2", title="Harbor Season")
+    assert a == b
+    assert a != c
+    assert d == e
+    assert d.intensity == pytest.approx(0.55)
+    assert wallpaper_motion_seed(jellyfin_id="demo-jf-1", title="Northlight") == motion_seed_key("demo-jf-1")
+
+
+def test_profile_defaults_include_motion_vary_on():
+    settings = AppSettings()
+    assert settings.motion_vary is True
     item = MediaItem(title="Depth", year=2024, overview="Parallax", rating=8.2, genres=["Sci-Fi"])
     chrome = render_chrome(item, PRESETS["Netflix Hero"])
     assert chrome.mode == "RGBA"

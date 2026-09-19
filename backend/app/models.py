@@ -166,6 +166,7 @@ class AppSettings(BaseModel):
     editor_theme: str = "cinema"
     motion_preset: str = "cinematic"
     light_leak: bool = True
+    motion_vary: bool = True
     taste_profile: str = "tonight"
     taste_weights: dict[str, int] = Field(
         default_factory=lambda: {"unwatched": 50, "newly_added": 30, "requestable": 20}

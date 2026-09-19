@@ -374,7 +374,7 @@ vi.stubGlobal(
           { id: "seerr_trending", label: "Seerr trending", count: 1, titles: ["Relay"] },
         ],
         profile: "tonight",
-        motion: { style: "parallax", preset: "cinematic", intensity: 0.55, light_leak: true },
+        motion: { style: "parallax", preset: "cinematic", intensity: 0.55, light_leak: true, vary: true, seed: "demo-jf-1" },
         preview: {
           artworkUrl: shuffled ? "/api/media/artwork/demo-jf-2" : "/api/media/artwork/demo-jf-1",
           itemId: shuffled ? "demo-jf-2" : "demo-jf-1",
@@ -406,6 +406,7 @@ vi.stubGlobal(
         editor_theme: "cinema",
         motion_preset: "cinematic",
         light_leak: true,
+        motion_vary: true,
         taste_profile: "tonight",
         overlays_enabled: false,
         jellyfin: {},
@@ -575,6 +576,7 @@ describe("App smoke", () => {
     expect(await screen.findByRole("heading", { name: "Generate" })).toBeInTheDocument();
     expect(screen.getByText("Seerr only")).toBeInTheDocument();
     expect(screen.getByText(/Skip leaves titles/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Vary motion slightly per wallpaper/i)).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
     expect((await screen.findAllByText(/Created 2 stills/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Bake motion for tonight’s pick" }));
@@ -587,6 +589,7 @@ describe("App smoke", () => {
     expect(screen.getByLabelText("Default title display")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Overlay widgets/i })).toBeInTheDocument();
     expect(screen.getByText(/Intensity preset/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Vary motion slightly per wallpaper/i)).toBeChecked();
     expect(screen.getByLabelText("Cron layout")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     expect((await screen.findAllByText(/Created 1 still/)).length).toBeGreaterThan(0);

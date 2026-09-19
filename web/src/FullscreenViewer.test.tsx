@@ -13,6 +13,7 @@ vi.stubGlobal(
       motion_intensity: 0.55,
       motion_duration: 12,
       light_leak: true,
+      motion_vary: true,
       motion_quality: "light",
     }),
     text: async () => "{}",

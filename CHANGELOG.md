@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Slight per-wallpaper motion variety.** Settings and Generate have **Vary motion slightly per wallpaper** (**default on**). When on, each bake/preview gets a mild seeded drift (pan direction/axis, tiny intensity jitter, start phase, style mix inside Subtle / Cinematic / Bold). Same title/path/id rebakes the same loop. CSS preview uses the same helper as ffmpeg bake. Off is the exact CSS-matched ease/amplitude path. Chrome / vignette stay locked. Additive settings field `motion_vary`. See [MOTION.md](docs/MOTION.md).
+
 - **Plugin settings (Leanback).** Wallpaparr settings are grouped with titles and when-to-use copy (Connection, Layouts, What to show, Filters, Mix, Motion, Home screen). Pick-mode ids and status-API mapping are unchanged; a few labels were clarified (e.g. **Play baked motion (MP4)**, **If no MP4, show the JPEG still**, **No-repeat bag (same as Random)** — Random already sends `exclude`). Open a pick mode or client row for the full hint.
 - **Smoother MP4 / wallpaper rotates.** The plugin double-buffers the next pick, downloads JPEG/MP4 into cache, and returns a local `content://` URI when ready. If the next clip is not ready or `/status` fails, the previous URI is held instead of an empty list (empty often flashes black). AIDL still has no crossfade: Projectivy tears down the previous player when the URI changes, so a short hitch can remain. Details: [PROJECTIVY.md](docs/PROJECTIVY.md).
 

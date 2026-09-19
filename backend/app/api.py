@@ -20,7 +20,7 @@ from app.layouts import delete_layout, list_layouts, load_layout, save_layout, s
 from app import __version__
 from app.models import AppSettings, GenerateRequest, Layout, WallpaperStatus
 from app.seerr_status import seerr_kind
-from app.motion import generate_motion, intensity_from_preset, profile_from_settings
+from app.motion import generate_motion, intensity_from_preset, profile_from_settings, wallpaper_motion_seed
 from app.ops import load_ops
 from app.providers.demo import DemoProvider
 from app.providers.jellyfin import JellyfinProvider
@@ -432,6 +432,7 @@ def tonight(
     selected_id = None
     artwork_url = None
     path = status.path
+    rec = None
     if path:
         rec = next((r for r in catalog if r.layout.lower() == layout.lower() and r.filename == path), None)
         if rec is None:
@@ -440,6 +441,13 @@ def tonight(
             selected_id = rec.jellyfin_id or rec.tmdb_id or rec.imdb_id
             if rec.jellyfin_id or rec.tmdb_id:
                 artwork_url = f"/api/media/artwork/{quote(str(rec.jellyfin_id or rec.tmdb_id), safe='')}"
+    motion_seed = wallpaper_motion_seed(
+        jellyfin_id=rec.jellyfin_id if rec else None,
+        tmdb_id=rec.tmdb_id if rec else None,
+        imdb_id=rec.imdb_id if rec else None,
+        filename=rec.filename if rec else path,
+        title=rec.title if rec else status.title,
+    )
     return {
         "status": status.model_dump(),
         "queues": queues,
@@ -449,6 +457,8 @@ def tonight(
             "preset": settings.motion_preset,
             "intensity": intensity_from_preset(settings.motion_preset),
             "light_leak": settings.light_leak,
+            "vary": bool(settings.motion_vary),
+            "seed": motion_seed,
         },
         "preview": {
             "artworkUrl": artwork_url,
@@ -499,6 +509,7 @@ def dashboard() -> dict[str, Any]:
             "preset": settings.motion_preset,
             "quality": settings.motion_quality,
             "light_leak": settings.light_leak,
+            "vary": bool(settings.motion_vary),
         },
         "taste": {"profile": settings.taste_profile, "weights": settings.taste_weights},
     }

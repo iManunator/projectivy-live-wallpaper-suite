@@ -69,6 +69,7 @@ export type WallpaperRecord = {
   source: string;
   jellyfin_id?: string | null;
   tmdb_id?: string | null;
+  imdb_id?: string | null;
   has_video: boolean;
   parallax_style?: string | null;
   action_url?: string | null;
@@ -103,6 +104,7 @@ export type AppSettings = {
   editor_theme: string;
   motion_preset?: string;
   light_leak?: boolean;
+  motion_vary?: boolean;
   taste_profile?: string;
   taste_weights?: Record<string, number>;
   overlays_enabled?: boolean;

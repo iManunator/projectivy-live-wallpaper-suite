@@ -4,7 +4,7 @@ import { WallpaperStage } from "./WallpaperStage";
 import { api } from "./lib/api";
 import { galleryPreviewSources } from "./lib/gallery";
 import type { WallpaperRecord } from "./lib/layout";
-import { clampIntensity, defaultDuration, intensityFromPreset, motionPreviewVars, PRESET_DURATION, type MotionStyle } from "./lib/motion";
+import { clampIntensity, defaultDuration, intensityFromPreset, motionPreviewVars, motionSeedKey, PRESET_DURATION, type MotionStyle } from "./lib/motion";
 import { useToasts } from "./toasts";
 
 export type ViewerItem = {
@@ -25,6 +25,10 @@ export type ViewerItem = {
   logoSrc?: string | null;
   artCandidates?: string[];
   stillSrc?: string;
+  jellyfin_id?: string | null;
+  tmdb_id?: string | null;
+  imdb_id?: string | null;
+  filename?: string;
   hasVideo?: boolean;
 };
 
@@ -42,6 +46,10 @@ export function wallpaperSlide(item: WallpaperRecord): ViewerItem {
     id: item.id,
     pinned: item.pinned,
     hidden: item.hidden,
+    jellyfin_id: item.jellyfin_id,
+    tmdb_id: item.tmdb_id,
+    imdb_id: item.imdb_id,
+    filename: item.filename,
     videoSrc: preview.videoSrc,
     plateSrc: preview.plateSrc,
     artworkSrc: preview.artworkSrc,
@@ -80,6 +88,8 @@ export function FullscreenViewer({
     intensity: 0.55,
     duration: 12,
     lightLeak: true,
+    vary: true,
+    preset: "cinematic",
   });
 
   useEffect(() => {
@@ -94,6 +104,8 @@ export function FullscreenViewer({
           intensity,
           duration,
           lightLeak: Boolean(settings.light_leak),
+          vary: settings.motion_vary !== false,
+          preset: settings.motion_preset || "cinematic",
         });
       })
       .catch(() => undefined);
@@ -128,8 +140,13 @@ export function FullscreenViewer({
   const usingComposite = Boolean(artSrc && stillSrc && artSrc === stillSrc);
   const showLockedChrome = Boolean(item && !useVideo && !usingComposite);
   const motionVars = useMemo(
-    () => motionPreviewVars(motion.style, motion.intensity, motion.duration) as CSSProperties,
-    [motion],
+    () =>
+      motionPreviewVars(motion.style, motion.intensity, motion.duration, {
+        vary: motion.vary,
+        seed: motionSeedKey(item?.jellyfin_id, item?.tmdb_id, item?.imdb_id, item?.filename, item?.title),
+        preset: motion.preset,
+      }) as CSSProperties,
+    [motion, item?.jellyfin_id, item?.tmdb_id, item?.imdb_id, item?.filename, item?.title],
   );
 
   if (!item) return null;
