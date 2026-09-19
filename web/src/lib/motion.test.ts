@@ -39,9 +39,11 @@ describe("motion options", () => {
 
   it("maps intensity presets", () => {
     expect(intensityFromPreset("subtle")).toBe(0.16);
+    expect(intensityFromPreset("balanced")).toBe(0.355);
     expect(intensityFromPreset("bold")).toBe(0.96);
     expect(nearestMotionPreset(0.9)).toBe("bold");
-    expect(nearestMotionPreset(0.3)).toBe("subtle");
+    expect(nearestMotionPreset(0.3)).toBe("balanced");
+    expect(nearestMotionPreset(0.16)).toBe("subtle");
   });
 
   it("builds CSS motion preview variables that change with intensity", () => {
