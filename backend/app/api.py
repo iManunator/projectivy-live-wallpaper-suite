@@ -99,13 +99,20 @@ def layouts_load(name: str) -> dict[str, Any]:
 
 @router.post("/api/layouts/save")
 def layouts_save(layout: Layout) -> dict[str, Any]:
-    saved = save_layout(layout)
+    try:
+        saved = save_layout(layout)
+    except ValueError:
+        raise HTTPException(400, "Invalid layout name")
     return {"status": "ok", "layout": saved.model_dump()}
 
 
 @router.post("/api/layouts/delete/{name:path}")
 def layouts_delete(name: str) -> dict[str, Any]:
-    if not delete_layout(name):
+    try:
+        deleted = delete_layout(name)
+    except ValueError:
+        raise HTTPException(400, "Invalid layout name")
+    if not deleted:
         raise HTTPException(400, "Cannot delete a bundled preset (save a copy first)")
     return {"status": "ok"}
 
